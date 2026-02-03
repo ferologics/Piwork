@@ -24,7 +24,7 @@ function autoGrow() {
 
 <main class="flex flex-1 flex-col bg-background">
     <!-- Chat transcript area -->
-    <div class="flex-1 overflow-y-auto p-4">
+    <div class="flex-1 overflow-y-auto p-4 mr-2">
         <div class="mx-auto max-w-3xl space-y-4">
             <!-- Empty state -->
             <div class="flex h-full flex-col items-center justify-center py-20 text-center">
