@@ -1,27 +1,43 @@
-[tasks.build]
-description = "Build the frontend"
-run = "pnpm build"
-
-[tasks.check]
-description = "Typecheck (svelte-check)"
-run = "pnpm check"
-
-[tasks.dev]
-description = "Run Vite dev server"
-run = "pnpm dev"
-
 [tasks.setup]
 description = "Install dependencies"
 run = "pnpm install"
 
-[tasks.tauri-build]
-description = "Build the Tauri app"
-run = "pnpm tauri build"
+[tasks.dev]
+description = "Run Vite dev server"
+run = "pnpm exec vite dev"
 
-[tasks.tauri-dev]
-description = "Run the Tauri app"
-run = "pnpm tauri dev"
+[tasks.build]
+description = "Build the frontend"
+run = "pnpm exec vite build"
+
+[tasks.preview]
+description = "Preview the build"
+run = "pnpm exec vite preview"
+
+[tasks.format]
+description = "Format code (Biome)"
+run = "pnpm exec biome format --write ."
+
+[tasks.lint]
+description = "Lint code (oxlint)"
+run = "pnpm exec oxlint --tsconfig tsconfig.json src"
+
+[tasks.compile]
+description = "Typecheck (svelte-check)"
+run = "pnpm exec svelte-kit sync && pnpm exec svelte-check --tsconfig ./tsconfig.json"
 
 [tasks.test]
 description = "Run unit tests"
-run = "pnpm test"
+run = "pnpm exec vitest run"
+
+[tasks.check]
+description = "Format, lint, typecheck, test"
+run = "mise run format && mise run lint && mise run compile && mise run test"
+
+[tasks.tauri-dev]
+description = "Run the Tauri app"
+run = "pnpm exec tauri dev"
+
+[tasks.tauri-build]
+description = "Build the Tauri app"
+run = "pnpm exec tauri build"

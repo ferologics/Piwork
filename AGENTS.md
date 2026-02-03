@@ -12,6 +12,11 @@ Build a Cowork‑style, normie‑first UI on top of **pi** using **Tauri**. Focu
 - **Tailwind 4 + shadcn‑svelte**
 - **Testing:** Vitest (RPC mock; Playwright deferred)
 
+## Commands
+
+- Use **mise** tasks for all workflows (avoid direct `pnpm` scripts).
+- `mise run check` = format (Biome) + lint (oxlint) + compile (svelte-check) + test (Vitest).
+
 ## Key Decisions
 
 - Desktop runtime = **QEMU runtime pack**, **fresh VM per task**.

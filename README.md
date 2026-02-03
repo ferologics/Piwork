@@ -11,13 +11,18 @@ Early planning + scaffold. See `docs/` for product and runtime notes.
 - Tauri 2
 - SvelteKit
 - pnpm
-- Tailwind + shadcn‑svelte (planned)
+- Tailwind 4 + shadcn‑svelte
+- mise (task runner)
 
 ## Development
 
 ```bash
-pnpm install
-pnpm tauri dev
+mise run setup
+mise run tauri-dev
+```
+
+```bash
+mise run check
 ```
 
 ## Docs

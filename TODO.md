@@ -1,6 +1,7 @@
 # TODO
 
-- Scaffold **Tauri + Svelte + Tailwind + shadcn‑svelte**.
 - Define **task persistence** storage format + location.
-- Add **testing harness** (Vitest + RPC mock).
+- Implement **TaskStore** + persistence (task.json).
+- Implement **RpcClient** interface + **MockRpcClient** + JSONL fixtures.
+- Build **layout skeleton** (left rail, main view, right tabs).
 - Plan **full auth UI** (pi `/login` + API key entry) for later.

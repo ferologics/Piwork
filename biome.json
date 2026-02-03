@@ -1,0 +1,15 @@
+{
+    "$schema": "https://biomejs.dev/schemas/2.3.0/schema.json",
+    "formatter": {
+        "indentStyle": "space",
+        "indentWidth": 4
+    },
+    "linter": {
+        "enabled": false
+    },
+    "css": {
+        "parser": {
+            "tailwindDirectives": true
+        }
+    }
+}
