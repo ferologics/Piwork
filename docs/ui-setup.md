@@ -63,7 +63,7 @@ Document the UI stack decision before implementation. Focus on a Cowork‑style,
 
 ## Stack Decision (locked)
 
-**Svelte + Vite + Tailwind + shadcn‑svelte**
+**Tauri 2 + SvelteKit + Tailwind 4 + shadcn‑svelte**
 
 Rationale: rich UI primitives without a later migration, good for streaming + multi‑panel layouts.
 
@@ -74,6 +74,6 @@ Rationale: rich UI primitives without a later migration, good for streaming + mu
 
 ## Next Steps
 
-1. Scaffold Tauri + Svelte + Tailwind + shadcn‑svelte.
+1. Add Tailwind + shadcn‑svelte.
 2. Add testing harness (Vitest + Playwright).
 3. Iterate on layout sketch + panel behavior.

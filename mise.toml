@@ -1,0 +1,27 @@
+[tasks.build]
+description = "Build the frontend"
+run = "pnpm build"
+
+[tasks.check]
+description = "Typecheck (svelte-check)"
+run = "pnpm check"
+
+[tasks.dev]
+description = "Run Vite dev server"
+run = "pnpm dev"
+
+[tasks.setup]
+description = "Install dependencies"
+run = "pnpm install"
+
+[tasks.tauri-build]
+description = "Build the Tauri app"
+run = "pnpm tauri build"
+
+[tasks.tauri-dev]
+description = "Run the Tauri app"
+run = "pnpm tauri dev"
+
+[tasks.test]
+description = "Run unit tests"
+run = "pnpm test"
