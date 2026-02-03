@@ -51,7 +51,7 @@
 - **Workspace-based access**: agent only sees explicitly selected folders.
 - **Mounts are user-driven** per session.
 - **Connector tools** (GitHub/Notion/etc) require explicit enablement.
-- **Network access**: on by default; prompt/allowlist for risky use cases.
+- **Network access**: on by default; VM uses **NAT**; prompt/allowlist for risky use cases.
 - **Approvals**: write operations outside workspace require confirmation.
 
 ## Implementation Notes

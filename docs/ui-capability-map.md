@@ -22,7 +22,7 @@ Build a Cowork‑style UI on top of **pi**, focused on simple, safe, file‑base
 - Background tasks continue while browsing others
 
 **Required capabilities**
-- Persistent task metadata
+- Persistent task metadata (resumable across restarts)
 - Task state transitions + updates
 - Background execution support
 

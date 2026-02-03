@@ -55,7 +55,7 @@ Provide a **consistent, isolated Linux environment** for desktop while keeping t
    - Attach rootfs overlay + cache volume
    - Attach workspace via **virtiofs** (fallback to 9p)
    - Attach **virtio‑serial** channel for RPC
-   - Configure **network on by default** (policy‑gated)
+   - Enable **user‑mode NAT (SLIRP)** by default
 
 4. **Start pi in VM**
    - Bootstrap service launches `pi --mode rpc`
@@ -81,10 +81,12 @@ Provide a **consistent, isolated Linux environment** for desktop while keeping t
 
 ## Network Policy (v1)
 
-- **Default: network on**
-- Prompt/allowlist for network‑using commands
+- **Default: network on** via **user‑mode NAT (SLIRP)**
+- Prompt/allowlist for network‑using commands (non‑search)
 - Optional per‑task “offline” mode
 - Web search can still be routed via host tool if we run offline
+
+**Later (optional):** host‑proxy/allowlist model (Codex‑style) if needed.
 
 ## Task Isolation
 
@@ -106,3 +108,4 @@ UI should offer:
 
 - How to handle **cache volume** safely between tasks
 - Whether to enforce **domain allowlists** or rely on prompts
+- Do we ever need host‑proxy networking, or is NAT sufficient long‑term?

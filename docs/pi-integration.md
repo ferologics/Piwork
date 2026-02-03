@@ -30,7 +30,7 @@ VM (Linux)
 
 - **One VM per task** (fresh overlay per task).
 - Host starts pi → sends `prompt` commands.
-- Host **stores task metadata + transcript** (do not rely on pi session files).
+- Host **stores task metadata + transcript** (pi session files are optional for resume).
 
 ## Event Mapping (RPC → UI)
 
@@ -76,6 +76,7 @@ A pi extension inside the VM enforces action prompts using `tool_call` intercept
     - Loads the permission‑gate extension
     - Enables default tools/skills
     - Sets model defaults (if needed)
+- Mount host `~/.pi/agent/auth.json` into the VM during dev
 
 ## Open Questions
 

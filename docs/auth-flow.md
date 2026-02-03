@@ -19,12 +19,11 @@ Let users authenticate once and reuse provider credentials across tasks. Support
 
 ## Onboarding Flow (v1)
 
-**Phase 1 (bootstrap / mocked):**
+**Phase 1 (dev bootstrap):**
 
-1. **Import existing pi credentials** (`auth.json`) from the host
-   - File picker or explicit path to `~/.pi/agent/auth.json`
-2. Save to host profile
-3. Copy into VM at task start
+1. **Use host pi credentials directly**: `~/.pi/agent/auth.json`
+2. Mount into VM at task start
+3. No UI flow yet
 
 **Phase 2 (full login UI):**
 

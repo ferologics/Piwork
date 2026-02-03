@@ -48,5 +48,4 @@
 ## Open Questions
 
 - Which artifact types must be first‑class in v1?
-- Should tasks be resumable across app restarts by default?
 - What is the minimum connector set to feel useful?
