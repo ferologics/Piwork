@@ -22,3 +22,4 @@
 - [ ] Artifact preview (HTML, Markdown, images, CSV)
 - [ ] Canvas viewer component
 - [ ] Connector badges (web search visibility)
+- [ ] Explore MITM network mode (virtio‑net + stream netdev + host JS Ethernet stack)

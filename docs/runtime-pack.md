@@ -88,6 +88,11 @@ Provide a **consistent, isolated Linux environment** for desktop while keeping t
 
 **Later (optional):** host‑proxy/allowlist model (Codex‑style) if needed.
 
+Potential MITM mode (future idea):
+
+- Use **virtio‑net + stream netdev** to pipe Ethernet frames to a host process.
+- Host JS stack handles DNS/TCP + TLS re‑encryption for **per‑request control**.
+
 ## Task Isolation
 
 - **v1:** each task runs in a **fresh overlay** (clean state, best isolation)
