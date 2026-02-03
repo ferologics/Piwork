@@ -1,0 +1,14 @@
+[build]
+rustc-wrapper = "sccache"
+
+[target.'cfg(all())']
+rustflags = [
+    # Clippy lints - deny warnings in CI, warn locally
+    "-Wclippy::all",
+    "-Wclippy::pedantic",
+    # Allow some pedantic lints that are too noisy
+    "-Aclippy::module_name_repetitions",
+    "-Aclippy::must_use_candidate",
+    "-Aclippy::missing_errors_doc",
+    "-Aclippy::missing_panics_doc",
+]

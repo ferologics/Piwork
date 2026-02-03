@@ -15,7 +15,11 @@ Build a Cowork‑style, normie‑first UI on top of **pi** using **Tauri**. Focu
 ## Commands
 
 - Use **mise** tasks for all workflows (avoid direct `pnpm` scripts).
-- `mise run check` = format (Biome + dprint) + lint (oxlint) + compile (svelte-check) + test (Vitest).
+- `mise run check` = format (Biome + dprint + rustfmt) + lint (oxlint + clippy) + compile (svelte-check) + test (Vitest).
+
+## Tooling
+
+- Rust builds use **sccache** via `.cargo/config.toml`.
 
 ## Key Decisions
 

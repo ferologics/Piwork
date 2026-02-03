@@ -15,12 +15,12 @@ description = "Preview the build"
 run = "pnpm exec vite preview"
 
 [tasks.format]
-description = "Format code (Biome + dprint)"
-run = "pnpm exec biome format --write . && dprint fmt"
+description = "Format code (Biome + dprint + rustfmt)"
+run = "pnpm exec biome format --write src src-tauri/tauri.conf.json src-tauri/capabilities/default.json package.json components.json svelte.config.js vite.config.js tailwind.config.ts tsconfig.json biome.json dprint.json && dprint fmt && cargo fmt --manifest-path src-tauri/Cargo.toml"
 
 [tasks.lint]
-description = "Lint code (oxlint)"
-run = "pnpm exec oxlint --tsconfig tsconfig.json src"
+description = "Lint code (oxlint + clippy)"
+run = "pnpm exec oxlint --tsconfig tsconfig.json src && cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings"
 
 [tasks.compile]
 description = "Typecheck (svelte-check)"
@@ -37,6 +37,10 @@ run = "mise run format && mise run lint && mise run compile && mise run test"
 [tasks.tauri-dev]
 description = "Run the Tauri app"
 run = "pnpm exec tauri dev"
+
+[tasks.icons]
+description = "Regenerate app icons from assets/logo.svg"
+run = "pnpm exec tauri icon assets/logo.svg --output src-tauri/icons"
 
 [tasks.tauri-build]
 description = "Build the Tauri app"

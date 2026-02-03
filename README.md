@@ -25,6 +25,15 @@ mise run tauri-dev
 mise run check
 ```
 
+### Rust build cache
+
+Rust builds use **sccache** via `.cargo/config.toml`.
+
+## Assets
+
+- `assets/logo.svg` is the source for app icons.
+- Regenerate with `mise run icons`.
+
 ## Docs
 
 - `docs/ui-layout-sketch.md`

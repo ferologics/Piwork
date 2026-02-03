@@ -4,10 +4,5 @@
         "lineWidth": 100
     },
     "includes": ["**/*.{md,mdx}"],
-    "excludes": [
-        "**/node_modules/**",
-        "**/.svelte-kit/**",
-        "**/build/**",
-        "**/package/**"
-    ]
+    "excludes": ["**/node_modules/**", "**/.svelte-kit/**", "**/build/**", "**/package/**"]
 }
