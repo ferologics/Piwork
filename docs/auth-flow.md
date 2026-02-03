@@ -13,7 +13,7 @@ Let users authenticate once and reuse provider credentials across tasks. Support
 ## Storage
 
 - Host stores `auth.json` per profile.
-- VM reads credentials from a mounted config volume (e.g., `/home/pui/.pi/agent/auth.json`).
+- VM reads credentials from a mounted config volume (e.g., `/home/piwork/.pi/agent/auth.json`).
 - `auth.json` format matches pi’s standard file.
 - **No auth files are committed** (secrets remain local).
 

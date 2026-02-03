@@ -22,6 +22,7 @@ Build a Cowork‑style UI on top of **pi**, focused on simple, safe, file‑base
 - Background tasks continue while browsing others
 
 **Required capabilities**
+
 - Persistent task metadata (resumable across restarts)
 - Task state transitions + updates
 - Background execution support
@@ -35,6 +36,7 @@ Build a Cowork‑style UI on top of **pi**, focused on simple, safe, file‑base
 - Queue follow‑ups
 
 **Required capabilities**
+
 - Streaming tokens + tool events (SSE or WebSocket)
 - Render incremental updates efficiently
 - Queue control (steer vs follow‑up)
@@ -46,6 +48,7 @@ Build a Cowork‑style UI on top of **pi**, focused on simple, safe, file‑base
 - Visibility into commands (safe, readable)
 
 **Required capabilities**
+
 - Structured step events (derive from tool calls + model text)
 - Collapse/expand raw command output
 
@@ -56,6 +59,7 @@ Build a Cowork‑style UI on top of **pi**, focused on simple, safe, file‑base
 - **Working files / changes** (recently touched)
 
 **Required capabilities**
+
 - Explicit scope model
 - Mount list + file access control UI
 - Connector permissions UI
@@ -67,6 +71,7 @@ Build a Cowork‑style UI on top of **pi**, focused on simple, safe, file‑base
 - Open externally / export
 
 **Required capabilities**
+
 - File type detection + preview renderers
 - Sandbox‑safe file access
 - Canvas viewer for HTML/Markdown/Text/Images/CSV
@@ -78,6 +83,7 @@ Build a Cowork‑style UI on top of **pi**, focused on simple, safe, file‑base
 - Network prompts only for non‑search tools (if needed)
 
 **Required capabilities**
+
 - Per‑action permission hooks
 - “Allow once / always allow” choices
 
@@ -88,6 +94,7 @@ Build a Cowork‑style UI on top of **pi**, focused on simple, safe, file‑base
 - Sandbox status (VM OK / setup required)
 
 **Required capabilities**
+
 - Policy storage + surfaced status
 - Clear, non‑technical labels
 
@@ -111,11 +118,13 @@ Build a Cowork‑style UI on top of **pi**, focused on simple, safe, file‑base
 ## UI Stack Implications
 
 **Minimum for MVP:**
+
 - Streaming channel (SSE or WebSocket)
 - Incremental UI updates (lists + logs)
 - File preview components
 
 This can be achieved with:
+
 - **Server‑driven UI** (Maud + htmx + SSE)
 - **Client app** (Svelte/React + WS)
 

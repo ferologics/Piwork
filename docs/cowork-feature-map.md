@@ -1,4 +1,4 @@
-# Cowork Signals → PUI Feature Map
+# Cowork Signals → Piwork Feature Map
 
 ## What users love about Cowork (signals)
 
@@ -10,7 +10,7 @@
 - **Connectors / web access**: optional, permission‑gated external access.
 - **Normie‑friendly UI**: no terminal; approachable defaults.
 
-## PUI Parity Checklist (v1 targets)
+## Piwork Parity Checklist (v1 targets)
 
 - **Tasks list** (left rail): create, resume, status, last activity.
 - **Task view** (main): chat + streaming output + tool logs.

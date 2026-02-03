@@ -30,15 +30,15 @@
 **Default: Hardened VM (QEMU), required on desktop**
 
 - Desktop runs **inside QEMU** (HVF/WHPX/KVM acceleration when available):
-    - Strong kernel boundary
-    - Uniform Linux environment for tools
-    - Explicit host folder mounts only
-    - Snapshot/rollback support
+  - Strong kernel boundary
+  - Uniform Linux environment for tools
+  - Explicit host folder mounts only
+  - Snapshot/rollback support
 - If QEMU is unavailable or disabled, the app enters **setup-required mode** and does not run agent tasks.
 - **Unsafe dev mode (optional):** OS-level sandbox only for local development/testing:
-    - macOS: Seatbelt
-    - Linux: Landlock + seccomp
-    - Windows: AppContainer / WSL-backed sandbox (when available)
+  - macOS: Seatbelt
+  - Linux: Landlock + seccomp
+  - Windows: AppContainer / WSL-backed sandbox (when available)
 
 ## Rationale and Competitive Signals
 
@@ -57,9 +57,9 @@
 ## Implementation Notes
 
 - Define a `SandboxRuntime` abstraction with per-platform adapters:
-    - `MobileSandboxRuntime` (native app sandbox + capability grants)
-    - `QemuSandboxRuntime` (required on desktop)
-    - `DesktopSandboxRuntime` (unsafe dev-only mode)
+  - `MobileSandboxRuntime` (native app sandbox + capability grants)
+  - `QemuSandboxRuntime` (required on desktop)
+  - `DesktopSandboxRuntime` (unsafe dev-only mode)
 - Ship a **minimal toolset** on mobile; expand on desktop.
 - Keep the **UI permissions model identical** across platforms.
 

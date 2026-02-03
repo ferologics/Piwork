@@ -37,6 +37,7 @@ Define what “canvas” means in this product and what artifact types we must s
 ## Artifact Types (Candidate List)
 
 **Must‑have (v1)**
+
 - HTML
 - Markdown
 - Text
@@ -44,11 +45,13 @@ Define what “canvas” means in this product and what artifact types we must s
 - CSV (preview as table)
 
 **Nice‑to‑have (v1.5)**
+
 - PDF (view only)
 - Audio (playback)
 - JSON (pretty view)
 
 **Later**
+
 - Office docs (docx/xlsx/pptx)
 - Video
 

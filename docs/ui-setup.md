@@ -23,41 +23,49 @@ Document the UI stack decision before implementation. Focus on a Cowork‑style,
 ### Option A: Svelte + Tailwind + shadcn‑svelte
 
 **Pros**
+
 - Rich UI primitives (tabs, dialogs, badges) with low friction
 - Excellent for streaming + complex state
 - Easy to theme + customize
 
 **Cons**
+
 - Heavier setup than PicoCSS
 - Tailwind learning curve for contributors
 
 ### Option B: Svelte + PicoCSS
 
 **Pros**
+
 - Minimal setup, fast MVP
 - Clean defaults for forms/typography
 
 **Cons**
+
 - Missing components (tabs, dialogs, panels)
 - Custom CSS work grows fast for this UI
 
 ### Option C: Maud + htmx + PicoCSS
 
 **Pros**
+
 - Server‑driven UI, minimal JS
 - Fast iteration for simple screens
 
 **Cons**
+
 - Streaming + complex panels quickly become custom JS anyway
 - Harder to build rich artifact/canvas views
 
 ### Option D: Rust‑native UI (Dioxus / Iced / Slint)
 
 **Pros**
+
 - Single language (Rust)
 - No web stack
 
 **Cons**
+
 - Slower iteration for complex UX
 - Ecosystem not as mature for web‑style UI
 

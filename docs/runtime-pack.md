@@ -26,9 +26,9 @@ Provide a **consistent, isolated Linux environment** for desktop while keeping t
 
 - **Pack format:** `tar.zst` with `manifest.json` + signatures.
 - **Install location (per‑user):**
-    - macOS: `~/Library/Application Support/pui/runtime/`
-    - Windows: `%LOCALAPPDATA%\pui\runtime\`
-    - Linux: `~/.local/share/pui/runtime/`
+  - macOS: `~/Library/Application Support/piwork/runtime/`
+  - Windows: `%LOCALAPPDATA%\piwork\runtime\`
+  - Linux: `~/.local/share/piwork/runtime/`
 - **Updates:** app checks for new pack versions and upgrades in‑place.
 - **Rollback:** keep previous pack for one release cycle.
 
@@ -59,7 +59,7 @@ Provide a **consistent, isolated Linux environment** for desktop while keeping t
 
 4. **Start pi in VM**
    - Bootstrap service launches `pi --mode rpc`
-   - RPC listens on `/dev/virtio-ports/pui.rpc`
+   - RPC listens on `/dev/virtio-ports/piwork.rpc`
 
 5. **Host ↔ VM handshake**
    - UI connects to the virtio‑serial stream
@@ -69,7 +69,7 @@ Provide a **consistent, isolated Linux environment** for desktop while keeping t
 
 **Single path:** **virtio‑serial** (no network stack needed)
 
-- VM exposes a virtio‑serial port (e.g., `/dev/virtio-ports/pui.rpc`)
+- VM exposes a virtio‑serial port (e.g., `/dev/virtio-ports/piwork.rpc`)
 - Host connects via a local socket / named pipe
 - pi RPC uses JSONL over this stream (RPC mode already supports stdio‑style streams)
 
@@ -96,11 +96,13 @@ Provide a **consistent, isolated Linux environment** for desktop while keeping t
 ## Setup‑Required Mode
 
 Shown when:
+
 - Runtime pack is missing or corrupt
 - Acceleration unavailable
 - VM fails health check
 
 UI should offer:
+
 - “Install runtime” button
 - “Enable virtualization” help links
 

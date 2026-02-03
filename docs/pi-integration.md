@@ -23,7 +23,7 @@ VM (Linux)
 ## RPC Transport
 
 - QEMU exposes a **virtio‑serial** channel.
-- pi runs `--mode rpc` and listens on `/dev/virtio-ports/pui.rpc`.
+- pi runs `--mode rpc` and listens on `/dev/virtio-ports/piwork.rpc`.
 - Host reads/writes **JSONL** over this stream (same as stdin/stdout).
 
 ## Task Model
@@ -93,9 +93,9 @@ A pi extension inside the VM enforces action prompts using `tool_call` intercept
 ## Settings in VM
 
 - Provide a minimal `settings.json` that:
-    - Loads the permission‑gate extension
-    - Enables default tools/skills
-    - Sets model defaults (if needed)
+  - Loads the permission‑gate extension
+  - Enables default tools/skills
+  - Sets model defaults (if needed)
 - Mount host `~/.pi/agent/auth.json` into the VM during dev
 
 ## Open Questions

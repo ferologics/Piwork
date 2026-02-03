@@ -15,8 +15,8 @@ description = "Preview the build"
 run = "pnpm exec vite preview"
 
 [tasks.format]
-description = "Format code (Biome)"
-run = "pnpm exec biome format --write ."
+description = "Format code (Biome + dprint)"
+run = "pnpm exec biome format --write . && dprint fmt"
 
 [tasks.lint]
 description = "Lint code (oxlint)"

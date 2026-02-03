@@ -1,8 +1,8 @@
 {
     "$schema": "https://schema.tauri.app/config/2",
-    "productName": "userszendevpui",
+    "productName": "Piwork",
     "version": "0.1.0",
-    "identifier": "com.zen.userszendevpui",
+    "identifier": "com.pi.work",
     "build": {
         "beforeDevCommand": "mise run dev",
         "devUrl": "http://localhost:1420",
@@ -12,7 +12,7 @@
     "app": {
         "windows": [
             {
-                "title": "userszendevpui",
+                "title": "Piwork",
                 "width": 800,
                 "height": 600
             }

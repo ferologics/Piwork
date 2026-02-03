@@ -38,7 +38,7 @@
 - Clicking the connector opens a **side drawer** with search queries + results.
 - “Thought process” shows inline **search steps** (e.g., “Searched for …”).
 
-## Implications for PUI
+## Implications for Piwork
 
 - Empty state can use **stacked cards** on the right for quick orientation.
 - The **Working folder** card is a strong affordance (keep it).

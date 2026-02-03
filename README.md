@@ -1,4 +1,4 @@
-# PUI
+# Piwork
 
 Cowork‑style, normie‑first UI on top of **pi**, built with **Tauri**.
 
