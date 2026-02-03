@@ -18,6 +18,18 @@ run = "pnpm exec vite preview"
 description = "Format code (Biome + dprint + rustfmt)"
 run = "pnpm exec biome format --write src src-tauri/tauri.conf.json src-tauri/capabilities/default.json package.json components.json svelte.config.js vite.config.js tailwind.config.ts tsconfig.json biome.json dprint.json && dprint fmt && cargo fmt --manifest-path src-tauri/Cargo.toml"
 
+[tasks.clean]
+description = "Remove build artifacts"
+run = "rm -rf .svelte-kit build dist package coverage src-tauri/target target node_modules/.vite"
+
+[tasks.clean-deep]
+description = "Remove build artifacts + node_modules"
+run = "mise run clean && rm -rf node_modules"
+
+[tasks.reset]
+description = "Deep clean + setup"
+run = "mise run clean-deep && mise run setup"
+
 [tasks.lint]
 description = "Lint code (oxlint + clippy)"
 run = "pnpm exec oxlint --tsconfig tsconfig.json src && cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings"

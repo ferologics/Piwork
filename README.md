@@ -25,6 +25,14 @@ mise run tauri-dev
 mise run check
 ```
 
+### Cleanup
+
+```bash
+mise run clean        # remove build artifacts
+mise run clean-deep   # remove build artifacts + node_modules
+mise run reset        # clean-deep + setup
+```
+
 ### Rust build cache
 
 Rust builds use **sccache** via `.cargo/config.toml`.

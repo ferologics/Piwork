@@ -16,6 +16,7 @@ Build a Cowork‑style, normie‑first UI on top of **pi** using **Tauri**. Focu
 
 - Use **mise** tasks for all workflows (avoid direct `pnpm` scripts).
 - `mise run check` = format (Biome + dprint + rustfmt) + lint (oxlint + clippy) + compile (svelte-check) + test (Vitest).
+- Cleanup: `mise run clean`, `mise run clean-deep`, `mise run reset`.
 
 ## Tooling
 
