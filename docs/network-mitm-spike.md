@@ -45,6 +45,43 @@ This keeps the VM “talking Ethernet” while the host enforces per‑request p
 - Keep **NAT** for v1 to ship faster.
 - Treat MITM mode as a **future strict‑network option** once we validate the spike.
 
+## Local PoC (macOS/arm64)
+
+1. Download an Alpine aarch64 ISO (virt build):
+
+   ```bash
+   curl -L \
+     https://dl-cdn.alpinelinux.org/alpine/latest-stable/releases/aarch64/alpine-virt-3.23.3-aarch64.iso \
+     -o ~/Downloads/alpine-virt-3.23.3-aarch64.iso
+   ```
+
+2. Start the host netdev sniffer:
+
+   ```bash
+   NETDEV_SOCKET=/tmp/piwork-netdev.sock \
+     node scripts/mitm-netdev-sniff.mjs
+   ```
+
+3. Boot QEMU with stream netdev:
+
+   ```bash
+   ALPINE_ISO=~/Downloads/alpine-virt-3.23.3-aarch64.iso \
+   NETDEV_SOCKET=/tmp/piwork-netdev.sock \
+     scripts/run-mitm-qemu.sh
+   ```
+
+4. Inside the VM, bring up network to generate traffic:
+
+   ```sh
+   setup-interfaces -a
+   rc-service networking start
+   ping -c 1 1.1.1.1
+   ```
+
+You should see Ethernet frames logged in the host sniffer.
+
+> Note: the sniffer currently logs **raw chunks**. If frames look garbled, we may need to implement proper frame boundaries for the stream netdev protocol.
+
 ## Next steps
 
 1. PoC: launch a tiny VM with **virtio‑net + stream netdev**.
