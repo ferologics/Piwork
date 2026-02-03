@@ -1,5 +1,6 @@
 # TODO
 
-- Decide **UI stack** (Svelte + Tailwind + shadcn?).
+- Scaffold **Tauri + Svelte + Tailwind + shadcn‑svelte**.
 - Define **task persistence** storage format + location.
+- Add **testing harness** (Vitest + Playwright + RPC mock).
 - Plan **full auth UI** (pi `/login` + API key entry) for later.

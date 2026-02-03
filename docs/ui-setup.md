@@ -61,18 +61,19 @@ Document the UI stack decision before implementation. Focus on a Cowork‑style,
 - Slower iteration for complex UX
 - Ecosystem not as mature for web‑style UI
 
-## Provisional Direction
+## Stack Decision (locked)
 
-Leaning toward **Option A (Svelte + Tailwind + shadcn‑svelte)** to avoid a migration later when the UI grows (tabs, modals, resizable panes, artifact previews). Decision is open until artifact/canvas requirements are clearer.
+**Svelte + Vite + Tailwind + shadcn‑svelte**
+
+Rationale: rich UI primitives without a later migration, good for streaming + multi‑panel layouts.
 
 ## Open Questions
 
-- Do we want a full design system now, or keep it minimal and evolve?
-- Should we align with a specific theme (e.g., Rose Pine), or keep neutral?
-- How much JavaScript are we comfortable with in v1?
+- Theme direction (neutral vs Rose Pine).
+- How much custom styling we want on top of shadcn components.
 
 ## Next Steps
 
-1. Deep‑dive **Artifacts / Canvas** requirements (separate doc).
-2. Re‑validate stack choice after artifact requirements are clear.
+1. Scaffold Tauri + Svelte + Tailwind + shadcn‑svelte.
+2. Add testing harness (Vitest + Playwright).
 3. Iterate on layout sketch + panel behavior.

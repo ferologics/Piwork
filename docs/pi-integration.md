@@ -30,7 +30,7 @@ VM (Linux)
 
 - **One VM per task** (fresh overlay per task).
 - Host starts pi → sends `prompt` commands.
-- Host **stores task metadata + transcript** (pi session files are optional for resume).
+- Host **stores task metadata + transcript** (pi session files used for resume).
 
 ## Event Mapping (RPC → UI)
 
@@ -38,6 +38,26 @@ VM (Linux)
 - `tool_execution_*` → progress steps + logs
 - `extension_ui_request` → permission prompts
 - `agent_end` → mark task complete + highlight artifacts
+
+## Task Persistence / Resume (v1)
+
+**Task metadata stored on host:**
+
+- `task.json`:
+  - `taskId`, `title`, `status`, `createdAt`, `updatedAt`
+  - `sessionFile` (pi session JSONL path)
+  - `mounts` (approved folders + modes)
+  - `model` + `thinkingLevel`
+  - `connectorsEnabled`
+
+**Resume flow:**
+
+1. Start a **fresh VM**.
+2. Mount the same folders listed in `task.json`.
+3. Mount host `auth.json` for provider access.
+4. Start pi with `--session-dir` pointing at the host‑mounted tasks dir.
+5. Call `switch_session` with `sessionFile`.
+6. Rebuild UI via `get_messages` + `get_state`.
 
 ## Permission Gate Extension
 
