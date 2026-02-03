@@ -15,8 +15,9 @@
 
 ### File Operations
 
-- **Write/Edit** → prompt (allow once / always / deny)
-- **Delete / Move / Rename** → prompt (always)
+- **Write/Edit** → **no prompt** inside scope.
+  - Changes are **summarized** in a Changes list.
+- **Delete / Move / Rename** → prompt (always).
 
 ### Network / Connectors
 
@@ -35,6 +36,12 @@
   - Task
   - Folder
   - Tool type
+
+## Change Review (v1)
+
+- Track **created / modified / deleted** files per task.
+- Show a **Changes** list with per‑file status.
+- **Undo/restore** is a **future enhancement** (not required for v1).
 
 ## Policy Storage (v1)
 

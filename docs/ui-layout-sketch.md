@@ -43,7 +43,7 @@
 
 - **Progress**: todo‑style step list + current action
 - **Artifacts**: generated files with preview
-- **Context**: selected folders + connectors + working files
+- **Context**: selected folders + connectors + working files/changes
 - **Permissions**: pending approvals + history
 
 **Empty state:** stacked cards for Progress / Working folder / Context

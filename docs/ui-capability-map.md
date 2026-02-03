@@ -53,7 +53,7 @@ Build a Cowork‑style UI on top of **pi**, focused on simple, safe, file‑base
 
 - Selected folders (read/write scope)
 - Connectors enabled
-- Working files (recently touched)
+- **Working files / changes** (recently touched)
 
 **Required capabilities**
 - Explicit scope model
@@ -73,9 +73,9 @@ Build a Cowork‑style UI on top of **pi**, focused on simple, safe, file‑base
 
 ### 6) Permission Prompts (modal)
 
-- Destructive actions (delete/overwrite/move)
-- Network access prompts
+- Destructive actions (delete/move/rename)
 - Connector access prompts
+- Network prompts only for non‑search tools (if needed)
 
 **Required capabilities**
 - Per‑action permission hooks

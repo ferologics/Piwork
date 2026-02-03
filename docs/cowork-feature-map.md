@@ -17,7 +17,7 @@
 - **Progress panel**: step list with status + current action.
 - **Context panel**: selected folders, connectors, working files.
 - **Artifacts panel**: list + preview + open/export.
-- **Permission prompts**: writes, deletes, network, connectors.
+- **Permission prompts**: deletes/moves, connectors (writes are reviewed via changes).
 - **Queueing**: allow multiple tasks and background execution.
 - **Safety defaults**: explicit scope + visible approvals.
 
