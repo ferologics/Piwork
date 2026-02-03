@@ -47,44 +47,49 @@ This keeps the VM “talking Ethernet” while the host enforces per‑request p
 
 ## Local PoC (macOS/arm64)
 
-1. Download an Alpine aarch64 ISO (virt build):
+1. Download an Alpine aarch64 ISO (virt build) into `tmp/`:
 
    ```bash
+   mkdir -p tmp
    curl -L \
      https://dl-cdn.alpinelinux.org/alpine/latest-stable/releases/aarch64/alpine-virt-3.23.3-aarch64.iso \
-     -o ~/Downloads/alpine-virt-3.23.3-aarch64.iso
+     -o tmp/alpine-virt-3.23.3-aarch64.iso
    ```
 
-2. Start the host netdev sniffer:
+2. Run the spike harness (starts sniffer + QEMU + static IP):
 
    ```bash
-   NETDEV_SOCKET=/tmp/piwork-netdev.sock \
-     node scripts/mitm-netdev-sniff.mjs
+   scripts/run-mitm-spike.sh
    ```
 
-3. Boot QEMU with stream netdev:
+3. Inspect logs:
 
    ```bash
-   ALPINE_ISO=~/Downloads/alpine-virt-3.23.3-aarch64.iso \
-   NETDEV_SOCKET=/tmp/piwork-netdev.sock \
-     scripts/run-mitm-qemu.sh
+   tail -n 40 tmp/mitm-qemu.log
+   tail -n 40 tmp/mitm-netdev.log
    ```
 
-4. Inside the VM, bring up network to generate traffic:
+You should see Ethernet frames logged in the host sniffer. The harness assigns `192.168.100.2/24` and pings `192.168.100.1`, which is enough to emit ARP/ICMP frames even without a host stack.
 
-   ```sh
-   setup-interfaces -a
-   rc-service networking start
-   ping -c 1 1.1.1.1
-   ```
+> Note: stream netdev uses a **4‑byte length prefix** per frame. The sniffer parses that framing.
 
-You should see Ethernet frames logged in the host sniffer.
+### Cleanup
 
-> Note: the sniffer currently logs **raw chunks**. If frames look garbled, we may need to implement proper frame boundaries for the stream netdev protocol.
+```bash
+scripts/mitm-clean.sh
+# remove the ISO too:
+CLEAN_ISO=1 scripts/mitm-clean.sh
+```
+
+## Spike results (2026‑02‑03)
+
+- ✅ Alpine aarch64 boots under QEMU with **stream netdev**.
+- ✅ Host sniffer receives **framed Ethernet packets** (ARP + IPv6 multicast).
+- ⚠️ No DHCP/IP routing yet (expected until a host network stack is implemented).
 
 ## Next steps
 
-1. PoC: launch a tiny VM with **virtio‑net + stream netdev**.
-2. Host process: read frames, parse ARP/IP/TCP, log destinations.
+1. Implement minimal host stack (ARP + DHCP) or configure static IP + ICMP reply.
+2. Parse DNS/TCP and log destinations.
 3. Add **allowlist policy** for a single hostname.
 4. Decide whether to proceed to TLS MITM (custom CA + re‑encryption).

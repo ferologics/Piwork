@@ -1,22 +1,24 @@
 #!/usr/bin/env node
 import fs from "node:fs";
 import net from "node:net";
+import path from "node:path";
 import process from "node:process";
+import { fileURLToPath } from "node:url";
 
-const socketPath = process.env.NETDEV_SOCKET ?? process.argv[2];
+const scriptDir = path.dirname(fileURLToPath(import.meta.url));
+const rootDir = path.resolve(scriptDir, "..");
+const tmpDir = process.env.TMP_DIR ?? path.join(rootDir, "tmp");
 
-if (!socketPath) {
-    console.error("Usage: mitm-netdev-sniff.mjs <unix-socket-path>");
-    console.error("Set NETDEV_SOCKET to override.");
-    process.exit(1);
-}
+fs.mkdirSync(tmpDir, { recursive: true });
 
-if (!fs.existsSync(socketPath)) {
-    console.error(`Socket not found: ${socketPath}`);
-    process.exit(1);
-}
+const socketPath = process.env.NETDEV_SOCKET ?? process.argv[2] ?? path.join(tmpDir, "piwork-netdev.sock");
+const waitSeconds = Number(process.env.WAIT_FOR_SOCKET ?? 10);
+const maxFrameSize = Number(process.env.MAX_FRAME_SIZE ?? 65535);
+
+await waitForSocket(socketPath, waitSeconds);
 
 const client = net.createConnection(socketPath);
+let pending = Buffer.alloc(0);
 
 client.on("connect", () => {
     console.log(`Connected to ${socketPath}`);
@@ -28,8 +30,32 @@ client.on("error", (error) => {
 });
 
 client.on("data", (chunk) => {
-    logFrame(chunk);
+    pending = Buffer.concat([pending, chunk]);
+    pending = drainFrames(pending);
 });
+
+function drainFrames(buffer) {
+    let offset = 0;
+
+    while (buffer.length - offset >= 4) {
+        const frameLength = buffer.readUInt32BE(offset);
+
+        if (frameLength > maxFrameSize) {
+            console.error(`Frame length ${frameLength} exceeds max ${maxFrameSize}. Resetting buffer.`);
+            return Buffer.alloc(0);
+        }
+
+        if (buffer.length - offset < 4 + frameLength) {
+            break;
+        }
+
+        const frame = buffer.subarray(offset + 4, offset + 4 + frameLength);
+        logFrame(frame);
+        offset += 4 + frameLength;
+    }
+
+    return buffer.subarray(offset);
+}
 
 function logFrame(frame) {
     if (frame.length < 14) {
@@ -71,4 +97,29 @@ function formatMac(buffer) {
 
 function formatIp(buffer) {
     return [...buffer].join(".");
+}
+
+async function waitForSocket(socketFile, seconds) {
+    if (fs.existsSync(socketFile)) {
+        return;
+    }
+
+    if (seconds <= 0) {
+        console.error(`Socket not found: ${socketFile}`);
+        process.exit(1);
+    }
+
+    console.log(`Waiting for socket: ${socketFile}`);
+
+    const deadline = Date.now() + seconds * 1000;
+
+    while (Date.now() < deadline) {
+        if (fs.existsSync(socketFile)) {
+            return;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 200));
+    }
+
+    console.error(`Socket not found after ${seconds}s: ${socketFile}`);
+    process.exit(1);
 }

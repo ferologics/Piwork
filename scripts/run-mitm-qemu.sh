@@ -1,13 +1,18 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ALPINE_ISO=${ALPINE_ISO:-}
-NETDEV_SOCKET=${NETDEV_SOCKET:-/tmp/piwork-netdev.sock}
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+ROOT_DIR=$(cd "$SCRIPT_DIR/.." && pwd)
+TMP_DIR=${TMP_DIR:-$ROOT_DIR/tmp}
+ALPINE_ISO=${ALPINE_ISO:-$TMP_DIR/alpine-virt-3.23.3-aarch64.iso}
+NETDEV_SOCKET=${NETDEV_SOCKET:-$TMP_DIR/piwork-netdev.sock}
 EFI_BIOS=${EFI_BIOS:-/opt/homebrew/share/qemu/edk2-aarch64-code.fd}
+
+mkdir -p "$TMP_DIR"
 
 if [[ -z "$ALPINE_ISO" ]]; then
     echo "Set ALPINE_ISO to an Alpine aarch64 ISO path." >&2
-    echo "Example: export ALPINE_ISO=~/Downloads/alpine-virt-3.23.3-aarch64.iso" >&2
+    echo "Example: export ALPINE_ISO=$TMP_DIR/alpine-virt-3.23.3-aarch64.iso" >&2
     exit 1
 fi
 
@@ -21,11 +26,17 @@ if [[ ! -f "$EFI_BIOS" ]]; then
     exit 1
 fi
 
+cleanup() {
+    rm -f "$NETDEV_SOCKET"
+}
+
+trap cleanup EXIT
+
 rm -f "$NETDEV_SOCKET"
 
 qemu-system-aarch64 \
     -machine virt,accel=hvf \
-    -cpu cortex-a72 \
+    -cpu host \
     -smp 2 \
     -m 1024 \
     -nographic \
