@@ -8,15 +8,15 @@
 
 ## Tooling
 
-- **Unit / component**: Vitest + @testing-library/svelte
-- **E2E**: Playwright (webview in dev server)
+- **Unit / component / flow**: Vitest + @testing-library/svelte
 - **Type checks**: svelte-check
+- **E2E**: deferred (optional later)
 
 ## RPC Mock Harness
 
 Create a **mock RPC server** that replays JSONL fixtures into the UI.
 
-- `fixtures/rpc/*.jsonl`
+- `src/lib/__tests__/fixtures/rpc/*.jsonl`
 - Each fixture is a full transcript (prompt → tool calls → events)
 
 The UI subscribes to a `RpcClient` interface. Tests swap in a **MockRpcClient**.
@@ -37,9 +37,9 @@ The UI subscribes to a `RpcClient` interface. Tests swap in a **MockRpcClient**.
 ## Where Tests Live
 
 - `src/lib/__tests__/` for store + component tests
-- `tests/e2e/` for Playwright flows
+- `src/lib/__tests__/fixtures/` for RPC fixtures
 
 ## Notes
 
-- We can keep tests **VM‑free** by using the mock RPC harness.
-- Playwright can run against Vite dev server (no Tauri needed initially).
+- We keep tests **VM‑free** by using the mock RPC harness.
+- If we ever need true E2E, we can add Playwright later.

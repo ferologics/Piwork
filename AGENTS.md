@@ -10,7 +10,7 @@ Build a Cowork‑style, normie‑first UI on top of **pi** using **Tauri**. Focu
 - **SvelteKit** (template from create‑tauri‑app)
 - **pnpm**
 - **Tailwind 4 + shadcn‑svelte**
-- **Testing:** Vitest + Playwright (planned)
+- **Testing:** Vitest (RPC mock; Playwright deferred)
 
 ## Key Decisions
 

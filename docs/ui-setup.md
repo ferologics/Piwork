@@ -75,5 +75,5 @@ Rationale: rich UI primitives without a later migration, good for streaming + mu
 ## Next Steps
 
 1. Add Tailwind + shadcn‑svelte.
-2. Add testing harness (Vitest + Playwright).
+2. Add testing harness (Vitest + RPC mock).
 3. Iterate on layout sketch + panel behavior.
