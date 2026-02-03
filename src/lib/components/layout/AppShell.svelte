@@ -5,13 +5,16 @@ import MainView from "./MainView.svelte";
 import RightPanel from "./RightPanel.svelte";
 
 // TODO: default to false in prod
+let showLeftRail = $state(true);
 let showRightPanel = $state(true);
 </script>
 
 <div class="flex h-screen flex-col overflow-hidden">
-    <TopBar bind:showRightPanel />
+    <TopBar bind:showLeftRail bind:showRightPanel />
     <div class="flex flex-1 overflow-hidden">
-        <LeftRail />
+        {#if showLeftRail}
+            <LeftRail />
+        {/if}
         <MainView />
         {#if showRightPanel}
             <RightPanel />

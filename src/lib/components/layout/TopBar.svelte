@@ -1,11 +1,24 @@
 <script lang="ts">
-import { Settings, PanelRight } from "@lucide/svelte";
+import { Settings, PanelLeft, PanelRight } from "@lucide/svelte";
 
-let { showRightPanel = $bindable(false) }: { showRightPanel?: boolean } = $props();
+let {
+    showLeftRail = $bindable(true),
+    showRightPanel = $bindable(false),
+}: {
+    showLeftRail?: boolean;
+    showRightPanel?: boolean;
+} = $props();
 </script>
 
 <header class="flex h-12 items-center justify-between border-b border-border bg-background px-4">
-    <div class="flex items-center gap-3">
+    <div class="flex items-center gap-2">
+        <button
+            class="rounded-md p-2 hover:bg-accent {showLeftRail ? 'bg-accent' : ''}"
+            aria-label="Toggle tasks"
+            onclick={() => (showLeftRail = !showLeftRail)}
+        >
+            <PanelLeft class="h-4 w-4" />
+        </button>
         <span class="text-lg font-semibold">PUI</span>
         <span class="text-sm text-muted-foreground">No active task</span>
     </div>
