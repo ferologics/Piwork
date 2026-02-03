@@ -19,7 +19,7 @@ let {
         >
             <PanelLeft class="h-4 w-4" />
         </button>
-        <span class="text-lg font-semibold">PUI</span>
+        <span class="text-lg font-semibold">Piwork</span>
         <span class="text-sm text-muted-foreground">No active task</span>
     </div>
 
