@@ -22,7 +22,7 @@
 - Agent runs **inside the app sandbox**.
 - File access only through **explicit user grants** (file picker / scoped storage).
 - **Tools are whitelisted** and implemented in-app (Rust), not arbitrary shell.
-- Network access is **prompted and policy-gated** (allowlist / per-session toggle).
+- Network access is **on by default**, but **policy-gated** (prompts/allowlist; per-task toggle optional).
 - Write operations require explicit approval when outside a trusted workspace.
 
 ### Desktop (macOS / Windows / Linux)
@@ -51,7 +51,7 @@
 - **Workspace-based access**: agent only sees explicitly selected folders.
 - **Mounts are user-driven** per session.
 - **Connector tools** (GitHub/Notion/etc) require explicit enablement.
-- **Network access**: off by default; prompt/allowlist for use cases.
+- **Network access**: on by default; prompt/allowlist for risky use cases.
 - **Approvals**: write operations outside workspace require confirmation.
 
 ## Implementation Notes
@@ -79,13 +79,14 @@
 
 ## Open Questions
 
-- Which operations should require confirmation by default (writes, network, external tools)?
+- Which operations should require confirmation by default (writes, deletes, external tools)?
+- What network prompts/allowlists do we enforce when network is on by default?
 - How should we detect QEMU availability and guide users through setup?
 - Where to host runtime packs, and how do we sign/verify updates?
 
 ## Next Steps
 
-1. Confirm approval/network defaults.
+1. Confirm approval defaults + network policy details.
 2. Define QEMU availability checks + setup-required flow.
 3. Define runtime pack download/install/update flow.
 4. Prototype `SandboxRuntime` interface and a minimal mobile toolset.

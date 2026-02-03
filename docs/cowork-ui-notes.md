@@ -3,11 +3,8 @@
 ## Global Layout
 
 - **Top segmented control**: Chat / Cowork / Code
-- **Left sidebar**: “New task” button + Recents list (empty state shows “No sessions yet”)
-- **Right panel (empty state)**: stacked cards (not tabs)
-  - Progress
-  - Working folder
-  - Context
+- **Left sidebar**: “New task” button + Recents list
+- **Right panel (empty state)**: stacked cards (Progress / Working folder / Context)
 
 ## Empty State / Onboarding
 
@@ -34,9 +31,19 @@
 
 - Bottom‑left profile chip with plan label
 
+## Online Tasks / Connectors
+
+- When using web search, **no explicit permission prompt** appears.
+- Right panel shows **Context → Connectors: Web search**.
+- Clicking the connector opens a **side drawer** with search queries + results.
+- “Thought process” shows inline **search steps** (e.g., “Searched for …”).
+
 ## Implications for PUI
 
 - Empty state can use **stacked cards** on the right for quick orientation.
+- The **Working folder** card is a strong affordance (keep it).
+- Progress appears **todo‑style** (steps/checks), not raw logs.
 - Keep **quick‑start tiles** visible in empty state.
 - Provide a **work‑in‑folder toggle** in composer.
 - “Suggestions” dropdown could map to our **hero workflows**.
+- For web search, consider **no prompt** but show **connector badge + drill‑in panel**.

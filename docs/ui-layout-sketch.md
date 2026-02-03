@@ -41,7 +41,7 @@
 
 **Tabs (active task):**
 
-- **Progress**: step list + current action
+- **Progress**: todo‑style step list + current action
 - **Artifacts**: generated files with preview
 - **Context**: selected folders + connectors + working files
 - **Permissions**: pending approvals + history

@@ -56,7 +56,7 @@ Define what “canvas” means in this product and what artifact types we must s
 
 - Treat artifacts as **untrusted content**.
 - HTML should render in a **sandboxed iframe** with restricted permissions.
-- Network access for HTML artifacts should be **off by default**.
+- Network access for HTML artifacts should be **off by default** (even if VM network is on).
 - Clear warnings for artifacts that include scripts.
 
 ## UX Ideas
