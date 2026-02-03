@@ -7,7 +7,8 @@ TMP_DIR=${TMP_DIR:-$ROOT_DIR/tmp}
 
 rm -f "$TMP_DIR/piwork-netdev.sock" \
     "$TMP_DIR/mitm-netdev.log" \
-    "$TMP_DIR/mitm-qemu.log"
+    "$TMP_DIR/mitm-qemu.log" \
+    "$TMP_DIR/mitm-boot.log"
 
 if [[ "${CLEAN_ISO:-0}" == "1" ]]; then
     rm -f "$TMP_DIR/alpine-virt-3.23.3-aarch64.iso"

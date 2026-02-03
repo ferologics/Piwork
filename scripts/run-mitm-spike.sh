@@ -6,8 +6,9 @@ ROOT_DIR=$(cd "$SCRIPT_DIR/.." && pwd)
 TMP_DIR=${TMP_DIR:-$ROOT_DIR/tmp}
 ALPINE_ISO=${ALPINE_ISO:-$TMP_DIR/alpine-virt-3.23.3-aarch64.iso}
 NETDEV_SOCKET=${NETDEV_SOCKET:-$TMP_DIR/piwork-netdev.sock}
-SNIFF_LOG=${SNIFF_LOG:-$TMP_DIR/mitm-netdev.log}
+HOST_LOG=${HOST_LOG:-$TMP_DIR/mitm-netdev.log}
 QEMU_LOG=${QEMU_LOG:-$TMP_DIR/mitm-qemu.log}
+BOOT_LOG=${BOOT_LOG:-$TMP_DIR/mitm-boot.log}
 
 mkdir -p "$TMP_DIR"
 
@@ -18,24 +19,35 @@ if [[ ! -f "$ALPINE_ISO" ]]; then
 fi
 
 cleanup() {
-    if [[ -n "${SNIFF_PID:-}" ]]; then
-        kill "$SNIFF_PID" 2>/dev/null || true
+    if [[ -n "${HOST_PID:-}" ]]; then
+        kill "$HOST_PID" 2>/dev/null || true
     fi
 }
 
 trap cleanup EXIT
 
 NETDEV_SOCKET="$NETDEV_SOCKET" \
-    node "$SCRIPT_DIR/mitm-netdev-sniff.mjs" > "$SNIFF_LOG" 2>&1 &
-SNIFF_PID=$!
+    HOST_IP=192.168.100.1 \
+    HOST_MAC=02:50:00:00:00:01 \
+    node "$SCRIPT_DIR/mitm-netdev-host.mjs" > "$HOST_LOG" 2>&1 &
+HOST_PID=$!
 
-TMP_DIR="$TMP_DIR" NETDEV_SOCKET="$NETDEV_SOCKET" expect <<EOF
+TMP_DIR="$TMP_DIR" NETDEV_SOCKET="$NETDEV_SOCKET" expect <<EOF > "$BOOT_LOG"
 set timeout 120
+log_user 0
+set start [clock milliseconds]
 log_file -a $QEMU_LOG
 spawn $SCRIPT_DIR/run-mitm-qemu.sh
 expect {
-    -re "login:" {}
-    timeout { exit 1 }
+    -re "login:" {
+        set end [clock milliseconds]
+        set delta [expr {\$end - \$start}]
+        send_user "BOOT_MS=\$delta\n"
+    }
+    timeout {
+        send_user "BOOT_TIMEOUT\n"
+        exit 1
+    }
 }
 send "root\r"
 expect -re "#"
@@ -50,3 +62,7 @@ expect -re "#"
 send "poweroff\r"
 expect eof
 EOF
+
+if [[ -f "$BOOT_LOG" ]]; then
+    cat "$BOOT_LOG"
+fi

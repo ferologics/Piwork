@@ -42,6 +42,6 @@ qemu-system-aarch64 \
     -nographic \
     -bios "$EFI_BIOS" \
     -cdrom "$ALPINE_ISO" \
-    -device virtio-net-pci,netdev=net0 \
+    -device virtio-net-pci,netdev=net0,mac=52:54:00:12:34:56 \
     -netdev stream,id=net0,server=on,addr.type=unix,addr.path="$NETDEV_SOCKET" \
     -serial mon:stdio

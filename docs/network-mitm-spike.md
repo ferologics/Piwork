@@ -56,20 +56,23 @@ This keeps the VM “talking Ethernet” while the host enforces per‑request p
      -o tmp/alpine-virt-3.23.3-aarch64.iso
    ```
 
-2. Run the spike harness (starts sniffer + QEMU + static IP):
+2. Run the spike harness (starts host stack + QEMU + static IP):
 
    ```bash
    scripts/run-mitm-spike.sh
    ```
 
-3. Inspect logs:
+3. Inspect logs + boot timing:
 
-   ```bash
+   ````bash
    tail -n 40 tmp/mitm-qemu.log
    tail -n 40 tmp/mitm-netdev.log
-   ```
+   cat tmp/mitm-boot.log # BOOT_MS=...   ```
+   ````
 
-You should see Ethernet frames logged in the host sniffer. The harness assigns `192.168.100.2/24` and pings `192.168.100.1`, which is enough to emit ARP/ICMP frames even without a host stack.
+You should see ARP + ICMP frames logged in the host stack. The harness assigns `192.168.100.2/24` and pings `192.168.100.1`, which should now receive a reply.
+
+Boot timing is written to `tmp/mitm-boot.log` as `BOOT_MS=...`.
 
 > Note: stream netdev uses a **4‑byte length prefix** per frame. The sniffer parses that framing.
 
@@ -83,13 +86,12 @@ CLEAN_ISO=1 scripts/mitm-clean.sh
 
 ## Spike results (2026‑02‑03)
 
-- ✅ Alpine aarch64 boots under QEMU with **stream netdev**.
-- ✅ Host sniffer receives **framed Ethernet packets** (ARP + IPv6 multicast).
+- ✅ Alpine aarch64 boots under QEMU with **stream netdev** (~7.6s to login on M2, first run).
+- ✅ Host stack replies to **ARP + ICMP** (ping to `192.168.100.1` succeeds).
 - ⚠️ No DHCP/IP routing yet (expected until a host network stack is implemented).
 
 ## Next steps
 
-1. Implement minimal host stack (ARP + DHCP) or configure static IP + ICMP reply.
-2. Parse DNS/TCP and log destinations.
-3. Add **allowlist policy** for a single hostname.
-4. Decide whether to proceed to TLS MITM (custom CA + re‑encryption).
+1. Expand host stack (DHCP + DNS + TCP) to allow outbound requests.
+2. Add **allowlist policy** for a single hostname.
+3. Decide whether to proceed to TLS MITM (custom CA + re‑encryption).
