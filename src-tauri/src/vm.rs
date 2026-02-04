@@ -305,7 +305,7 @@ fn resolve_qemu_binary(manifest: &RuntimeManifest, runtime_dir: &Path) -> Result
     find_in_path("qemu-system-aarch64").ok_or_else(|| "QEMU not found in PATH".to_string())
 }
 
-fn find_in_path(binary: &str) -> Option<PathBuf> {
+pub fn find_in_path(binary: &str) -> Option<PathBuf> {
     let path_var = std::env::var("PATH").ok()?;
     for entry in path_var.split(':') {
         let candidate = PathBuf::from(entry).join(binary);

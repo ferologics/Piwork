@@ -29,12 +29,6 @@ struct RuntimeStatus {
     accel_available: Option<bool>,
 }
 
-// Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-#[tauri::command]
-fn greet(name: &str) -> String {
-    format!("Hello, {name}! You've been greeted from Rust!")
-}
-
 #[tauri::command]
 fn dev_log(source: &str, message: &str) {
     eprintln!("[{source}] {message}");
@@ -83,19 +77,7 @@ fn find_qemu_binary(runtime_dir: &Path, manifest_path: &Path) -> Option<PathBuf>
         }
     }
 
-    find_in_path("qemu-system-aarch64")
-}
-
-fn find_in_path(binary: &str) -> Option<PathBuf> {
-    let path_var = std::env::var("PATH").ok()?;
-    for entry in path_var.split(':') {
-        let candidate = PathBuf::from(entry).join(binary);
-        if candidate.is_file() {
-            return Some(candidate);
-        }
-    }
-
-    None
+    vm::find_in_path("qemu-system-aarch64")
 }
 
 fn check_accel_available() -> Option<bool> {
@@ -325,7 +307,6 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            greet,
             dev_log,
             runtime_status,
             task_store_list,
