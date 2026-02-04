@@ -883,6 +883,8 @@ onDestroy(() => {
                             </div>
                         {:else}
                             {#each conversation.messages as message}
+                                {@const hasContent = message.blocks.length > 0 || message.isStreaming}
+                                {#if message.role === 'user' || hasContent}
                                 <div class="flex {message.role === 'user' ? 'justify-end' : 'justify-start'}">
                                     <div class="max-w-[80%] rounded-lg px-3 py-2 {message.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-muted'}">
                                         {#each message.blocks as block}
@@ -910,6 +912,7 @@ onDestroy(() => {
                                         {/if}
                                     </div>
                                 </div>
+                                {/if}
                             {/each}
                             {#if conversation.isAgentRunning && !conversation.messages.some(m => m.isStreaming)}
                                 <div class="flex justify-start">
