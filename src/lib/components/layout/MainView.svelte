@@ -767,7 +767,18 @@ onDestroy(() => {
                         <div class="mt-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-[11px] text-amber-200">
                             {rpcAuthHint}
                         </div>
-                        {#if rpcLoginUrl && loginPromptVisible && loginPromptedUrl === rpcLoginUrl}
+                        <div class="mt-2 flex flex-wrap gap-2">
+                            <button
+                                class="rounded-md bg-secondary px-3 py-1 text-[11px] hover:bg-secondary/80 disabled:opacity-60"
+                                onclick={sendLogin}
+                                disabled={!rpcConnected}
+                            >
+                                Send /login
+                            </button>
+                        </div>
+                    {/if}
+                    {#if rpcLoginUrl}
+                        {#if loginPromptVisible && loginPromptedUrl === rpcLoginUrl}
                             <div class="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
                                 <span>
                                     {#if loginPromptCountdown !== null}
@@ -792,36 +803,25 @@ onDestroy(() => {
                                 </button>
                             </div>
                         {/if}
-                        {#if rpcLoginUrl}
-                            <code class="mt-2 block rounded-md bg-muted px-2 py-1 text-[11px]">{rpcLoginUrl}</code>
-                        {/if}
+                        <code class="mt-2 block rounded-md bg-muted px-2 py-1 text-[11px]">{rpcLoginUrl}</code>
                         <div class="mt-2 flex flex-wrap gap-2">
-                            {#if rpcLoginUrl}
-                                <button
-                                    class="rounded-md bg-secondary px-3 py-1 text-[11px] hover:bg-secondary/80 disabled:opacity-60"
-                                    onclick={openLoginUrl}
-                                    disabled={openingLoginUrl}
-                                >
-                                    {openingLoginUrl ? "Opening login…" : "Open login URL"}
-                                </button>
-                                <button
-                                    class="rounded-md bg-secondary px-3 py-1 text-[11px] hover:bg-secondary/80 disabled:opacity-60"
-                                    onclick={copyLoginUrl}
-                                    disabled={copyingLoginUrl}
-                                >
-                                    {loginCopied
-                                        ? "Copied"
-                                        : copyingLoginUrl
-                                            ? "Copying…"
-                                            : "Copy URL"}
-                                </button>
-                            {/if}
                             <button
                                 class="rounded-md bg-secondary px-3 py-1 text-[11px] hover:bg-secondary/80 disabled:opacity-60"
-                                onclick={sendLogin}
-                                disabled={!rpcConnected}
+                                onclick={openLoginUrl}
+                                disabled={openingLoginUrl}
                             >
-                                Send /login
+                                {openingLoginUrl ? "Opening login…" : "Open login URL"}
+                            </button>
+                            <button
+                                class="rounded-md bg-secondary px-3 py-1 text-[11px] hover:bg-secondary/80 disabled:opacity-60"
+                                onclick={copyLoginUrl}
+                                disabled={copyingLoginUrl}
+                            >
+                                {loginCopied
+                                    ? "Copied"
+                                    : copyingLoginUrl
+                                        ? "Copying…"
+                                        : "Copy URL"}
                             </button>
                         </div>
                     {/if}
