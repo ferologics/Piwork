@@ -4,7 +4,9 @@
 
 - [x] **Tasks**: Auto-create on first message, conversation persistence per task ✓
 - [ ] **Task resume**: Click existing task → load its conversation (wired, needs UI click test)
-- [ ] **Working folder**: Selection UI + mount into VM as cwd
+- [x] **Working folder UI**: Selection UI, recent folders dropdown, Tauri dialog ✓
+- [ ] **VM folder mount**: BLOCKED - Alpine virt kernel lacks 9p modules
+  - Options: use standard kernel (bigger), virtiofs (complex), or build custom
 - [ ] **Remount on task switch**: Unmount old folder, mount new task's folder
 - [ ] **Session file per task**: Pi uses `--session-file` per task for conversation isolation
 
