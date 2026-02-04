@@ -418,14 +418,14 @@ onDestroy(() => {
 </script>
 
 {#if open}
-    <div class="fixed inset-0 z-50 flex items-center justify-center p-4 relative">
+    <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
         <button
             class="absolute inset-0 bg-black/40"
             type="button"
             aria-label="Close settings"
             onclick={() => onClose?.()}
         ></button>
-        <div class="relative w-full max-w-xl rounded-lg border border-border bg-card p-6 shadow-lg">
+        <div class="relative max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-lg border border-border bg-card p-6 shadow-lg">
             <div class="flex items-center justify-between">
                 <div>
                     <h2 class="text-lg font-semibold">Settings</h2>

@@ -45,8 +45,15 @@ async function loadRuntimeStatus() {
 }
 
 function handleKeydown(e: KeyboardEvent) {
+    // Escape closes settings
+    if (e.key === "Escape" && showSettings) {
+        e.preventDefault();
+        showSettings = false;
+        return;
+    }
+
     // Cmd+Shift+D (Mac) or Ctrl+Shift+D (Win/Linux) toggles dev panel
-    if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === "d") {
+    if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === "d") {
         e.preventDefault();
         devMode.toggle();
     }
@@ -59,15 +66,11 @@ onMount(() => {
         devLog("AppShell", `taskStore.load error: ${error}`);
     });
 
-    if (devMode.isAvailable) {
-        window.addEventListener("keydown", handleKeydown);
-    }
+    window.addEventListener("keydown", handleKeydown);
 });
 
 onDestroy(() => {
-    if (devMode.isAvailable) {
-        window.removeEventListener("keydown", handleKeydown);
-    }
+    window.removeEventListener("keydown", handleKeydown);
 });
 </script>
 
