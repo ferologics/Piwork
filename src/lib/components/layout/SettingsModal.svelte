@@ -50,6 +50,7 @@ let commandNotice = $state<string | null>(null);
 let copyingCommand = $state(false);
 let commandCopied = $state(false);
 let openingStorePath = $state(false);
+let importingAuth = $state(false);
 let newProfile = $state("");
 let profileNotice = $state<string | null>(null);
 let profileError = $state<string | null>(null);
@@ -129,6 +130,23 @@ async function openStorePath() {
         await openPath(storePath);
     } finally {
         openingStorePath = false;
+    }
+}
+
+async function importPiAuth() {
+    if (importingAuth) return;
+    importingAuth = true;
+    error = null;
+
+    try {
+        const summary = await invoke<AuthStoreSummary>("auth_store_import_pi", { profile });
+        entries = summary.entries;
+        storePath = summary.path;
+        setNotice("Imported ~/.pi/agent/auth.json");
+    } catch (err) {
+        error = err instanceof Error ? err.message : String(err);
+    } finally {
+        importingAuth = false;
     }
 }
 
@@ -365,6 +383,7 @@ function resetOnClose() {
     clearProfileNotice();
     clearProfileSetNotice();
     openingStorePath = false;
+    importingAuth = false;
     apiKey = "";
     newProfile = "";
 }
@@ -490,6 +509,13 @@ onDestroy(() => {
                                     disabled={openingStorePath}
                                 >
                                     {openingStorePath ? "Opening…" : "Open auth file"}
+                                </button>
+                                <button
+                                    class="rounded-md bg-secondary px-2 py-1 text-[11px] hover:bg-secondary/80 disabled:opacity-60"
+                                    onclick={importPiAuth}
+                                    disabled={importingAuth}
+                                >
+                                    {importingAuth ? "Importing…" : "Import ~/.pi auth"}
                                 </button>
                             </div>
                         </div>

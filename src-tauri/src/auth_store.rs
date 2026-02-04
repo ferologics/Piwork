@@ -56,6 +56,22 @@ pub fn delete_provider(path: &Path, provider: &str) -> Result<(), String> {
     write_map(path, map)
 }
 
+pub fn import_from_path(dest_path: &Path, source_path: &Path) -> Result<(), String> {
+    if !source_path.exists() {
+        return Err(format!("Auth file not found at {}", source_path.display()));
+    }
+
+    let source_map = read_map(source_path)?;
+    if source_map.is_empty() {
+        return Err("Source auth file is empty".to_string());
+    }
+
+    let mut dest_map = read_map(dest_path)?;
+    dest_map.extend(source_map);
+
+    write_map(dest_path, dest_map)
+}
+
 fn read_map(path: &Path) -> Result<Map<String, Value>, String> {
     if !path.exists() {
         return Ok(Map::new());
@@ -148,5 +164,22 @@ mod tests {
         assert!(!path.exists());
 
         std::fs::remove_dir_all(path.parent().unwrap()).ok();
+    }
+
+    #[test]
+    fn import_merges_entries() {
+        let source = temp_path();
+        let dest = temp_path();
+
+        set_api_key(&source, "anthropic", "source-key").expect("set source");
+        set_api_key(&dest, "openai", "dest-key").expect("set dest");
+
+        import_from_path(&dest, &source).expect("import");
+
+        let summary = summary(&dest).expect("summary");
+        assert_eq!(summary.entries.len(), 2);
+
+        std::fs::remove_dir_all(source.parent().unwrap()).ok();
+        std::fs::remove_dir_all(dest.parent().unwrap()).ok();
     }
 }

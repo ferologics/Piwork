@@ -119,6 +119,11 @@ fn auth_file(app: &tauri::AppHandle, profile: Option<String>) -> Result<PathBuf,
     Ok(base_dir.join("auth").join(profile).join("auth.json"))
 }
 
+fn pi_auth_file(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    let home_dir = app.path().home_dir().map_err(|error| error.to_string())?;
+    Ok(home_dir.join(".pi").join("agent").join("auth.json"))
+}
+
 #[tauri::command]
 #[allow(clippy::needless_pass_by_value)]
 fn vm_status(state: tauri::State<vm::VmState>) -> vm::VmStatusResponse {
@@ -197,6 +202,18 @@ fn auth_store_delete(
     auth_store::summary(&auth_path)
 }
 
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
+fn auth_store_import_pi(
+    app: tauri::AppHandle,
+    profile: Option<String>,
+) -> Result<auth_store::AuthStoreSummary, String> {
+    let auth_path = auth_file(&app, profile)?;
+    let source_path = pi_auth_file(&app)?;
+    auth_store::import_from_path(&auth_path, &source_path)?;
+    auth_store::summary(&auth_path)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -211,6 +228,7 @@ pub fn run() {
             auth_store_list,
             auth_store_set_api_key,
             auth_store_delete,
+            auth_store_import_pi,
             vm_status,
             vm_start,
             vm_stop,
