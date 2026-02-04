@@ -181,6 +181,20 @@ fn task_store_delete(app: tauri::AppHandle, task_id: String) -> Result<(), Strin
 
 #[tauri::command]
 #[allow(clippy::needless_pass_by_value)]
+fn task_store_save_conversation(app: tauri::AppHandle, task_id: String, conversation_json: String) -> Result<(), String> {
+    let tasks_dir = tasks_dir(&app)?;
+    task_store::save_conversation(&tasks_dir, &task_id, &conversation_json)
+}
+
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
+fn task_store_load_conversation(app: tauri::AppHandle, task_id: String) -> Result<Option<String>, String> {
+    let tasks_dir = tasks_dir(&app)?;
+    task_store::load_conversation(&tasks_dir, &task_id)
+}
+
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
 fn auth_store_list(app: tauri::AppHandle, profile: Option<String>) -> Result<auth_store::AuthStoreSummary, String> {
     let auth_path = auth_file(&app, profile)?;
     auth_store::summary(&auth_path)
@@ -304,6 +318,8 @@ pub fn run() {
             task_store_list,
             task_store_upsert,
             task_store_delete,
+            task_store_save_conversation,
+            task_store_load_conversation,
             auth_store_list,
             auth_store_set_api_key,
             auth_store_delete,

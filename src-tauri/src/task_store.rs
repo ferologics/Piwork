@@ -73,6 +73,29 @@ pub fn delete_task(tasks_dir: &Path, task_id: String) -> Result<(), String> {
     Ok(())
 }
 
+pub fn save_conversation(tasks_dir: &Path, task_id: &str, conversation_json: &str) -> Result<(), String> {
+    let task_folder = tasks_dir.join(task_id);
+    if !task_folder.exists() {
+        return Err(format!("Task folder does not exist: {}", task_id));
+    }
+
+    let conv_path = task_folder.join("conversation.json");
+    std::fs::write(&conv_path, conversation_json).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+pub fn load_conversation(tasks_dir: &Path, task_id: &str) -> Result<Option<String>, String> {
+    let task_folder = tasks_dir.join(task_id);
+    let conv_path = task_folder.join("conversation.json");
+
+    if !conv_path.exists() {
+        return Ok(None);
+    }
+
+    let content = std::fs::read_to_string(&conv_path).map_err(|e| e.to_string())?;
+    Ok(Some(content))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

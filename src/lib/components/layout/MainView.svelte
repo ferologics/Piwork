@@ -7,6 +7,8 @@ import { Send, Paperclip, FolderOpen, ChevronDown, Loader2 } from "@lucide/svelt
 import { devLog } from "$lib/utils/devLog";
 import { TauriRpcClient, MessageAccumulator } from "$lib/rpc";
 import type { RpcEvent, RpcPayload, ConversationState, ContentBlock } from "$lib/rpc";
+import { taskStore } from "$lib/stores/taskStore";
+import type { TaskMetadata } from "$lib/types/task";
 
 
 let prompt = $state("");
@@ -35,6 +37,10 @@ let pendingUiInput = $state("");
 let pendingUiSending = $state(false);
 let vmLogPath = $state<string | null>(null);
 let openingLog = $state(false);
+
+// Task tracking
+let currentTaskId = $state<string | null>(null);
+let unsubscribeActiveTask: (() => void) | null = null;
 
 interface ModelOption {
     id: string;
@@ -726,6 +732,45 @@ async function sendPrompt(message?: string) {
 
 let testPromptUnlisten: (() => void) | null = null;
 
+async function handleTaskSwitch(newTask: TaskMetadata | null) {
+    const newTaskId = newTask?.id ?? null;
+    const oldTaskId = currentTaskId;
+
+    // Skip if same task
+    if (newTaskId === oldTaskId) return;
+
+    devLog("MainView", `Task switch: ${oldTaskId} -> ${newTaskId}`);
+
+    // Save current conversation to old task
+    if (oldTaskId && messageAccumulator.getState().messages.length > 0) {
+        try {
+            await taskStore.saveConversation(oldTaskId, messageAccumulator.serialize());
+            devLog("MainView", `Saved conversation to task ${oldTaskId}`);
+        } catch (e) {
+            devLog("MainView", `Failed to save conversation: ${e}`);
+        }
+    }
+
+    // Reset and load new task's conversation
+    messageAccumulator.reset();
+    conversation = messageAccumulator.getState();
+
+    if (newTaskId) {
+        try {
+            const saved = await taskStore.loadConversation(newTaskId);
+            if (saved) {
+                messageAccumulator.loadState(saved);
+                conversation = messageAccumulator.getState();
+                devLog("MainView", `Loaded conversation for task ${newTaskId}`);
+            }
+        } catch (e) {
+            devLog("MainView", `Failed to load conversation: ${e}`);
+        }
+    }
+
+    currentTaskId = newTaskId;
+}
+
 onMount(() => {
     try {
         const stored = localStorage.getItem(LOGIN_AUTO_OPEN_KEY);
@@ -741,6 +786,11 @@ onMount(() => {
     void connectRpc();
     void refreshVmLogPath();
 
+    // Subscribe to active task changes
+    unsubscribeActiveTask = taskStore.activeTask.subscribe((task) => {
+        void handleTaskSwitch(task);
+    });
+
     // Test harness listener (dev only)
     if (import.meta.env.DEV) {
         listen<string>("test_prompt", (event) => {
@@ -754,6 +804,11 @@ onMount(() => {
 });
 
 onDestroy(() => {
+    // Save conversation before unmounting
+    if (currentTaskId && messageAccumulator.getState().messages.length > 0) {
+        void taskStore.saveConversation(currentTaskId, messageAccumulator.serialize());
+    }
+    unsubscribeActiveTask?.();
     void disconnectRpc();
     testPromptUnlisten?.();
 });

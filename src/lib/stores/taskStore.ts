@@ -85,6 +85,14 @@ function setActiveTask(id: string | null) {
     activeTaskId.set(id);
 }
 
+async function saveConversation(taskId: string, conversationJson: string): Promise<void> {
+    await invoke("task_store_save_conversation", { taskId, conversationJson });
+}
+
+async function loadConversation(taskId: string): Promise<string | null> {
+    return await invoke<string | null>("task_store_load_conversation", { taskId });
+}
+
 export const taskStore = {
     subscribe: tasks.subscribe,
     activeTaskId: { subscribe: activeTaskId.subscribe },
@@ -94,4 +102,6 @@ export const taskStore = {
     delete: deleteTask,
     create: createTask,
     setActive: setActiveTask,
+    saveConversation,
+    loadConversation,
 };

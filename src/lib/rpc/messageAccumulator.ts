@@ -418,4 +418,23 @@ export class MessageAccumulator {
         this.currentToolName = "";
         this.activeToolOutputs.clear();
     }
+
+    serialize(): string {
+        // Only serialize messages, not transient state
+        return JSON.stringify({
+            messages: this.state.messages,
+        });
+    }
+
+    loadState(json: string): void {
+        this.reset();
+        try {
+            const data = JSON.parse(json);
+            if (Array.isArray(data.messages)) {
+                this.state.messages = data.messages;
+            }
+        } catch {
+            // Invalid JSON, keep reset state
+        }
+    }
 }
