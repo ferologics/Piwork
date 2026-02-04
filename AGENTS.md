@@ -28,17 +28,20 @@ mise run runtime-clean  # clean runtime artifacts
 **Boot time**: ~1s to READY, ~0.7s first RPC response
 
 **Files** (in `~/Library/Application Support/com.pi.work/runtime/`):
+
 - `vmlinuz-virt` (10MB) - Linux kernel
 - `initramfs-virt-fast` (51MB) - Alpine + Node.js + pi
 - `manifest.json` - config
 
 **How it works**:
+
 1. QEMU boots kernel + initramfs (direct boot, no bootloader)
 2. Init script: mount filesystems, get DHCP, print "READY" to serial
 3. `nc -l -p 19384 -e node pi --mode rpc` bridges TCP to pi stdin/stdout
 4. Host connects to `localhost:19384` for RPC
 
 **Building** (`mise run runtime-build`):
+
 1. Downloads Alpine ISO (cached)
 2. Extracts kernel + base initramfs
 3. Downloads Node.js + deps from Alpine APKs (16 packages)

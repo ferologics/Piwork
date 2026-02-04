@@ -2,16 +2,21 @@
 import { onDestroy, onMount } from "svelte";
 import { invoke } from "@tauri-apps/api/core";
 import { openPath, openUrl } from "@tauri-apps/plugin-opener";
-import { Send, Paperclip, FolderOpen, ChevronDown } from "@lucide/svelte";
+import { Send, Paperclip, FolderOpen, ChevronDown, ChevronRight, Loader2 } from "@lucide/svelte";
 import { devLog } from "$lib/utils/devLog";
-import { TauriRpcClient } from "$lib/rpc";
-import type { RpcEvent } from "$lib/rpc";
+import { TauriRpcClient, MessageAccumulator } from "$lib/rpc";
+import type { RpcEvent, RpcPayload, ConversationState, ContentBlock } from "$lib/rpc";
+
+// Dev mode for verbose output (only available in dev builds)
+const IS_DEV = import.meta.env.DEV;
+let showDevPanel = $state(false);
+let rpcLog = $state<string[]>([]);
 
 let prompt = $state("");
 let textareaEl: HTMLTextAreaElement | undefined = $state();
 let rpcClient: TauriRpcClient | null = $state(null);
-let rpcMessages = $state<string[]>([]);
-let rpcStreaming = $state("");
+let messageAccumulator = new MessageAccumulator();
+let conversation = $state<ConversationState>(messageAccumulator.getState());
 let rpcConnected = $state(false);
 let rpcConnecting = $state(false);
 let rpcError = $state<string | null>(null);
@@ -56,12 +61,18 @@ interface ExtensionUiRequest {
     widgetPlacement?: string;
 }
 
+// Preferred model patterns - filter to just these
+const PREFERRED_MODEL_PATTERNS = ["claude-opus-4-5", "gpt-5.2-codex", "gemini-3-pro"];
+
 const fallbackModels: ModelOption[] = [
-    { id: "claude-opus-4-5", label: "Opus 4.5", provider: null },
-    { id: "gpt-5.2", label: "GPT 5.2", provider: null },
-    { id: "gemini-3-pro", label: "Gemini 3", provider: null },
-    { id: "kimi-2.5", label: "Kimi 2.5", provider: null },
+    { id: "claude-opus-4-5", label: "Opus 4.5", provider: "anthropic" },
+    { id: "gpt-5.2-codex", label: "GPT 5.2", provider: "openai-codex" },
+    { id: "gemini-3-pro-preview", label: "Gemini 3 Pro", provider: "google-gemini-cli" },
 ];
+
+function isPreferredModel(id: string): boolean {
+    return PREFERRED_MODEL_PATTERNS.some((pattern) => id.includes(pattern) || id.startsWith(pattern.split("-")[0]));
+}
 
 let availableModels = $state<ModelOption[]>([...fallbackModels]);
 let selectedModelId = $state(fallbackModels[0]?.id ?? "");
@@ -86,7 +97,10 @@ function autoGrow() {
 }
 
 function pushRpcMessage(message: string) {
-    rpcMessages = [...rpcMessages, message];
+    // Log to dev panel instead of showing to user
+    if (IS_DEV) {
+        rpcLog = [...rpcLog.slice(-99), message];
+    }
     maybeCaptureLoginUrl(message);
 }
 
@@ -413,6 +427,15 @@ function formatStateInfo(data: Record<string, unknown> | undefined) {
 }
 
 function handleRpcPayload(payload: Record<string, unknown>) {
+    // Log for dev panel
+    if (IS_DEV) {
+        rpcLog = [...rpcLog.slice(-99), `[${payload.type}] ${JSON.stringify(payload).slice(0, 200)}`];
+    }
+
+    // Feed to message accumulator for proper conversation tracking
+    messageAccumulator.processEvent(payload as RpcPayload);
+    conversation = messageAccumulator.getState();
+
     const type = payload.type;
 
     if (type === "response") {
@@ -458,7 +481,8 @@ function handleRpcPayload(payload: Record<string, unknown>) {
                 const mapped = models
                     .filter((model) => typeof model === "object" && model !== null)
                     .map((model) => resolveModelOption(model as Record<string, unknown>))
-                    .filter((model): model is ModelOption => Boolean(model));
+                    .filter((model): model is ModelOption => Boolean(model))
+                    .filter((model) => isPreferredModel(model.id));
 
                 if (mapped.length > 0) {
                     availableModels = mapped;
@@ -547,53 +571,7 @@ function handleRpcPayload(payload: Record<string, unknown>) {
         return;
     }
 
-    if (type === "message_update") {
-        const event = payload.assistantMessageEvent as Record<string, unknown> | undefined;
-        const eventType = event?.type;
-
-        if (eventType === "text_delta" && typeof event?.delta === "string") {
-            rpcStreaming += event.delta;
-            return;
-        }
-
-        if (eventType === "text_end" && typeof event?.content === "string") {
-            rpcStreaming = event.content;
-            pushRpcMessage(rpcStreaming);
-            rpcStreaming = "";
-            return;
-        }
-
-        if (eventType === "done") {
-            if (rpcStreaming) {
-                pushRpcMessage(rpcStreaming);
-                rpcStreaming = "";
-            }
-            return;
-        }
-    }
-
-    if (type === "message_end") {
-        const message = payload.message as Record<string, unknown> | undefined;
-        const content = extractMessageContent(message);
-        if (content) {
-            pushRpcMessage(content);
-            rpcStreaming = "";
-            return;
-        }
-    }
-
-    if (type === "tool_execution_start") {
-        const toolName = payload.toolName;
-        if (typeof toolName === "string") {
-            pushRpcMessage(`[tool] ${toolName}`);
-            return;
-        }
-    }
-
-    const message = extractFallbackMessage(payload);
-    if (message) {
-        pushRpcMessage(message);
-    }
+    // message_update, message_end, tool_execution events are handled by MessageAccumulator
 }
 
 function extractMessageContent(message: Record<string, unknown> | undefined) {
@@ -739,6 +717,10 @@ async function sendPrompt() {
     const content = prompt.trim();
     if (!content) return;
 
+    // Add user message to conversation
+    messageAccumulator.addUserMessage(content);
+    conversation = messageAccumulator.getState();
+
     await rpcClient.send({ type: "prompt", message: content });
     prompt = "";
 }
@@ -880,18 +862,80 @@ onDestroy(() => {
                             </button>
                         </div>
                     {/if}
-                    <div class="mt-2 space-y-2 text-xs text-muted-foreground">
-                        {#if rpcMessages.length === 0 && !rpcStreaming}
-                            <div>No events yet.</div>
+                    <!-- Chat messages -->
+                    <div class="mt-4 space-y-4">
+                        {#if conversation.messages.length === 0 && !conversation.isAgentRunning}
+                            <div class="text-center text-sm text-muted-foreground py-8">
+                                What would you like to do?
+                            </div>
                         {:else}
-                            {#each rpcMessages as message}
-                                <div class="break-words rounded-md bg-muted px-2 py-1">{message}</div>
+                            {#each conversation.messages as message}
+                                <div class="flex {message.role === 'user' ? 'justify-end' : 'justify-start'}">
+                                    <div class="max-w-[80%] rounded-lg px-3 py-2 {message.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-muted'}">
+                                        {#each message.blocks as block}
+                                            {#if block.type === 'text'}
+                                                <div class="text-sm whitespace-pre-wrap">{block.text}</div>
+                                            {:else if block.type === 'thinking' && !block.isCollapsed}
+                                                <div class="text-xs text-muted-foreground italic border-l-2 border-muted-foreground/30 pl-2 my-1">
+                                                    {block.text}
+                                                </div>
+                                            {:else if block.type === 'tool_call'}
+                                                <div class="text-xs text-muted-foreground my-1 flex items-center gap-1">
+                                                    {#if block.isStreaming}
+                                                        <Loader2 class="h-3 w-3 animate-spin" />
+                                                    {/if}
+                                                    <span class="font-mono">{block.name}</span>
+                                                </div>
+                                            {:else if block.type === 'tool_result' && block.isError}
+                                                <div class="text-xs text-red-400 my-1">
+                                                    Error: {block.output}
+                                                </div>
+                                            {/if}
+                                        {/each}
+                                        {#if message.isStreaming && message.blocks.length === 0}
+                                            <Loader2 class="h-4 w-4 animate-spin text-muted-foreground" />
+                                        {/if}
+                                    </div>
+                                </div>
                             {/each}
-                            {#if rpcStreaming}
-                                <div class="break-words rounded-md bg-muted/60 px-2 py-1 italic">{rpcStreaming}</div>
+                            {#if conversation.isAgentRunning && !conversation.messages.some(m => m.isStreaming)}
+                                <div class="flex justify-start">
+                                    <div class="rounded-lg bg-muted px-3 py-2">
+                                        <Loader2 class="h-4 w-4 animate-spin text-muted-foreground" />
+                                    </div>
+                                </div>
                             {/if}
                         {/if}
+                        {#if conversation.error}
+                            <div class="rounded-lg bg-red-500/10 border border-red-500/30 px-3 py-2 text-sm text-red-400">
+                                {conversation.error}
+                            </div>
+                        {/if}
                     </div>
+
+                    <!-- Dev panel (only in dev builds) -->
+                    {#if IS_DEV}
+                        <div class="mt-4 border-t border-border pt-2">
+                            <button
+                                class="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
+                                onclick={() => showDevPanel = !showDevPanel}
+                            >
+                                <ChevronRight class="h-3 w-3 transition-transform {showDevPanel ? 'rotate-90' : ''}" />
+                                Dev: RPC Log ({rpcLog.length})
+                            </button>
+                            {#if showDevPanel}
+                                <div class="mt-2 max-h-48 overflow-auto rounded bg-muted/50 p-2 font-mono text-[10px] text-muted-foreground">
+                                    {#each rpcLog as entry}
+                                        <div class="truncate">{entry}</div>
+                                    {/each}
+                                    {#if rpcLog.length === 0}
+                                        <div class="italic">No RPC events yet</div>
+                                    {/if}
+                                </div>
+                            {/if}
+                        </div>
+                    {/if}
+
                     {#if pendingUiRequest}
                         <div class="mt-4 rounded-md border border-border bg-muted/30 p-3 text-xs text-muted-foreground">
                             <div class="text-sm font-medium text-foreground">
@@ -1033,7 +1077,7 @@ onDestroy(() => {
                         <select
                             bind:value={selectedModelId}
                             onchange={handleModelChange}
-                            class="appearance-none rounded-md bg-transparent px-2 py-1 text-xs text-muted-foreground outline-none hover:bg-accent cursor-pointer"
+                            class="max-w-32 truncate appearance-none rounded-md bg-transparent px-2 py-1 text-xs text-muted-foreground outline-none hover:bg-accent cursor-pointer"
                         >
                             {#each availableModels as model}
                                 <option value={model.id}>{model.label}</option>

@@ -111,11 +111,7 @@ pub fn start(app: &AppHandle, state: &VmState, runtime_dir: &Path) -> Result<VmS
     eprintln!("[rust:vm] loading manifest");
     let manifest = load_manifest(runtime_dir)?;
 
-    let vm_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| e.to_string())?
-        .join("vm");
+    let vm_dir = app.path().app_data_dir().map_err(|e| e.to_string())?.join("vm");
     std::fs::create_dir_all(&vm_dir).map_err(|e| e.to_string())?;
     let log_path = vm_dir.join("qemu.log");
 
@@ -157,19 +153,15 @@ pub fn start(app: &AppHandle, state: &VmState, runtime_dir: &Path) -> Result<VmS
         // Connect to RPC port
         match connect_rpc(RPC_PORT) {
             Ok(stream) => {
-                eprintln!("[rust:vm:rpc] connected to TCP port {}", RPC_PORT);
+                eprintln!("[rust:vm:rpc] connected to TCP port {RPC_PORT}");
                 if let Ok(clone) = stream.try_clone() {
                     *rpc_writer.lock().unwrap() = Some(clone);
                 }
                 read_rpc_lines(&app_handle, stream);
             }
             Err(error) => {
-                eprintln!("[rust:vm:rpc] TCP connection failed: {}", error);
-                emit_event(
-                    &app_handle,
-                    "error",
-                    format!("RPC connection failed: {error}"),
-                );
+                eprintln!("[rust:vm:rpc] TCP connection failed: {error}");
+                emit_event(&app_handle, "error", format!("RPC connection failed: {error}"));
             }
         }
 
@@ -227,10 +219,7 @@ fn spawn_qemu(manifest: &RuntimeManifest, runtime_dir: &Path, log_path: &Path) -
         return Err(format!("Initrd not found: {}", initrd.display()));
     }
 
-    let cmdline = manifest
-        .cmdline
-        .as_deref()
-        .unwrap_or("quiet console=ttyAMA0");
+    let cmdline = manifest.cmdline.as_deref().unwrap_or("quiet console=ttyAMA0");
 
     // Open log file for serial output
     let log_file = std::fs::File::create(log_path).map_err(|e| e.to_string())?;
@@ -256,10 +245,7 @@ fn spawn_qemu(manifest: &RuntimeManifest, runtime_dir: &Path, log_path: &Path) -
         .arg("-device")
         .arg("virtio-net-pci,netdev=net0,mac=52:54:00:12:34:56")
         .arg("-netdev")
-        .arg(format!(
-            "user,id=net0,hostfwd=tcp:127.0.0.1:{}-:{}",
-            RPC_PORT, RPC_PORT
-        ))
+        .arg(format!("user,id=net0,hostfwd=tcp:127.0.0.1:{RPC_PORT}-:{RPC_PORT}"))
         // Serial console to file (we read this for READY)
         .arg("-serial")
         .arg(format!("file:{}", log_path.display()))
@@ -308,7 +294,7 @@ fn wait_for_ready(log_path: &Path, timeout: Duration) -> bool {
 }
 
 fn connect_rpc(port: u16) -> Result<TcpStream, String> {
-    let addr = format!("127.0.0.1:{}", port);
+    let addr = format!("127.0.0.1:{port}");
     let mut attempts = 0;
 
     loop {
@@ -332,7 +318,7 @@ fn read_rpc_lines(app: &AppHandle, stream: TcpStream) {
     for line in reader.lines().map_while(Result::ok) {
         let trimmed = line.trim();
         if !trimmed.is_empty() {
-            eprintln!("[rust:vm:rpc] received: {:?}", trimmed);
+            eprintln!("[rust:vm:rpc] received: {trimmed:?}");
             emit_event(app, "rpc", trimmed.to_string());
         }
     }

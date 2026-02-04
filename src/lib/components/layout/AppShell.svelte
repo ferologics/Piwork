@@ -8,17 +8,7 @@ import TopBar from "./TopBar.svelte";
 import SettingsModal from "./SettingsModal.svelte";
 import LeftRail from "./LeftRail.svelte";
 import RightPanel from "./RightPanel.svelte";
-
-// Lazy load MainView to avoid blocking initial render
-let MainView: typeof import("./MainView.svelte").default | null = $state(null);
-
-async function loadMainView() {
-    devLog("AppShell", "loadMainView start");
-    if (MainView) return;
-    const module = await import("./MainView.svelte");
-    MainView = module.default;
-    devLog("AppShell", "loadMainView done");
-}
+import MainView from "./MainView.svelte";
 
 interface RuntimeStatus {
     status: "missing" | "ready";
@@ -29,62 +19,44 @@ interface RuntimeStatus {
     accelAvailable: boolean | null;
 }
 
-// TODO: default to false in prod
 let showLeftRail = $state(true);
 let showRightPanel = $state(true);
 let showSettings = $state(false);
 let runtimeStatus = $state<RuntimeStatus | null>(null);
 let runtimeError = $state<string | null>(null);
-let checkingRuntime = $state(false);
+let checkingRuntime = $state(true);
 
 async function loadRuntimeStatus() {
-    devLog("AppShell", "loadRuntimeStatus start");
+    devLog("AppShell", "loadRuntimeStatus");
     checkingRuntime = true;
     runtimeError = null;
 
     try {
-        devLog("AppShell", "invoking runtime_status...");
         runtimeStatus = await invoke<RuntimeStatus>("runtime_status");
-        devLog("AppShell", `runtime_status returned: ${runtimeStatus?.status}`);
+        devLog("AppShell", `runtime_status: ${runtimeStatus?.status}`);
     } catch (error) {
         devLog("AppShell", `runtime_status error: ${error}`);
         runtimeError = error instanceof Error ? error.message : String(error);
         runtimeStatus = null;
     } finally {
-        devLog("AppShell", "loadRuntimeStatus done");
         checkingRuntime = false;
     }
 }
 
 onMount(() => {
     devLog("AppShell", "onMount");
-    void loadRuntimeStatus().then(() => {
-        devLog("AppShell", `after loadRuntimeStatus, status=${runtimeStatus?.status}`);
-        if (runtimeStatus?.status === "ready") {
-            void loadMainView();
-        }
-    });
+    void loadRuntimeStatus();
     void taskStore.load().catch((error) => {
         devLog("AppShell", `taskStore.load error: ${error}`);
     });
 });
 </script>
 
-{#if checkingRuntime && !runtimeStatus}
+{#if checkingRuntime}
     <div class="flex h-screen items-center justify-center bg-background text-sm text-muted-foreground">
         Checking runtime…
     </div>
-{:else if runtimeStatus && runtimeStatus.status === "missing"}
-    <SetupRequired
-        runtimeDir={runtimeStatus.runtimeDir}
-        manifestPath={runtimeStatus.manifestPath}
-        qemuAvailable={runtimeStatus.qemuAvailable}
-        qemuPath={runtimeStatus.qemuPath}
-        accelAvailable={runtimeStatus.accelAvailable}
-        error={runtimeError}
-        onRecheck={loadRuntimeStatus}
-    />
-{:else if runtimeError}
+{:else if runtimeStatus?.status === "missing" || runtimeError}
     <SetupRequired
         runtimeDir={runtimeStatus?.runtimeDir ?? ""}
         manifestPath={runtimeStatus?.manifestPath ?? ""}
@@ -101,11 +73,7 @@ onMount(() => {
             {#if showLeftRail}
                 <LeftRail />
             {/if}
-            {#if MainView}
-                <MainView />
-            {:else}
-                <div class="flex flex-1 items-center justify-center text-muted-foreground">Loading…</div>
-            {/if}
+            <MainView />
             {#if showRightPanel}
                 <RightPanel />
             {/if}

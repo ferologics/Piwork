@@ -1,3 +1,6 @@
-export type { RpcClient, RpcEvent, RpcListener } from "$lib/rpc/types";
-export { MockRpcClient, parseJsonl } from "$lib/rpc/mockRpcClient";
-export { TauriRpcClient } from "$lib/rpc/tauriRpcClient";
+export type { RpcClient, RpcEvent, RpcListener, RpcPayload } from "./types";
+export type * from "./types";
+export { MockRpcClient, parseJsonl } from "./mockRpcClient";
+export { TauriRpcClient } from "./tauriRpcClient";
+export { MessageAccumulator } from "./messageAccumulator";
+export type * from "./messageAccumulator";
