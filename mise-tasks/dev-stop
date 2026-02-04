@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+#MISE description="Stop Piwork and QEMU"
+set -euo pipefail
+
+pkill -9 piwork 2>/dev/null && echo "✓ Stopped piwork" || echo "piwork not running"
+pkill -9 qemu-system 2>/dev/null && echo "✓ Stopped qemu" || echo "qemu not running"

@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+#MISE description="Tail Piwork dev logs"
+set -euo pipefail
+
+ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+LOG_FILE="$ROOT_DIR/tmp/dev/piwork.log"
+
+if [[ ! -f "$LOG_FILE" ]]; then
+    echo "No log file. Run: mise run dev-start"
+    exit 1
+fi
+
+tail -f "$LOG_FILE"

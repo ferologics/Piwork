@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+#MISE description="Send a prompt and wait for response"
+set -euo pipefail
+
+MESSAGE="${1:-Hello}"
+ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+LOG_FILE="$ROOT_DIR/tmp/dev/piwork.log"
+
+# Check test server is running
+if ! nc -z localhost 19385 2>/dev/null; then
+    echo "Test server not running. Run: mise run dev-start"
+    exit 1
+fi
+
+# Count existing agent_end events
+BEFORE=$(grep -c 'agent_end' "$LOG_FILE" 2>/dev/null || echo 0)
+
+# Send prompt
+echo "Sending: $MESSAGE"
+echo "{\"cmd\":\"prompt\",\"message\":\"$MESSAGE\"}" | nc -w 2 localhost 19385
+
+# Wait for new agent_end event
+echo "Waiting for response..."
+TIMEOUT=120
+for i in $(seq 1 $((TIMEOUT * 2))); do
+    AFTER=$(grep -c 'agent_end' "$LOG_FILE" 2>/dev/null || echo 0)
+    if [[ $AFTER -gt $BEFORE ]]; then
+        echo "✓ Response complete"
+        exit 0
+    fi
+    sleep 0.5
+done
+
+echo "Timeout waiting for response"
+exit 1

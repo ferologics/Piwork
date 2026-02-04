@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+#MISE description="Take a screenshot of Piwork window (non-disruptive)"
+set -euo pipefail
+
+ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+NAME="${1:-screenshot}"
+OUTPUT="$ROOT_DIR/tmp/dev/${NAME}.png"
+WINDOWLIST="$ROOT_DIR/tmp/dev/windowlist"
+
+# Build windowlist helper if needed
+if [[ ! -x "$WINDOWLIST" ]]; then
+    swiftc -O "$ROOT_DIR/scripts/windowlist.swift" -o "$WINDOWLIST" 2>/dev/null
+fi
+
+# Get window ID without stealing focus
+WINDOW_ID=$("$WINDOWLIST" 2>/dev/null)
+
+if [[ -z "$WINDOW_ID" ]]; then
+    echo "Piwork window not found"
+    exit 1
+fi
+
+# Capture without stealing focus (-o no shadow, -x no sound)
+screencapture -o -x -l"$WINDOW_ID" "$OUTPUT"
+echo "✓ Saved: $OUTPUT"
