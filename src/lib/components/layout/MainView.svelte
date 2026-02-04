@@ -46,9 +46,13 @@ function handleRpcEvent(event: RpcEvent) {
         let message = event.message;
 
         try {
-            const parsed = JSON.parse(event.message) as { content?: unknown };
+            const parsed = JSON.parse(event.message) as { content?: unknown; message?: unknown; type?: unknown };
             if (typeof parsed?.content === "string") {
                 message = parsed.content;
+            } else if (typeof parsed?.message === "string") {
+                message = parsed.message;
+            } else if (typeof parsed?.type === "string") {
+                message = `[${parsed.type}]`;
             }
         } catch {
             // Ignore JSON parse errors.
@@ -90,7 +94,7 @@ async function sendPrompt() {
     const content = prompt.trim();
     if (!content) return;
 
-    await rpcClient.send({ type: "prompt", content });
+    await rpcClient.send({ type: "prompt", message: content });
     prompt = "";
 }
 

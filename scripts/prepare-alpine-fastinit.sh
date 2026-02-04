@@ -24,7 +24,7 @@ bsdtar -xf "$INITRAMFS_ORIG" -C "$FAST_DIR"
 
 cat > "$FAST_DIR/init" <<'EOF'
 #!/bin/sh
-export PATH=/usr/bin:/bin:/sbin
+export PATH=/usr/local/bin:/usr/bin:/bin:/sbin
 
 mount -t proc proc /proc
 mount -t sysfs sysfs /sys
@@ -39,10 +39,31 @@ ip link set eth0 up
 udhcpc -i eth0 -q -n -t 3 -T 1
 
 RPC_PORT=/dev/virtio-ports/piwork.rpc
+
+setup_repos() {
+    cat > /etc/apk/repositories <<'REPOS'
+http://dl-cdn.alpinelinux.org/alpine/v3.23/main
+http://dl-cdn.alpinelinux.org/alpine/v3.23/community
+REPOS
+}
+
+install_pi() {
+    setup_repos
+    apk add --no-cache ca-certificates nodejs npm bash git
+    update-ca-certificates 2>/dev/null || true
+    npm install -g @mariozechner/pi-coding-agent --omit=optional
+}
+
+start_pi() {
+    echo READY > "$RPC_PORT"
+    pi --mode rpc < "$RPC_PORT" > "$RPC_PORT" 2>/dev/null &
+}
+
 rpc_loop() {
     local rpc_port="$1"
     while IFS= read -r line; do
-        if echo "$line" | grep -q '"prompt"'; then
+        if echo "$line" | grep -q '"type":"prompt"'; then
+            echo '{"type":"response","command":"prompt","success":true}' > "$rpc_port"
             echo '{"type":"message_update","role":"assistant","content":"Piwork stub: received prompt"}' > "$rpc_port"
             echo '{"type":"agent_end","reason":"completed"}' > "$rpc_port"
         else
@@ -51,12 +72,24 @@ rpc_loop() {
     done < "$rpc_port"
 }
 
-if [ -e "$RPC_PORT" ]; then
+start_stub() {
     echo READY > "$RPC_PORT"
     rpc_loop "$RPC_PORT" &
+}
+
+if [ -e "$RPC_PORT" ]; then
+    if command -v pi >/dev/null 2>&1; then
+        start_pi
+    else
+        if install_pi; then
+            start_pi
+        else
+            echo '{"type":"message_update","role":"assistant","content":"Piwork stub: pi install failed"}' > "$RPC_PORT"
+            start_stub
+        fi
+    fi
 fi
 
-echo READY
 exec /usr/bin/sh -i
 EOF
 
