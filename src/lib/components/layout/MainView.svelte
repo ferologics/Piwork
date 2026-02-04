@@ -22,6 +22,7 @@ let loginCopied = $state(false);
 let loginPromptVisible = $state(false);
 let loginPromptedUrl = $state<string | null>(null);
 let loginPromptCountdown = $state<number | null>(null);
+let autoOpenLogin = $state(true);
 let rpcStateInfo = $state<string | null>(null);
 let rpcStateRequested = $state(false);
 let rpcModelsRequested = $state(false);
@@ -72,6 +73,7 @@ interface VmStatusResponse {
 
 const MAX_HEIGHT = 200;
 const LOGIN_PROMPT_SECONDS = 5;
+const LOGIN_AUTO_OPEN_KEY = "piwork:auto-open-login";
 
 let loginPromptTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -107,9 +109,7 @@ function maybeCaptureLoginUrl(message: string) {
     }
 }
 
-function clearLoginPrompt() {
-    loginPromptVisible = false;
-    loginPromptedUrl = null;
+function stopLoginCountdown() {
     loginPromptCountdown = null;
 
     if (loginPromptTimer) {
@@ -118,10 +118,41 @@ function clearLoginPrompt() {
     }
 }
 
+function setAutoOpenLogin(enabled: boolean) {
+    autoOpenLogin = enabled;
+
+    try {
+        localStorage.setItem(LOGIN_AUTO_OPEN_KEY, enabled ? "true" : "false");
+    } catch {
+        // Ignore storage errors.
+    }
+
+    if (!enabled) {
+        stopLoginCountdown();
+        return;
+    }
+
+    if (rpcLoginUrl && loginPromptVisible && loginPromptedUrl === rpcLoginUrl) {
+        startLoginPrompt(rpcLoginUrl);
+    }
+}
+
+function clearLoginPrompt() {
+    loginPromptVisible = false;
+    loginPromptedUrl = null;
+    stopLoginCountdown();
+}
+
 function startLoginPrompt(url: string) {
     clearLoginPrompt();
     loginPromptVisible = true;
     loginPromptedUrl = url;
+
+    if (!autoOpenLogin) {
+        loginPromptCountdown = null;
+        return;
+    }
+
     loginPromptCountdown = LOGIN_PROMPT_SECONDS;
 
     loginPromptTimer = setInterval(() => {
@@ -707,6 +738,15 @@ async function sendPrompt() {
 }
 
 onMount(() => {
+    try {
+        const stored = localStorage.getItem(LOGIN_AUTO_OPEN_KEY);
+        if (stored === "false") {
+            autoOpenLogin = false;
+        }
+    } catch {
+        // Ignore storage errors.
+    }
+
     void connectRpc();
     void refreshVmLogPath();
 });
@@ -822,6 +862,12 @@ onDestroy(() => {
                                     : copyingLoginUrl
                                         ? "Copying…"
                                         : "Copy URL"}
+                            </button>
+                            <button
+                                class="rounded-md px-3 py-1 text-[11px] text-muted-foreground hover:bg-accent disabled:opacity-60"
+                                onclick={() => setAutoOpenLogin(!autoOpenLogin)}
+                            >
+                                Auto-open: {autoOpenLogin ? "On" : "Off"}
                             </button>
                         </div>
                     {/if}
