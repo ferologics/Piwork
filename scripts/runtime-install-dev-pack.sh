@@ -12,9 +12,25 @@ RUNTIME_DIR=$($SCRIPT_DIR/runtime-path.sh)
 MANIFEST_PATH="$RUNTIME_DIR/manifest.json"
 
 if [[ -z "${PIWORK_AUTH_PATH:-}" && -n "${PIWORK_COPY_AUTH:-}" ]]; then
-    AUTH_CANDIDATE="$HOME/.pi/agent/auth.json"
-    if [[ -f "$AUTH_CANDIDATE" ]]; then
-        export PIWORK_AUTH_PATH="$AUTH_CANDIDATE"
+    AUTH_PROFILE=${PIWORK_AUTH_PROFILE:-default}
+
+    if [[ "$(uname -s)" == "Darwin" ]]; then
+        APP_AUTH_CANDIDATE="$HOME/Library/Application Support/com.pi.work/auth/$AUTH_PROFILE/auth.json"
+    elif [[ -n "${XDG_DATA_HOME:-}" ]]; then
+        APP_AUTH_CANDIDATE="$XDG_DATA_HOME/piwork/auth/$AUTH_PROFILE/auth.json"
+    elif [[ -n "${APPDATA:-}" ]]; then
+        APP_AUTH_CANDIDATE="$APPDATA/com.pi.work/auth/$AUTH_PROFILE/auth.json"
+    else
+        APP_AUTH_CANDIDATE="$HOME/.local/share/piwork/auth/$AUTH_PROFILE/auth.json"
+    fi
+
+    if [[ -f "$APP_AUTH_CANDIDATE" ]]; then
+        export PIWORK_AUTH_PATH="$APP_AUTH_CANDIDATE"
+    else
+        AUTH_CANDIDATE="$HOME/.pi/agent/auth.json"
+        if [[ -f "$AUTH_CANDIDATE" ]]; then
+            export PIWORK_AUTH_PATH="$AUTH_CANDIDATE"
+        fi
     fi
 fi
 
