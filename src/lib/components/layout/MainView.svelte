@@ -705,6 +705,7 @@ async function sendPrompt(message?: string) {
 
 let testPromptUnlisten: (() => void) | null = null;
 let testFolderUnlisten: (() => void) | null = null;
+let testTaskUnlisten: (() => void) | null = null;
 
 async function restartVm(reason: string) {
     if (!rpcClient) return;
@@ -824,6 +825,13 @@ onMount(() => {
         }).then((unlisten) => {
             testFolderUnlisten = unlisten;
         });
+
+        listen<string | null>("test_set_task", (event) => {
+            devLog("TestHarness", `received test_set_task: ${event.payload}`);
+            taskStore.setActive(event.payload ?? null);
+        }).then((unlisten) => {
+            testTaskUnlisten = unlisten;
+        });
     }
 });
 
@@ -836,6 +844,7 @@ onDestroy(() => {
     void disconnectRpc();
     testPromptUnlisten?.();
     testFolderUnlisten?.();
+    testTaskUnlisten?.();
 });
 </script>
 

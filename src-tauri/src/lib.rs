@@ -289,6 +289,13 @@ fn start_test_server(app_handle: tauri::AppHandle) {
                             let _ = app.emit("test_set_folder", folder);
                             let _ = stream.write_all(b"OK\n");
                         }
+                        "set_task" => {
+                            // Emit event to frontend to change active task
+                            let task_id = json.get("taskId").and_then(|v| v.as_str());
+                            eprintln!("[test-server] emitting test_set_task: {task_id:?}");
+                            let _ = app.emit("test_set_task", task_id);
+                            let _ = stream.write_all(b"OK\n");
+                        }
                         _ => {
                             // Direct RPC send (bypass UI)
                             let state: tauri::State<vm::VmState> = app.state();
