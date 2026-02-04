@@ -868,6 +868,7 @@ onDestroy(() => {
                             <button
                                 class="rounded-md px-3 py-1 text-[11px] text-muted-foreground hover:bg-accent disabled:opacity-60"
                                 onclick={() => setAutoOpenLogin(!autoOpenLogin)}
+                                title="When on, login links auto-open after a short countdown."
                             >
                                 Auto-open: {autoOpenLogin ? "On" : "Off"}
                             </button>
