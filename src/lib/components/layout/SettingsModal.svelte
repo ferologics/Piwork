@@ -54,6 +54,8 @@ let profileError = $state<string | null>(null);
 let profileTimer: ReturnType<typeof setTimeout> | null = null;
 let profileSetTimer: ReturnType<typeof setTimeout> | null = null;
 
+const PROFILE_STORAGE_KEY = "piwork:auth-profile";
+
 let noticeTimer: ReturnType<typeof setTimeout> | null = null;
 let commandTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -154,9 +156,18 @@ function buildAuthCommand() {
     return `PIWORK_COPY_AUTH=1 PIWORK_AUTH_PROFILE=${profile} mise run runtime-install-dev`;
 }
 
+function persistProfile() {
+    try {
+        localStorage.setItem(PROFILE_STORAGE_KEY, profile);
+    } catch {
+        // Ignore storage errors.
+    }
+}
+
 function handleProfileChange() {
     clearProfileSetNotice();
     clearProfileNotice();
+    persistProfile();
     void loadEntries();
 }
 
@@ -172,6 +183,7 @@ async function addProfile() {
     setProfileNotice(`Switched to ${trimmed}`);
     clearProfileSetNotice();
     clearProfileNotice();
+    persistProfile();
     await loadEntries();
 }
 
@@ -265,6 +277,19 @@ $effect(() => {
     }
 });
 
+$effect(() => {
+    if (!open) return;
+
+    try {
+        const stored = localStorage.getItem(PROFILE_STORAGE_KEY);
+        if (stored && stored !== profile) {
+            profile = stored;
+        }
+    } catch {
+        // Ignore storage errors.
+    }
+});
+
 onDestroy(() => {
     if (noticeTimer) {
         clearTimeout(noticeTimer);
@@ -312,6 +337,12 @@ onDestroy(() => {
                                 placeholder="default"
                                 bind:value={profile}
                                 onblur={handleProfileChange}
+                                onkeydown={(event) => {
+                                    if (event.key === "Enter") {
+                                        event.preventDefault();
+                                        handleProfileChange();
+                                    }
+                                }}
                             />
                         </label>
                         <div class="flex flex-wrap items-center gap-2">
