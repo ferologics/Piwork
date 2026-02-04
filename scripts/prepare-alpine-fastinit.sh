@@ -81,6 +81,11 @@ start_pi() {
 rpc_loop() {
     local rpc_port="$1"
     while IFS= read -r line; do
+        if echo "$line" | grep -q '"type":"get_state"'; then
+            echo '{"type":"response","command":"get_state","success":true,"data":{"model":null,"sessionId":"stub-session","sessionName":"Stub Session","isStreaming":false}}' > "$rpc_port"
+            continue
+        fi
+
         if echo "$line" | grep -q '"type":"prompt"'; then
             echo '{"type":"response","command":"prompt","success":true}' > "$rpc_port"
             echo '{"type":"message_update","assistantMessageEvent":{"type":"text_delta","contentIndex":0,"delta":"Piwork stub: received prompt"}}' > "$rpc_port"

@@ -15,6 +15,8 @@ let rpcStreaming = $state("");
 let rpcConnected = $state(false);
 let rpcConnecting = $state(false);
 let rpcError = $state<string | null>(null);
+let rpcStateInfo = $state<string | null>(null);
+let rpcStateRequested = $state(false);
 let vmLogPath = $state<string | null>(null);
 let openingLog = $state(false);
 
@@ -64,8 +66,78 @@ async function openVmLog() {
     }
 }
 
+async function requestState() {
+    if (!rpcClient || rpcStateRequested) return;
+    rpcStateRequested = true;
+    await rpcClient.send({ type: "get_state" });
+}
+
+function formatStateInfo(data: Record<string, unknown> | undefined) {
+    if (!data) return null;
+
+    let modelName: string | null = null;
+    if (typeof data.model === "object" && data.model !== null) {
+        const model = data.model as Record<string, unknown>;
+        if (typeof model.name === "string") {
+            modelName = model.name;
+        } else if (typeof model.id === "string") {
+            modelName = model.id;
+        }
+    }
+
+    const sessionName = typeof data.sessionName === "string" ? data.sessionName : null;
+    const sessionId = typeof data.sessionId === "string" ? data.sessionId : null;
+    const isStreaming = typeof data.isStreaming === "boolean" ? data.isStreaming : null;
+
+    const parts: string[] = [];
+    if (modelName) {
+        parts.push(`Model: ${modelName}`);
+    }
+    if (sessionName) {
+        parts.push(`Session: ${sessionName}`);
+    } else if (sessionId) {
+        parts.push(`Session: ${sessionId.slice(0, 8)}`);
+    }
+    if (isStreaming !== null) {
+        parts.push(`Streaming: ${isStreaming ? "yes" : "no"}`);
+    }
+
+    return parts.length > 0 ? parts.join(" · ") : null;
+}
+
 function handleRpcPayload(payload: Record<string, unknown>) {
     const type = payload.type;
+
+    if (type === "response") {
+        const command = typeof payload.command === "string" ? payload.command : null;
+
+        if (command === "get_state") {
+            rpcStateRequested = false;
+
+            if (payload.success === true) {
+                const info = formatStateInfo(payload.data as Record<string, unknown> | undefined);
+                rpcStateInfo = info;
+            } else {
+                const error = payload.error;
+                if (typeof error === "string") {
+                    pushRpcMessage(`[error] ${error}`);
+                } else {
+                    pushRpcMessage("[error] get_state failed");
+                }
+                rpcStateInfo = null;
+            }
+
+            return;
+        }
+
+        if (payload.success === false) {
+            const error = payload.error;
+            if (typeof error === "string") {
+                pushRpcMessage(`[error] ${error}`);
+                return;
+            }
+        }
+    }
 
     if (type === "message_update") {
         const event = payload.assistantMessageEvent as Record<string, unknown> | undefined;
@@ -110,14 +182,6 @@ function handleRpcPayload(payload: Record<string, unknown>) {
         }
     }
 
-    if (type === "response" && payload.success === false) {
-        const error = payload.error;
-        if (typeof error === "string") {
-            pushRpcMessage(`[error] ${error}`);
-            return;
-        }
-    }
-
     const message = extractFallbackMessage(payload);
     if (message) {
         pushRpcMessage(message);
@@ -158,12 +222,15 @@ function handleRpcEvent(event: RpcEvent) {
     if (event.type === "ready") {
         rpcConnected = true;
         rpcError = null;
+        void requestState();
         return;
     }
 
     if (event.type === "error") {
         rpcError = typeof event.message === "string" ? event.message : "Runtime error";
         rpcConnected = false;
+        rpcStateInfo = null;
+        rpcStateRequested = false;
         void refreshVmLogPath();
         return;
     }
@@ -182,6 +249,8 @@ async function connectRpc() {
     if (rpcClient || rpcConnecting) return;
     rpcConnecting = true;
     rpcError = null;
+    rpcStateInfo = null;
+    rpcStateRequested = false;
 
     const client = new TauriRpcClient();
     client.subscribe(handleRpcEvent);
@@ -205,6 +274,8 @@ async function disconnectRpc() {
     rpcClient = null;
     rpcConnected = false;
     rpcError = null;
+    rpcStateInfo = null;
+    rpcStateRequested = false;
 }
 
 async function sendPrompt() {
@@ -268,6 +339,11 @@ onDestroy(() => {
             {:else}
                 <div class="rounded-lg border border-border bg-card p-4">
                     <div class="text-sm font-medium">RPC output</div>
+                    {#if rpcStateInfo}
+                        <div class="mt-1 text-[11px] text-muted-foreground">{rpcStateInfo}</div>
+                    {:else if rpcStateRequested}
+                        <div class="mt-1 text-[11px] text-muted-foreground">Loading state…</div>
+                    {/if}
                     <div class="mt-2 space-y-2 text-xs text-muted-foreground">
                         {#if rpcMessages.length === 0 && !rpcStreaming}
                             <div>No events yet.</div>
