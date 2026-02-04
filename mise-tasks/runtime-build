@@ -71,6 +71,7 @@ if [[ ! -f "$NODE_DIR/usr/bin/node" ]]; then
         "main/icu-libs" "main/icu-data-en" "main/libgcc" "main/libstdc++"
         "main/nghttp2-libs" "main/sqlite-libs" "main/zlib" "main/zstd-libs"
         "main/libcrypto3" "main/libssl3" "main/simdjson" "main/simdutf"
+        "main/ca-certificates-bundle"
     )
     
     for pkg_path in "${PACKAGES[@]}"; do
@@ -167,6 +168,9 @@ modprobe virtio_net 2>/dev/null || true
 
 ip link set eth0 up
 udhcpc -i eth0 -q -n -t 3 -T 1
+
+# QEMU user-mode networking provides DNS at 10.0.2.3
+echo "nameserver 10.0.2.3" > /etc/resolv.conf
 
 [ -f /opt/pi-agent/auth.json ] && export PI_CODING_AGENT_DIR=/opt/pi-agent
 

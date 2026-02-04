@@ -45,3 +45,12 @@
 - [ ] MITM: TCP proxy + allowlist policy
 - [ ] MITM: TLS interception (CA install) + pinning fallbacks
 - [ ] MITM: UI controls (network mode toggle, allowlist, audit log)
+
+## Dev Tasks (mise)
+
+Add mise tasks for common dev workflows:
+- `dev:start` - start app with logging to tmp/dev/piwork.log
+- `dev:prompt "msg"` - send test prompt via test harness
+- `dev:screenshot [name]` - capture app window to tmp/dev/
+- `dev:logs` - tail -f tmp/dev/piwork.log
+- `dev:stop` - kill piwork + qemu processes
