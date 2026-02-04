@@ -677,6 +677,9 @@ onDestroy(() => {
                         <div class="mt-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-[11px] text-amber-200">
                             {rpcAuthHint}
                         </div>
+                        {#if rpcLoginUrl}
+                            <code class="mt-2 block rounded-md bg-muted px-2 py-1 text-[11px]">{rpcLoginUrl}</code>
+                        {/if}
                         <div class="mt-2 flex flex-wrap gap-2">
                             {#if rpcLoginUrl}
                                 <button
