@@ -74,10 +74,14 @@ rpc_loop() {
     while IFS= read -r line; do
         if echo "$line" | grep -q '"type":"prompt"'; then
             echo '{"type":"response","command":"prompt","success":true}' > "$rpc_port"
-            echo '{"type":"message_update","role":"assistant","content":"Piwork stub: received prompt"}' > "$rpc_port"
+            echo '{"type":"message_update","assistantMessageEvent":{"type":"text_delta","contentIndex":0,"delta":"Piwork stub: received prompt"}}' > "$rpc_port"
+            echo '{"type":"message_update","assistantMessageEvent":{"type":"text_end","contentIndex":0,"content":"Piwork stub: received prompt"}}' > "$rpc_port"
+            echo '{"type":"message_update","assistantMessageEvent":{"type":"done","reason":"stop"}}' > "$rpc_port"
             echo '{"type":"agent_end","reason":"completed"}' > "$rpc_port"
         else
-            echo '{"type":"message_update","role":"assistant","content":"Piwork stub: received command"}' > "$rpc_port"
+            echo '{"type":"message_update","assistantMessageEvent":{"type":"text_delta","contentIndex":0,"delta":"Piwork stub: received command"}}' > "$rpc_port"
+            echo '{"type":"message_update","assistantMessageEvent":{"type":"text_end","contentIndex":0,"content":"Piwork stub: received command"}}' > "$rpc_port"
+            echo '{"type":"message_update","assistantMessageEvent":{"type":"done","reason":"stop"}}' > "$rpc_port"
         fi
     done < "$rpc_port"
 }

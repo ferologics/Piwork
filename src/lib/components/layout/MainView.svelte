@@ -9,6 +9,7 @@ let textareaEl: HTMLTextAreaElement | undefined = $state();
 let selectedModel = $state("claude-opus-4-5");
 let rpcClient: TauriRpcClient | null = $state(null);
 let rpcMessages = $state<string[]>([]);
+let rpcStreaming = $state("");
 let rpcConnected = $state(false);
 let rpcConnecting = $state(false);
 let rpcError = $state<string | null>(null);
@@ -29,6 +30,100 @@ function autoGrow() {
     textareaEl.style.overflowY = textareaEl.scrollHeight > MAX_HEIGHT ? "auto" : "hidden";
 }
 
+function pushRpcMessage(message: string) {
+    rpcMessages = [...rpcMessages, message];
+}
+
+function handleRpcPayload(payload: Record<string, unknown>) {
+    const type = payload.type;
+
+    if (type === "message_update") {
+        const event = payload.assistantMessageEvent as Record<string, unknown> | undefined;
+        const eventType = event?.type;
+
+        if (eventType === "text_delta" && typeof event?.delta === "string") {
+            rpcStreaming += event.delta;
+            return;
+        }
+
+        if (eventType === "text_end" && typeof event?.content === "string") {
+            rpcStreaming = event.content;
+            pushRpcMessage(rpcStreaming);
+            rpcStreaming = "";
+            return;
+        }
+
+        if (eventType === "done") {
+            if (rpcStreaming) {
+                pushRpcMessage(rpcStreaming);
+                rpcStreaming = "";
+            }
+            return;
+        }
+    }
+
+    if (type === "message_end") {
+        const message = payload.message as Record<string, unknown> | undefined;
+        const content = extractMessageContent(message);
+        if (content) {
+            pushRpcMessage(content);
+            rpcStreaming = "";
+            return;
+        }
+    }
+
+    if (type === "tool_execution_start") {
+        const toolName = payload.toolName;
+        if (typeof toolName === "string") {
+            pushRpcMessage(`[tool] ${toolName}`);
+            return;
+        }
+    }
+
+    if (type === "response" && payload.success === false) {
+        const error = payload.error;
+        if (typeof error === "string") {
+            pushRpcMessage(`[error] ${error}`);
+            return;
+        }
+    }
+
+    const message = extractFallbackMessage(payload);
+    if (message) {
+        pushRpcMessage(message);
+    }
+}
+
+function extractMessageContent(message: Record<string, unknown> | undefined) {
+    if (!message) return null;
+
+    if (typeof message.content === "string") {
+        return message.content;
+    }
+
+    if (Array.isArray(message.content)) {
+        const parts = message.content
+            .filter((part) => typeof part === "object" && part !== null)
+            .map((part) => part as Record<string, unknown>)
+            .filter((part) => part.type === "text" && typeof part.text === "string")
+            .map((part) => part.text as string);
+
+        if (parts.length > 0) {
+            return parts.join("");
+        }
+    }
+
+    return null;
+}
+
+function extractFallbackMessage(payload: Record<string, unknown>) {
+    if (typeof payload.content === "string") return payload.content;
+    if (typeof payload.message === "string") return payload.message;
+    if (typeof payload.type === "string") return `[${payload.type}]`;
+
+    return null;
+}
+
 function handleRpcEvent(event: RpcEvent) {
     if (event.type === "ready") {
         rpcConnected = true;
@@ -43,22 +138,12 @@ function handleRpcEvent(event: RpcEvent) {
     }
 
     if (event.type === "rpc" && typeof event.message === "string") {
-        let message = event.message;
-
         try {
-            const parsed = JSON.parse(event.message) as { content?: unknown; message?: unknown; type?: unknown };
-            if (typeof parsed?.content === "string") {
-                message = parsed.content;
-            } else if (typeof parsed?.message === "string") {
-                message = parsed.message;
-            } else if (typeof parsed?.type === "string") {
-                message = `[${parsed.type}]`;
-            }
+            const parsed = JSON.parse(event.message) as Record<string, unknown>;
+            handleRpcPayload(parsed);
         } catch {
-            // Ignore JSON parse errors.
+            pushRpcMessage(event.message);
         }
-
-        rpcMessages = [...rpcMessages, message];
     }
 }
 
@@ -138,12 +223,15 @@ onDestroy(() => {
                 <div class="rounded-lg border border-border bg-card p-4">
                     <div class="text-sm font-medium">RPC output</div>
                     <div class="mt-2 space-y-2 text-xs text-muted-foreground">
-                        {#if rpcMessages.length === 0}
+                        {#if rpcMessages.length === 0 && !rpcStreaming}
                             <div>No events yet.</div>
                         {:else}
                             {#each rpcMessages as message}
                                 <div class="break-words rounded-md bg-muted px-2 py-1">{message}</div>
                             {/each}
+                            {#if rpcStreaming}
+                                <div class="break-words rounded-md bg-muted/60 px-2 py-1 italic">{rpcStreaming}</div>
+                            {/if}
                         {/if}
                     </div>
                 </div>
