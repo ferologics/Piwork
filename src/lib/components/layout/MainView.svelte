@@ -17,6 +17,8 @@ let rpcError = $state<string | null>(null);
 let rpcAuthHint = $state<string | null>(null);
 let rpcLoginUrl = $state<string | null>(null);
 let openingLoginUrl = $state(false);
+let copyingLoginUrl = $state(false);
+let loginCopied = $state(false);
 let rpcStateInfo = $state<string | null>(null);
 let rpcStateRequested = $state(false);
 let rpcModelsRequested = $state(false);
@@ -245,6 +247,30 @@ async function openLoginUrl() {
         await openUrl(rpcLoginUrl);
     } finally {
         openingLoginUrl = false;
+    }
+}
+
+async function copyLoginUrl() {
+    if (!rpcLoginUrl || copyingLoginUrl) return;
+
+    if (!navigator?.clipboard) {
+        pushRpcMessage("[error] Clipboard unavailable");
+        return;
+    }
+
+    copyingLoginUrl = true;
+    loginCopied = false;
+
+    try {
+        await navigator.clipboard.writeText(rpcLoginUrl);
+        loginCopied = true;
+        setTimeout(() => {
+            loginCopied = false;
+        }, 2000);
+    } catch {
+        pushRpcMessage("[error] Failed to copy login URL");
+    } finally {
+        copyingLoginUrl = false;
     }
 }
 
@@ -525,6 +551,8 @@ function handleRpcEvent(event: RpcEvent) {
         rpcError = null;
         rpcAuthHint = null;
         rpcLoginUrl = null;
+        loginCopied = false;
+        copyingLoginUrl = false;
         void requestState();
         void requestAvailableModels();
         return;
@@ -535,6 +563,8 @@ function handleRpcEvent(event: RpcEvent) {
         rpcConnected = false;
         rpcAuthHint = null;
         rpcLoginUrl = null;
+        loginCopied = false;
+        copyingLoginUrl = false;
         rpcStateInfo = null;
         rpcStateRequested = false;
         void refreshVmLogPath();
@@ -547,6 +577,8 @@ function handleRpcEvent(event: RpcEvent) {
             rpcError = null;
             rpcAuthHint = null;
             rpcLoginUrl = null;
+            loginCopied = false;
+            copyingLoginUrl = false;
             void requestState();
             void requestAvailableModels();
         }
@@ -566,6 +598,8 @@ async function connectRpc() {
     rpcError = null;
     rpcAuthHint = null;
     rpcLoginUrl = null;
+    loginCopied = false;
+    copyingLoginUrl = false;
     rpcStateInfo = null;
     rpcStateRequested = false;
     rpcModelsRequested = false;
@@ -598,6 +632,8 @@ async function disconnectRpc() {
     rpcError = null;
     rpcAuthHint = null;
     rpcLoginUrl = null;
+    loginCopied = false;
+    copyingLoginUrl = false;
     rpcStateInfo = null;
     rpcStateRequested = false;
     rpcModelsRequested = false;
@@ -688,6 +724,17 @@ onDestroy(() => {
                                     disabled={openingLoginUrl}
                                 >
                                     {openingLoginUrl ? "Opening login…" : "Open login URL"}
+                                </button>
+                                <button
+                                    class="rounded-md bg-secondary px-3 py-1 text-[11px] hover:bg-secondary/80 disabled:opacity-60"
+                                    onclick={copyLoginUrl}
+                                    disabled={copyingLoginUrl}
+                                >
+                                    {loginCopied
+                                        ? "Copied"
+                                        : copyingLoginUrl
+                                            ? "Copying…"
+                                            : "Copy URL"}
                                 </button>
                             {/if}
                             <button
