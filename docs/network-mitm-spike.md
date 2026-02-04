@@ -47,7 +47,7 @@ This keeps the VM “talking Ethernet” while the host enforces per‑request p
 
 ## Local PoC (macOS/arm64)
 
-1. Download an Alpine aarch64 ISO (virt build) into `tmp/`:
+1. Download an Alpine aarch64 ISO (virt build) into `tmp/` (one‑time):
 
    ```bash
    mkdir -p tmp
@@ -56,7 +56,7 @@ This keeps the VM “talking Ethernet” while the host enforces per‑request p
      -o tmp/alpine-virt-3.23.3-aarch64.iso
    ```
 
-2. Run the spike harness (starts host stack + QEMU + DHCP):
+2. Run the spike harness (extracts kernel + direct‑boots QEMU):
 
    ```bash
    scripts/run-mitm-spike.sh
@@ -64,13 +64,15 @@ This keeps the VM “talking Ethernet” while the host enforces per‑request p
 
 3. Inspect logs + boot timing:
 
-   ````bash
+   ```bash
    tail -n 40 tmp/mitm-qemu.log
    tail -n 40 tmp/mitm-netdev.log
-   cat tmp/mitm-boot.log # BOOT_MS=...   ```
-   ````
+   cat tmp/mitm-boot.log # BOOT_MS=...
+   ```
 
-You should see DHCP, DNS, ARP, and ICMP logs from the host stack. The VM uses `udhcpc` (limited retries), runs `nslookup example.com`, and pings `192.168.100.1`.
+You should see DHCP, DNS, ARP, ICMP, and HTTP logs from the host stack. The VM uses `udhcpc` (limited retries), runs `nslookup example.com`, requests `http://example.com`, and pings `192.168.100.1`.
+
+The harness direct‑boots the kernel/initramfs extracted from the ISO. A fast initramfs (custom `/init`, no OpenRC) is generated to reduce boot time.
 
 Boot timing is written to `tmp/mitm-boot.log` as `BOOT_MS=...`.
 
@@ -80,18 +82,20 @@ Boot timing is written to `tmp/mitm-boot.log` as `BOOT_MS=...`.
 
 ```bash
 scripts/mitm-clean.sh
-# remove the ISO too:
+# remove the ISO + extracted kernel + fast initramfs:
 CLEAN_ISO=1 scripts/mitm-clean.sh
 ```
 
 ## Spike results (2026‑02‑03)
 
 - ✅ Alpine aarch64 boots under QEMU with **stream netdev** (~7.6s to login on M2, first run).
-- ✅ Host stack replies to **DHCP + DNS + ARP + ICMP** (`udhcpc` gets a lease, `nslookup example.com` succeeds, ping succeeds).
-- ✅ Boot timing measured: ~7.6s to login on M2.
+- ✅ Host stack replies to **DHCP + DNS + ARP + ICMP + HTTP** (`udhcpc` gets a lease, `nslookup example.com` succeeds, `wget http://example.com` returns stub, ping succeeds).
+- ✅ Boot timing measured: ~1.1s to login on M2 with direct kernel boot (was ~7.6s with UEFI/GRUB).
+- ✅ Fast initramfs boot timing measured: **~0.47s** to READY on M2.
 
 ## Next steps
 
 1. Expand host stack (TCP) to allow outbound requests.
 2. Add **allowlist policy** for a single hostname at TCP/HTTP layer.
 3. Decide whether to proceed to TLS MITM (custom CA + re‑encryption).
+4. Decide if we want to keep fast‑initramfs boot path in the runtime pack.

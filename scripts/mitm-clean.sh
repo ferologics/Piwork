@@ -12,4 +12,5 @@ rm -f "$TMP_DIR/piwork-netdev.sock" \
 
 if [[ "${CLEAN_ISO:-0}" == "1" ]]; then
     rm -f "$TMP_DIR/alpine-virt-3.23.3-aarch64.iso"
+    rm -rf "$TMP_DIR/boot" "$TMP_DIR/alpine-kernel.cmdline" "$TMP_DIR/initramfs-fast"
 fi

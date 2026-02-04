@@ -28,6 +28,17 @@ const dnsResponseIp = process.env.DNS_RESPONSE_IP ?? hostIp;
 const hostIpBytes = ipToBytes(hostIp);
 const hostMacBytes = macToBytes(hostMac);
 const dnsResponseIpBytes = ipToBytes(dnsResponseIp);
+const httpBody = "piwork mitm ok\n";
+const httpResponse = Buffer.from(
+    "HTTP/1.1 200 OK\r\n" +
+        "Content-Type: text/plain\r\n" +
+        `Content-Length: ${Buffer.byteLength(httpBody)}\r\n` +
+        "Connection: close\r\n" +
+        "\r\n" +
+        httpBody,
+);
+
+const connections = new Map();
 
 await waitForSocket(socketPath, waitSeconds);
 
@@ -141,6 +152,11 @@ function handleIpv4(frame, _destMac, sourceMac) {
         return;
     }
 
+    if (protocol === 6) {
+        handleTcp(frame, sourceMac, sourceIp, destIp, ipOffset, ihl, totalLength);
+        return;
+    }
+
     if (!destIp.equals(hostIpBytes)) {
         return;
     }
@@ -218,6 +234,107 @@ function handleUdp(frame, sourceMac, sourceIp, destIp, ipOffset, ihl, totalLengt
         const payload = frame.subarray(payloadStart, payloadEnd);
         handleDns(payload, sourceMac, sourceIp, sourcePort);
     }
+}
+
+function handleTcp(frame, sourceMac, sourceIp, destIp, ipOffset, ihl, totalLength) {
+    if (!destIp.equals(hostIpBytes)) {
+        return;
+    }
+
+    const tcpOffset = ipOffset + ihl;
+    if (frame.length < tcpOffset + 20) {
+        return;
+    }
+
+    const sourcePort = frame.readUInt16BE(tcpOffset);
+    const destPort = frame.readUInt16BE(tcpOffset + 2);
+    const seq = frame.readUInt32BE(tcpOffset + 4);
+    const ackSeq = frame.readUInt32BE(tcpOffset + 8);
+    const flags = frame[tcpOffset + 13];
+    const dataOffset = (frame[tcpOffset + 12] >> 4) * 4;
+    const isFin = (flags & 0x01) !== 0;
+    const payloadStart = tcpOffset + dataOffset;
+    const payloadEnd = Math.min(ipOffset + totalLength, frame.length);
+    const payload = payloadEnd > payloadStart ? frame.subarray(payloadStart, payloadEnd) : Buffer.alloc(0);
+
+    if (destPort !== 80) {
+        return;
+    }
+
+    const key = `${formatIp(sourceIp)}:${sourcePort}`;
+    let conn = connections.get(key);
+
+    if (!conn) {
+        conn = {
+            clientMac: sourceMac,
+            clientIp: Buffer.from(sourceIp),
+            clientPort: sourcePort,
+            serverSeq: 1,
+            established: false,
+            finSent: false,
+        };
+        connections.set(key, conn);
+    }
+
+    if (flags & 0x04) {
+        connections.delete(key);
+        return;
+    }
+
+    if ((flags & 0x02) && !(flags & 0x10)) {
+        const ack = seq + 1;
+        sendTcpSegment({
+            conn,
+            flags: 0x12,
+            seq: conn.serverSeq,
+            ack,
+            payload: Buffer.alloc(0),
+        });
+        conn.serverSeq += 1;
+        return;
+    }
+
+    if (isFin) {
+        const ack = seq + 1;
+        sendTcpSegment({
+            conn,
+            flags: 0x10,
+            seq: conn.serverSeq,
+            ack,
+            payload: Buffer.alloc(0),
+        });
+        connections.delete(key);
+        return;
+    }
+
+    if (conn.finSent && (flags & 0x10) && ackSeq === conn.serverSeq) {
+        connections.delete(key);
+        return;
+    }
+
+    if (flags & 0x10) {
+        conn.established = true;
+    }
+
+    if (!conn.established || payload.length === 0) {
+        return;
+    }
+
+    const responsePayload = httpResponse;
+    const ack = seq + payload.length;
+
+    sendTcpSegment({
+        conn,
+        flags: 0x19,
+        seq: conn.serverSeq,
+        ack,
+        payload: responsePayload,
+    });
+
+    conn.serverSeq += responsePayload.length + 1;
+    conn.finSent = true;
+    conn.lastAck = ackSeq;
+    console.log(`HTTP response -> ${key}`);
 }
 
 function handleDhcp(payload, sourceMac, _sourceIp, _destIp) {
@@ -547,6 +664,45 @@ function sendFrame(frame) {
     client.write(Buffer.concat([header, frame]));
 }
 
+function sendTcpSegment({ conn, flags, seq, ack, payload }) {
+    const tcpHeader = Buffer.alloc(20);
+    tcpHeader.writeUInt16BE(80, 0);
+    tcpHeader.writeUInt16BE(conn.clientPort, 2);
+    tcpHeader.writeUInt32BE(seq, 4);
+    tcpHeader.writeUInt32BE(ack, 8);
+    tcpHeader.writeUInt8(0x50, 12);
+    tcpHeader.writeUInt8(flags, 13);
+    tcpHeader.writeUInt16BE(4096, 14);
+    tcpHeader.writeUInt16BE(0, 16);
+    tcpHeader.writeUInt16BE(0, 18);
+
+    const tcpSegment = Buffer.concat([tcpHeader, payload]);
+    const tcpChecksum = computeTcpChecksum(hostIpBytes, conn.clientIp, tcpSegment);
+    tcpSegment.writeUInt16BE(tcpChecksum, 16);
+
+    const ipHeader = Buffer.alloc(20);
+    ipHeader.writeUInt8(0x45, 0);
+    ipHeader.writeUInt8(0, 1);
+    ipHeader.writeUInt16BE(20 + tcpSegment.length, 2);
+    ipHeader.writeUInt16BE(0, 4);
+    ipHeader.writeUInt16BE(0, 6);
+    ipHeader.writeUInt8(64, 8);
+    ipHeader.writeUInt8(6, 9);
+    hostIpBytes.copy(ipHeader, 12);
+    conn.clientIp.copy(ipHeader, 16);
+    ipHeader.writeUInt16BE(0, 10);
+    const ipChecksum = computeChecksum(ipHeader);
+    ipHeader.writeUInt16BE(ipChecksum, 10);
+
+    const ethernet = Buffer.alloc(14);
+    conn.clientMac.copy(ethernet, 0);
+    hostMacBytes.copy(ethernet, 6);
+    ethernet.writeUInt16BE(0x0800, 12);
+
+    const frameOut = Buffer.concat([ethernet, ipHeader, tcpSegment]);
+    sendFrame(frameOut);
+}
+
 function computeChecksum(buffer) {
     let sum = 0;
 
@@ -562,6 +718,18 @@ function computeChecksum(buffer) {
     }
 
     return (~sum) & 0xffff;
+}
+
+function computeTcpChecksum(sourceIp, destIp, tcpSegment) {
+    const pseudo = Buffer.alloc(12);
+    sourceIp.copy(pseudo, 0);
+    destIp.copy(pseudo, 4);
+    pseudo.writeUInt8(0, 8);
+    pseudo.writeUInt8(6, 9);
+    pseudo.writeUInt16BE(tcpSegment.length, 10);
+
+    const combined = Buffer.concat([pseudo, tcpSegment]);
+    return computeChecksum(combined);
 }
 
 function logFrame(frame) {

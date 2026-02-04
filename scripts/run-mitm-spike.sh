@@ -18,6 +18,9 @@ if [[ ! -f "$ALPINE_ISO" ]]; then
     exit 1
 fi
 
+"$SCRIPT_DIR/prepare-alpine-kernel.sh"
+"$SCRIPT_DIR/prepare-alpine-fastinit.sh"
+
 cleanup() {
     if [[ -n "${HOST_PID:-}" ]]; then
         kill "$HOST_PID" 2>/dev/null || true
@@ -30,7 +33,7 @@ NETDEV_SOCKET="$NETDEV_SOCKET" \
     HOST_IP=192.168.100.1 \
     HOST_MAC=02:50:00:00:00:01 \
     ALLOWED_DOMAINS=example.com \
-    DNS_RESPONSE_IP=93.184.216.34 \
+    DNS_RESPONSE_IP=192.168.100.1 \
     node "$SCRIPT_DIR/mitm-netdev-host.mjs" > "$HOST_LOG" 2>&1 &
 HOST_PID=$!
 
@@ -41,7 +44,7 @@ set start [clock milliseconds]
 log_file -a $QEMU_LOG
 spawn $SCRIPT_DIR/run-mitm-qemu.sh
 expect {
-    -re "login:" {
+    -re "READY" {
         set end [clock milliseconds]
         set delta [expr {\$end - \$start}]
         send_user "BOOT_MS=\$delta\n"
@@ -51,13 +54,10 @@ expect {
         exit 1
     }
 }
-send "root\r"
-expect -re "#"
-send "ip link set eth0 up\r"
-expect -re "#"
-send "udhcpc -i eth0 -q -n -t 5 -T 1\r"
 expect -re "#"
 send "nslookup example.com\r"
+expect -re "#"
+send "wget -qO- -T 5 -t 1 http://example.com\r"
 expect -re "#"
 send "ping -c 1 192.168.100.1\r"
 expect -re "#"
