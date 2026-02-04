@@ -6,24 +6,41 @@ import type { RpcClient, RpcEvent, RpcListener } from "$lib/rpc/types";
 export class TauriRpcClient implements RpcClient {
     private unlisten: (() => void) | null = null;
     private listeners = new Set<RpcListener>();
+    private connecting = false;
 
     async connect() {
         devLog("RpcClient", "connect start");
-        if (this.unlisten) return;
-        devLog("RpcClient", "setting up event listener");
-        const unlisten = await listen<{ event: string; message: string }>("vm_event", ({ payload }) => {
-            devLog("RpcClient", `vm_event: ${payload.event}`);
-            const event: RpcEvent = {
-                type: payload.event,
-                message: payload.message,
-            };
-            this.listeners.forEach((listener) => listener(event));
-        });
-        this.unlisten = unlisten;
+        if (this.unlisten || this.connecting) {
+            devLog("RpcClient", "already connected or connecting");
+            return;
+        }
+        this.connecting = true;
 
-        devLog("RpcClient", "calling vm_start");
-        await invoke("vm_start");
-        devLog("RpcClient", "vm_start returned");
+        try {
+            devLog("RpcClient", "setting up event listener");
+            const unlisten = await listen<{ event: string; message: string }>("vm_event", ({ payload }) => {
+                devLog("RpcClient", `vm_event: ${payload.event}`);
+                const event: RpcEvent = {
+                    type: payload.event,
+                    message: payload.message,
+                };
+                this.listeners.forEach((listener) => listener(event));
+            });
+            this.unlisten = unlisten;
+
+            devLog("RpcClient", "calling vm_start");
+            const result = await invoke<{ status: string }>("vm_start");
+            devLog("RpcClient", `vm_start returned: ${JSON.stringify(result)}`);
+
+            // If VM was already running and ready, emit a synthetic ready event
+            if (result?.status === "ready") {
+                devLog("RpcClient", "VM already ready, emitting ready event");
+                const event: RpcEvent = { type: "ready", message: "" };
+                this.listeners.forEach((listener) => listener(event));
+            }
+        } finally {
+            this.connecting = false;
+        }
     }
 
     async disconnect() {
