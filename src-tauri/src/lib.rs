@@ -1,3 +1,5 @@
+use std::io::{BufRead, BufReader, Write};
+use std::net::TcpListener;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use tauri::Manager;
@@ -221,11 +223,56 @@ fn auth_store_import_pi(
     auth_store::summary(&auth_path)
 }
 
+/// Test server for automated testing (dev mode only)
+/// Listens on port 19385 and forwards commands to the VM RPC
+#[cfg(debug_assertions)]
+fn start_test_server(app_handle: tauri::AppHandle) {
+    std::thread::spawn(move || {
+        let listener = match TcpListener::bind("127.0.0.1:19385") {
+            Ok(l) => l,
+            Err(e) => {
+                eprintln!("[test-server] failed to bind: {e}");
+                return;
+            }
+        };
+        eprintln!("[test-server] listening on 127.0.0.1:19385");
+
+        for stream in listener.incoming() {
+            let Ok(mut stream) = stream else { continue };
+            let app = app_handle.clone();
+
+            std::thread::spawn(move || {
+                let reader = BufReader::new(stream.try_clone().unwrap());
+                for line in reader.lines() {
+                    let Ok(line) = line else { break };
+                    if line.is_empty() { continue; }
+
+                    eprintln!("[test-server] received: {line}");
+                    let state: tauri::State<vm::VmState> = app.state();
+                    match vm::send(&state, &line) {
+                        Ok(()) => {
+                            let _ = stream.write_all(b"OK\n");
+                        }
+                        Err(e) => {
+                            let _ = stream.write_all(format!("ERR: {e}\n").as_bytes());
+                        }
+                    }
+                }
+            });
+        }
+    });
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .manage(vm::VmState::default())
+        .setup(|app| {
+            #[cfg(debug_assertions)]
+            start_test_server(app.handle().clone());
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             greet,
             dev_log,
