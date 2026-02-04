@@ -6,7 +6,7 @@ import { Send, Paperclip, FolderOpen, ChevronDown, Loader2 } from "@lucide/svelt
 import { devLog } from "$lib/utils/devLog";
 import { TauriRpcClient, MessageAccumulator } from "$lib/rpc";
 import type { RpcEvent, RpcPayload, ConversationState, ContentBlock } from "$lib/rpc";
-import { devMode } from "$lib/stores/devMode.svelte";
+
 
 let prompt = $state("");
 let textareaEl: HTMLTextAreaElement | undefined = $state();
@@ -101,8 +101,8 @@ function handleInputKeydown(e: KeyboardEvent) {
 }
 
 function pushRpcMessage(message: string) {
-    // Log to dev panel instead of showing to user
-    devMode.pushLog(message);
+    // Log to console for debugging (visible in terminal)
+    devLog("RPC", message);
     maybeCaptureLoginUrl(message);
 }
 
@@ -429,9 +429,6 @@ function formatStateInfo(data: Record<string, unknown> | undefined) {
 }
 
 function handleRpcPayload(payload: Record<string, unknown>) {
-    // Log for dev panel
-    devMode.pushLog(`[${payload.type}] ${JSON.stringify(payload).slice(0, 200)}`);
-
     // Feed to message accumulator for proper conversation tracking
     messageAccumulator.processEvent(payload as RpcPayload);
     conversation = messageAccumulator.getState();
