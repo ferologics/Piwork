@@ -128,6 +128,11 @@ function handleIpv4(frame, _destMac, sourceMac) {
     const destIp = frame.subarray(ipOffset + 16, ipOffset + 20);
     const totalLength = frame.readUInt16BE(ipOffset + 2);
 
+    if (protocol === 17) {
+        handleUdp(frame, sourceMac, sourceIp, destIp, ipOffset, ihl, totalLength);
+        return;
+    }
+
     if (!destIp.equals(hostIpBytes)) {
         return;
     }
@@ -171,6 +176,193 @@ function handleIpv4(frame, _destMac, sourceMac) {
     const reply = Buffer.concat([ethernet, ipHeader, icmpPayload]);
     sendFrame(reply);
     console.log(`ICMP echo reply -> ${formatIp(sourceIp)}`);
+}
+
+function handleUdp(frame, sourceMac, sourceIp, destIp, ipOffset, ihl, totalLength) {
+    const udpOffset = ipOffset + ihl;
+    if (frame.length < udpOffset + 8) {
+        return;
+    }
+
+    const sourcePort = frame.readUInt16BE(udpOffset);
+    const destPort = frame.readUInt16BE(udpOffset + 2);
+    const length = frame.readUInt16BE(udpOffset + 4);
+    const payloadStart = udpOffset + 8;
+    const payloadEnd = Math.min(payloadStart + length - 8, ipOffset + totalLength, frame.length);
+
+    if (payloadEnd <= payloadStart) {
+        return;
+    }
+
+    if (destPort === 67) {
+        if (!destIp.equals(hostIpBytes) && !isBroadcastIp(destIp)) {
+            return;
+        }
+        const payload = frame.subarray(payloadStart, payloadEnd);
+        handleDhcp(payload, sourceMac, sourceIp, destIp, sourcePort, destPort);
+    }
+}
+
+function handleDhcp(payload, sourceMac, _sourceIp, _destIp) {
+    if (payload.length < 240) {
+        return;
+    }
+
+    const op = payload[0];
+    const hlen = payload[2];
+    const xid = payload.readUInt32BE(4);
+    const flags = payload.readUInt16BE(10);
+
+    if (op !== 1 || hlen !== 6) {
+        return;
+    }
+
+    const cookie = payload.readUInt32BE(236);
+    if (cookie !== 0x63825363) {
+        return;
+    }
+
+    const options = parseDhcpOptions(payload.subarray(240));
+    const messageType = options.messageType;
+    const requestedIp = options.requestedIp;
+
+    if (!messageType) {
+        return;
+    }
+
+    const offerIp = ipToBytes("192.168.100.2");
+
+    if (messageType === 1) {
+        const reply = buildDhcpReply({
+            messageType: 2,
+            xid,
+            flags,
+            clientMac: sourceMac,
+            yiaddr: offerIp,
+        });
+        sendDhcpFrame(reply, sourceMac);
+        console.log("DHCP offer -> 192.168.100.2");
+        return;
+    }
+
+    if (messageType === 3) {
+        if (requestedIp && !requestedIp.equals(offerIp)) {
+            console.log(`DHCP request for ${formatIp(requestedIp)} ignored`);
+            return;
+        }
+
+        const reply = buildDhcpReply({
+            messageType: 5,
+            xid,
+            flags,
+            clientMac: sourceMac,
+            yiaddr: offerIp,
+        });
+        sendDhcpFrame(reply, sourceMac);
+        console.log("DHCP ack -> 192.168.100.2");
+    }
+}
+
+function parseDhcpOptions(buffer) {
+    let offset = 0;
+    let messageType;
+    let requestedIp;
+
+    while (offset < buffer.length) {
+        const code = buffer[offset++];
+        if (code === 0) {
+            continue;
+        }
+        if (code === 255) {
+            break;
+        }
+        if (offset >= buffer.length) {
+            break;
+        }
+        const length = buffer[offset++];
+        if (offset + length > buffer.length) {
+            break;
+        }
+        const value = buffer.subarray(offset, offset + length);
+        offset += length;
+
+        if (code === 53 && length === 1) {
+            messageType = value[0];
+        } else if (code === 50 && length === 4) {
+            requestedIp = Buffer.from(value);
+        }
+    }
+
+    return { messageType, requestedIp };
+}
+
+function buildDhcpReply({ messageType, xid, flags, clientMac, yiaddr }) {
+    const bootp = Buffer.alloc(236, 0);
+    bootp[0] = 2;
+    bootp[1] = 1;
+    bootp[2] = 6;
+    bootp[3] = 0;
+    bootp.writeUInt32BE(xid, 4);
+    bootp.writeUInt16BE(0, 8);
+    bootp.writeUInt16BE(flags, 10);
+    bootp.writeUInt32BE(0, 12);
+    yiaddr.copy(bootp, 16);
+    hostIpBytes.copy(bootp, 20);
+    bootp.writeUInt32BE(0, 24);
+    clientMac.copy(bootp, 28);
+
+    const options = buildDhcpOptions(messageType);
+    const cookie = Buffer.from([0x63, 0x82, 0x53, 0x63]);
+    return Buffer.concat([bootp, cookie, options]);
+}
+
+function buildDhcpOptions(messageType) {
+    const lease = 3600;
+    const options = [];
+
+    options.push(Buffer.from([53, 1, messageType]));
+    options.push(Buffer.from([54, 4, ...hostIpBytes]));
+    options.push(Buffer.from([51, 4, (lease >> 24) & 0xff, (lease >> 16) & 0xff, (lease >> 8) & 0xff, lease & 0xff]));
+    options.push(Buffer.from([1, 4, 255, 255, 255, 0]));
+    options.push(Buffer.from([3, 4, ...hostIpBytes]));
+    options.push(Buffer.from([6, 4, 1, 1, 1, 1]));
+    options.push(Buffer.from([255]));
+
+    return Buffer.concat(options);
+}
+
+function sendDhcpFrame(payload, clientMac) {
+    const udpPayloadLength = payload.length;
+    const udpLength = 8 + udpPayloadLength;
+    const ipLength = 20 + udpLength;
+
+    const udpHeader = Buffer.alloc(8);
+    udpHeader.writeUInt16BE(67, 0);
+    udpHeader.writeUInt16BE(68, 2);
+    udpHeader.writeUInt16BE(udpLength, 4);
+    udpHeader.writeUInt16BE(0, 6);
+
+    const ipHeader = Buffer.alloc(20);
+    ipHeader.writeUInt8(0x45, 0);
+    ipHeader.writeUInt8(0, 1);
+    ipHeader.writeUInt16BE(ipLength, 2);
+    ipHeader.writeUInt16BE(0, 4);
+    ipHeader.writeUInt16BE(0, 6);
+    ipHeader.writeUInt8(64, 8);
+    ipHeader.writeUInt8(17, 9);
+    hostIpBytes.copy(ipHeader, 12);
+    ipHeader.writeUInt32BE(0xffffffff, 16);
+    ipHeader.writeUInt16BE(0, 10);
+    const ipChecksum = computeChecksum(ipHeader);
+    ipHeader.writeUInt16BE(ipChecksum, 10);
+
+    const ethernet = Buffer.alloc(14);
+    Buffer.from([0xff, 0xff, 0xff, 0xff, 0xff, 0xff]).copy(ethernet, 0);
+    hostMacBytes.copy(ethernet, 6);
+    ethernet.writeUInt16BE(0x0800, 12);
+
+    const frame = Buffer.concat([ethernet, ipHeader, udpHeader, payload]);
+    sendFrame(frame);
 }
 
 function buildArpReply(senderMac, senderIp) {
@@ -240,6 +432,10 @@ function ipToBytes(ip) {
 
 function macToBytes(mac) {
     return Buffer.from(mac.split(":").map((part) => Number.parseInt(part, 16)));
+}
+
+function isBroadcastIp(buffer) {
+    return buffer.length === 4 && buffer[0] === 255 && buffer[1] === 255 && buffer[2] === 255 && buffer[3] === 255;
 }
 
 async function waitForSocket(socketFile, seconds) {

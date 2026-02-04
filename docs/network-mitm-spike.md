@@ -56,7 +56,7 @@ This keeps the VM “talking Ethernet” while the host enforces per‑request p
      -o tmp/alpine-virt-3.23.3-aarch64.iso
    ```
 
-2. Run the spike harness (starts host stack + QEMU + static IP):
+2. Run the spike harness (starts host stack + QEMU + DHCP):
 
    ```bash
    scripts/run-mitm-spike.sh
@@ -70,7 +70,7 @@ This keeps the VM “talking Ethernet” while the host enforces per‑request p
    cat tmp/mitm-boot.log # BOOT_MS=...   ```
    ````
 
-You should see ARP + ICMP frames logged in the host stack. The harness assigns `192.168.100.2/24` and pings `192.168.100.1`, which should now receive a reply.
+You should see DHCP, ARP, and ICMP logs from the host stack. The VM uses `udhcpc` (limited retries) and pings `192.168.100.1`, which should receive a reply.
 
 Boot timing is written to `tmp/mitm-boot.log` as `BOOT_MS=...`.
 
@@ -87,8 +87,7 @@ CLEAN_ISO=1 scripts/mitm-clean.sh
 ## Spike results (2026‑02‑03)
 
 - ✅ Alpine aarch64 boots under QEMU with **stream netdev** (~7.6s to login on M2, first run).
-- ✅ Host stack replies to **ARP + ICMP** (ping to `192.168.100.1` succeeds).
-- ⚠️ No DHCP/IP routing yet (expected until a host network stack is implemented).
+- ✅ Host stack replies to **DHCP + ARP + ICMP** (`udhcpc` gets a lease, ping succeeds).
 
 ## Next steps
 
