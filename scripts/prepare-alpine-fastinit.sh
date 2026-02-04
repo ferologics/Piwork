@@ -78,11 +78,48 @@ start_pi() {
     pi --mode rpc < "$RPC_PORT" > "$RPC_PORT" 2>/dev/null &
 }
 
+extract_json_field() {
+    local input="$1"
+    local field="$2"
+    echo "$input" | sed -n "s/.*\"$field\":\"\([^\"]*\)\".*/\1/p"
+}
+
 rpc_loop() {
     local rpc_port="$1"
+    local current_model_id="stub-model"
+    local current_model_name="Stub Model"
+    local current_model_provider="stub"
+
     while IFS= read -r line; do
         if echo "$line" | grep -q '"type":"get_state"'; then
-            echo '{"type":"response","command":"get_state","success":true,"data":{"model":null,"sessionId":"stub-session","sessionName":"Stub Session","isStreaming":false}}' > "$rpc_port"
+            printf '{"type":"response","command":"get_state","success":true,"data":{"model":{"id":"%s","name":"%s","provider":"%s"},"sessionId":"stub-session","sessionName":"Stub Session","isStreaming":false}}\n' \
+                "$current_model_id" "$current_model_name" "$current_model_provider" > "$rpc_port"
+            continue
+        fi
+
+        if echo "$line" | grep -q '"type":"get_available_models"'; then
+            printf '{"type":"response","command":"get_available_models","success":true,"data":{"models":[{"id":"%s","name":"%s","provider":"%s"}]}}\n' \
+                "$current_model_id" "$current_model_name" "$current_model_provider" > "$rpc_port"
+            continue
+        fi
+
+        if echo "$line" | grep -q '"type":"set_model"'; then
+            local model_id
+            local provider
+            model_id=$(extract_json_field "$line" "modelId")
+            provider=$(extract_json_field "$line" "provider")
+
+            if [ -n "$model_id" ]; then
+                current_model_id="$model_id"
+                current_model_name="$model_id"
+            fi
+
+            if [ -n "$provider" ]; then
+                current_model_provider="$provider"
+            fi
+
+            printf '{"type":"response","command":"set_model","success":true,"data":{"id":"%s","name":"%s","provider":"%s"}}\n' \
+                "$current_model_id" "$current_model_name" "$current_model_provider" > "$rpc_port"
             continue
         fi
 

@@ -8,7 +8,6 @@ import type { RpcEvent } from "$lib/rpc";
 
 let prompt = $state("");
 let textareaEl: HTMLTextAreaElement | undefined = $state();
-let selectedModel = $state("claude-opus-4-5");
 let rpcClient: TauriRpcClient | null = $state(null);
 let rpcMessages = $state<string[]>([]);
 let rpcStreaming = $state("");
@@ -17,21 +16,31 @@ let rpcConnecting = $state(false);
 let rpcError = $state<string | null>(null);
 let rpcStateInfo = $state<string | null>(null);
 let rpcStateRequested = $state(false);
+let rpcModelsRequested = $state(false);
 let vmLogPath = $state<string | null>(null);
 let openingLog = $state(false);
+
+interface ModelOption {
+    id: string;
+    label: string;
+    provider: string | null;
+}
+
+const fallbackModels: ModelOption[] = [
+    { id: "claude-opus-4-5", label: "Opus 4.5", provider: null },
+    { id: "gpt-5.2", label: "GPT 5.2", provider: null },
+    { id: "gemini-3-pro", label: "Gemini 3", provider: null },
+    { id: "kimi-2.5", label: "Kimi 2.5", provider: null },
+];
+
+let availableModels = $state<ModelOption[]>([...fallbackModels]);
+let selectedModelId = $state(fallbackModels[0]?.id ?? "");
 
 interface VmStatusResponse {
     status: "starting" | "ready" | "stopped";
     rpcPath: string | null;
     logPath: string | null;
 }
-
-const models = [
-    { id: "claude-opus-4-5", label: "Opus 4.5" },
-    { id: "gpt-5.2", label: "GPT 5.2" },
-    { id: "gemini-3-pro", label: "Gemini 3" },
-    { id: "kimi-2.5", label: "Kimi 2.5" },
-];
 
 const MAX_HEIGHT = 200;
 
@@ -44,6 +53,26 @@ function autoGrow() {
 
 function pushRpcMessage(message: string) {
     rpcMessages = [...rpcMessages, message];
+}
+
+function resolveModelOption(model: Record<string, unknown> | undefined) {
+    if (!model) return null;
+
+    const id = typeof model.id === "string" ? model.id : null;
+    if (!id) return null;
+
+    const label = typeof model.name === "string" ? model.name : id;
+    const provider = typeof model.provider === "string" ? model.provider : null;
+
+    return { id, label, provider } satisfies ModelOption;
+}
+
+function ensureModelOption(option: ModelOption) {
+    if (availableModels.some((model) => model.id === option.id)) {
+        return;
+    }
+
+    availableModels = [option, ...availableModels];
 }
 
 async function refreshVmLogPath() {
@@ -70,6 +99,24 @@ async function requestState() {
     if (!rpcClient || rpcStateRequested) return;
     rpcStateRequested = true;
     await rpcClient.send({ type: "get_state" });
+}
+
+async function requestAvailableModels() {
+    if (!rpcClient || rpcModelsRequested) return;
+    rpcModelsRequested = true;
+    await rpcClient.send({ type: "get_available_models" });
+}
+
+async function handleModelChange() {
+    if (!rpcClient) return;
+
+    const selected = availableModels.find((model) => model.id === selectedModelId) ?? null;
+    if (!selected?.provider) {
+        pushRpcMessage("[info] Model provider unknown; waiting for available models.");
+        return;
+    }
+
+    await rpcClient.send({ type: "set_model", provider: selected.provider, modelId: selected.id });
 }
 
 function formatStateInfo(data: Record<string, unknown> | undefined) {
@@ -115,8 +162,19 @@ function handleRpcPayload(payload: Record<string, unknown>) {
             rpcStateRequested = false;
 
             if (payload.success === true) {
-                const info = formatStateInfo(payload.data as Record<string, unknown> | undefined);
+                const data = payload.data as Record<string, unknown> | undefined;
+                const info = formatStateInfo(data);
                 rpcStateInfo = info;
+
+                const model =
+                    typeof data?.model === "object" && data.model !== null
+                        ? (data.model as Record<string, unknown>)
+                        : null;
+                const option = model ? resolveModelOption(model) : null;
+                if (option) {
+                    ensureModelOption(option);
+                    selectedModelId = option.id;
+                }
             } else {
                 const error = payload.error;
                 if (typeof error === "string") {
@@ -125,6 +183,56 @@ function handleRpcPayload(payload: Record<string, unknown>) {
                     pushRpcMessage("[error] get_state failed");
                 }
                 rpcStateInfo = null;
+            }
+
+            return;
+        }
+
+        if (command === "get_available_models") {
+            rpcModelsRequested = false;
+
+            if (payload.success === true) {
+                const data = payload.data as Record<string, unknown> | undefined;
+                const models = Array.isArray(data?.models) ? data?.models : [];
+                const mapped = models
+                    .filter((model) => typeof model === "object" && model !== null)
+                    .map((model) => resolveModelOption(model as Record<string, unknown>))
+                    .filter((model): model is ModelOption => Boolean(model));
+
+                if (mapped.length > 0) {
+                    availableModels = mapped;
+                    if (!mapped.some((model) => model.id === selectedModelId)) {
+                        selectedModelId = mapped[0].id;
+                    }
+                }
+            } else {
+                const error = payload.error;
+                if (typeof error === "string") {
+                    pushRpcMessage(`[error] ${error}`);
+                } else {
+                    pushRpcMessage("[error] get_available_models failed");
+                }
+            }
+
+            return;
+        }
+
+        if (command === "set_model") {
+            if (payload.success === true) {
+                const data = payload.data as Record<string, unknown> | undefined;
+                const option = data ? resolveModelOption(data) : null;
+                if (option) {
+                    ensureModelOption(option);
+                    selectedModelId = option.id;
+                }
+                void requestState();
+            } else {
+                const error = payload.error;
+                if (typeof error === "string") {
+                    pushRpcMessage(`[error] ${error}`);
+                } else {
+                    pushRpcMessage("[error] set_model failed");
+                }
             }
 
             return;
@@ -223,6 +331,7 @@ function handleRpcEvent(event: RpcEvent) {
         rpcConnected = true;
         rpcError = null;
         void requestState();
+        void requestAvailableModels();
         return;
     }
 
@@ -251,6 +360,7 @@ async function connectRpc() {
     rpcError = null;
     rpcStateInfo = null;
     rpcStateRequested = false;
+    rpcModelsRequested = false;
 
     const client = new TauriRpcClient();
     client.subscribe(handleRpcEvent);
@@ -276,6 +386,7 @@ async function disconnectRpc() {
     rpcError = null;
     rpcStateInfo = null;
     rpcStateRequested = false;
+    rpcModelsRequested = false;
 }
 
 async function sendPrompt() {
@@ -380,10 +491,11 @@ onDestroy(() => {
                     </button>
                     <div class="flex items-center gap-2">
                         <select
-                            bind:value={selectedModel}
+                            bind:value={selectedModelId}
+                            onchange={handleModelChange}
                             class="appearance-none rounded-md bg-transparent px-2 py-1 text-xs text-muted-foreground outline-none hover:bg-accent cursor-pointer"
                         >
-                            {#each models as model}
+                            {#each availableModels as model}
                                 <option value={model.id}>{model.label}</option>
                             {/each}
                         </select>
