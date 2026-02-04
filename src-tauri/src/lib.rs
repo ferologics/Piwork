@@ -2,6 +2,7 @@ use std::path::PathBuf;
 use tauri::Manager;
 
 mod task_store;
+mod vm;
 
 const RUNTIME_MANIFEST: &str = "manifest.json";
 const RUNTIME_ENV_VAR: &str = "PIWORK_RUNTIME_DIR";
@@ -63,6 +64,31 @@ fn tasks_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
 
 #[tauri::command]
 #[allow(clippy::needless_pass_by_value)]
+fn vm_status(state: tauri::State<vm::VmState>) -> vm::VmStatusResponse {
+    vm::status(&state)
+}
+
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
+fn vm_start(app: tauri::AppHandle, state: tauri::State<vm::VmState>) -> Result<vm::VmStatusResponse, String> {
+    let runtime_dir = runtime_dir(&app)?;
+    vm::start(&app, &state, &runtime_dir)
+}
+
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
+fn vm_stop(state: tauri::State<vm::VmState>) {
+    vm::stop(&state);
+}
+
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
+fn rpc_send(state: tauri::State<vm::VmState>, message: String) -> Result<(), String> {
+    vm::send(&state, &message)
+}
+
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
 fn task_store_list(app: tauri::AppHandle) -> Result<Vec<task_store::TaskMetadata>, String> {
     let tasks_dir = tasks_dir(&app)?;
     task_store::list_tasks(&tasks_dir)
@@ -86,12 +112,17 @@ fn task_store_delete(app: tauri::AppHandle, task_id: String) -> Result<(), Strin
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .manage(vm::VmState::default())
         .invoke_handler(tauri::generate_handler![
             greet,
             runtime_status,
             task_store_list,
             task_store_upsert,
             task_store_delete,
+            vm_status,
+            vm_start,
+            vm_stop,
+            rpc_send,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -25,6 +25,7 @@ VM (Linux)
 - QEMU exposes a **virtio‑serial** channel.
 - pi runs `--mode rpc` and listens on `/dev/virtio-ports/piwork.rpc`.
 - Host reads/writes **JSONL** over this stream (same as stdin/stdout).
+- Dev runtime currently sends a `READY` line over this port.
 
 ## Task Model
 

@@ -1,9 +1,17 @@
 <script lang="ts">
+import { onDestroy, onMount } from "svelte";
 import { Send, Paperclip, FolderOpen, ChevronDown } from "@lucide/svelte";
+import { TauriRpcClient } from "$lib/rpc";
+import type { RpcEvent } from "$lib/rpc";
 
 let prompt = $state("");
 let textareaEl: HTMLTextAreaElement | undefined = $state();
 let selectedModel = $state("claude-opus-4-5");
+let rpcClient: TauriRpcClient | null = $state(null);
+let rpcMessages = $state<string[]>([]);
+let rpcConnected = $state(false);
+let rpcConnecting = $state(false);
+let rpcError = $state<string | null>(null);
 
 const models = [
     { id: "claude-opus-4-5", label: "Opus 4.5" },
@@ -20,24 +28,111 @@ function autoGrow() {
     textareaEl.style.height = Math.min(textareaEl.scrollHeight, MAX_HEIGHT) + "px";
     textareaEl.style.overflowY = textareaEl.scrollHeight > MAX_HEIGHT ? "auto" : "hidden";
 }
+
+function handleRpcEvent(event: RpcEvent) {
+    if (event.type === "ready") {
+        rpcConnected = true;
+        rpcError = null;
+        return;
+    }
+
+    if (event.type === "error") {
+        rpcError = typeof event.message === "string" ? event.message : "Runtime error";
+        rpcConnected = false;
+        return;
+    }
+
+    if (event.type === "rpc" && typeof event.message === "string") {
+        rpcMessages = [...rpcMessages, event.message];
+    }
+}
+
+async function connectRpc() {
+    if (rpcClient || rpcConnecting) return;
+    rpcConnecting = true;
+    rpcError = null;
+
+    const client = new TauriRpcClient();
+    client.subscribe(handleRpcEvent);
+
+    try {
+        await client.connect();
+        rpcClient = client;
+    } catch (error) {
+        rpcError = error instanceof Error ? error.message : String(error);
+        rpcConnected = false;
+        await client.disconnect().catch(() => undefined);
+    } finally {
+        rpcConnecting = false;
+    }
+}
+
+async function disconnectRpc() {
+    if (!rpcClient) return;
+    await rpcClient.disconnect();
+    rpcClient = null;
+    rpcConnected = false;
+}
+
+async function sendPrompt() {
+    if (!rpcClient) return;
+    const content = prompt.trim();
+    if (!content) return;
+
+    await rpcClient.send({ type: "prompt", content });
+    prompt = "";
+}
+
+onMount(() => {
+    void connectRpc();
+});
+
+onDestroy(() => {
+    void disconnectRpc();
+});
 </script>
 
 <main class="flex flex-1 flex-col bg-background">
     <!-- Chat transcript area -->
     <div class="flex-1 overflow-y-auto p-4 mr-2">
         <div class="mx-auto max-w-3xl space-y-4">
-            <!-- Empty state -->
-            <div class="flex h-full flex-col items-center justify-center py-20 text-center">
-                <FolderOpen class="mb-4 h-12 w-12 text-muted-foreground" />
-                <h2 class="mb-2 text-lg font-medium">Pick a folder to start</h2>
-                <p class="mb-6 text-sm text-muted-foreground">Select a folder to work in, then describe what you'd like to do.</p>
-
-                <div class="grid gap-2">
-                    <button class="rounded-md bg-secondary px-4 py-2 text-sm hover:bg-secondary/80">Organize Downloads</button>
-                    <button class="rounded-md bg-secondary px-4 py-2 text-sm hover:bg-secondary/80">Receipts → Spreadsheet</button>
-                    <button class="rounded-md bg-secondary px-4 py-2 text-sm hover:bg-secondary/80">Notes → Summary Report</button>
+            {#if !rpcConnected}
+                <div class="flex h-full flex-col items-center justify-center py-20 text-center">
+                    <FolderOpen class="mb-4 h-12 w-12 text-muted-foreground" />
+                    <h2 class="mb-2 text-lg font-medium">Booting runtime…</h2>
+                    <p class="mb-6 text-sm text-muted-foreground">
+                        {#if rpcConnecting}
+                            Starting VM…
+                        {:else if rpcError}
+                            Failed to start runtime: {rpcError}
+                        {:else}
+                            Waiting for the VM to signal READY.
+                        {/if}
+                    </p>
+                    {#if rpcError}
+                        <button
+                            class="rounded-md bg-secondary px-4 py-2 text-sm hover:bg-secondary/80 disabled:opacity-60"
+                            onclick={connectRpc}
+                            disabled={rpcConnecting}
+                        >
+                            Retry
+                        </button>
+                    {/if}
                 </div>
-            </div>
+            {:else}
+                <div class="rounded-lg border border-border bg-card p-4">
+                    <div class="text-sm font-medium">RPC output</div>
+                    <div class="mt-2 space-y-2 text-xs text-muted-foreground">
+                        {#if rpcMessages.length === 0}
+                            <div>No events yet.</div>
+                        {:else}
+                            {#each rpcMessages as message}
+                                <div class="break-words rounded-md bg-muted px-2 py-1">{message}</div>
+                            {/each}
+                        {/if}
+                    </div>
+                </div>
+            {/if}
         </div>
     </div>
 
@@ -69,7 +164,8 @@ function autoGrow() {
                         </select>
                         <button
                             class="rounded-md bg-primary p-2 text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-                            disabled={!prompt.trim()}
+                            disabled={!prompt.trim() || !rpcConnected}
+                            onclick={sendPrompt}
                             aria-label="Send"
                         >
                             <Send class="h-4 w-4" />

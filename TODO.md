@@ -14,7 +14,8 @@
 - [ ] QEMU detection + setup-required mode
 - [ ] Runtime pack download + install flow
 - [ ] Hardware accel check (HVF on macOS)
-- [ ] virtio-serial RPC bridge
+- [x] virtio-serial RPC bridge (READY handshake + JSONL stream)
+- [ ] Run pi inside VM + real RPC protocol
 - [ ] Folder mount UI (scope selection)
 - [ ] Permission-gate extension for VM
 

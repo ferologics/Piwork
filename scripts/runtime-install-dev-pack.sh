@@ -20,6 +20,7 @@ if [[ ! -f "$ALPINE_ISO" ]]; then
 fi
 
 "$SCRIPT_DIR/prepare-alpine-kernel.sh"
+rm -f "$INITRD_FAST"
 "$SCRIPT_DIR/prepare-alpine-fastinit.sh"
 
 mkdir -p "$RUNTIME_DIR"

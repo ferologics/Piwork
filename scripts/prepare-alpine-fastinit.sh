@@ -33,9 +33,15 @@ mount -t tmpfs tmpfs /run
 
 modprobe virtio_pci 2>/dev/null || true
 modprobe virtio_net 2>/dev/null || true
+modprobe virtio_console 2>/dev/null || true
 
 ip link set eth0 up
 udhcpc -i eth0 -q -n -t 3 -T 1
+
+RPC_PORT=/dev/virtio-ports/piwork.rpc
+if [ -e "$RPC_PORT" ]; then
+    echo READY > "$RPC_PORT"
+fi
 
 echo READY
 exec /usr/bin/sh -i
