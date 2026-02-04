@@ -6,7 +6,7 @@
 - [x] Define **task persistence** storage format + location
 - [x] Implement **TaskStore** + persistence (task.json)
 - [x] Implement **RpcClient** interface + **MockRpcClient** + JSONL fixtures
-- [ ] Plan **full auth UI** (pi `/login` + API key entry)
+- [x] Plan **full auth UI** (pi `/login` + API key entry)
 
 ## VM / Runtime Setup
 

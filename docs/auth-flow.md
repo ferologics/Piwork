@@ -34,6 +34,38 @@ Let users authenticate once and reuse provider credentials across tasks. Support
 3. Save credentials to host profile
 4. Show active provider in UI (profile chip + model selector)
 
+## Auth UI Plan (v1)
+
+### Entry Points
+
+- Auth banner in the main view when RPC returns auth errors.
+- Settings screen (later) for provider/profile management.
+
+### OAuth (/login) Flow
+
+1. User clicks **Log in**.
+2. Host sends `/login` via RPC.
+3. UI renders `extension_ui_request` dialogs (select/confirm/input).
+4. Detect login URLs in RPC/extension messages; show **Open** + **Copy** actions (auto-open optional).
+5. On completion, refresh `get_state` + `get_available_models` and show active provider/model.
+
+### API Key Flow
+
+1. User selects provider + pastes key.
+2. Host writes to the profile `auth.json`.
+3. Validate with `get_available_models`.
+
+### Success Criteria
+
+- `get_state` returns an active model.
+- `get_available_models` returns at least one model.
+- UI shows active provider/model.
+
+### Failure Handling
+
+- Display auth banner with the error message.
+- Dev shortcut: `PIWORK_COPY_AUTH=1` or `PIWORK_AUTH_PATH=~/.pi/agent/auth.json`.
+
 ## Subscription Login (OAuth)
 
 Use pi’s built‑in `/login` flow to avoid custom OAuth plumbing.
