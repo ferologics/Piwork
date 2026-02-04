@@ -2,15 +2,11 @@
 import { onDestroy, onMount } from "svelte";
 import { invoke } from "@tauri-apps/api/core";
 import { openPath, openUrl } from "@tauri-apps/plugin-opener";
-import { Send, Paperclip, FolderOpen, ChevronDown, ChevronRight, Loader2 } from "@lucide/svelte";
+import { Send, Paperclip, FolderOpen, ChevronDown, Loader2 } from "@lucide/svelte";
 import { devLog } from "$lib/utils/devLog";
 import { TauriRpcClient, MessageAccumulator } from "$lib/rpc";
 import type { RpcEvent, RpcPayload, ConversationState, ContentBlock } from "$lib/rpc";
-
-// Dev mode for verbose output (only available in dev builds)
-const IS_DEV = import.meta.env.DEV;
-let showDevPanel = $state(false);
-let rpcLog = $state<string[]>([]);
+import { devMode } from "$lib/stores/devMode.svelte";
 
 let prompt = $state("");
 let textareaEl: HTMLTextAreaElement | undefined = $state();
@@ -96,11 +92,17 @@ function autoGrow() {
     textareaEl.style.overflowY = textareaEl.scrollHeight > MAX_HEIGHT ? "auto" : "hidden";
 }
 
+function handleInputKeydown(e: KeyboardEvent) {
+    // Enter sends, Shift+Enter adds newline
+    if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        void sendPrompt();
+    }
+}
+
 function pushRpcMessage(message: string) {
     // Log to dev panel instead of showing to user
-    if (IS_DEV) {
-        rpcLog = [...rpcLog.slice(-99), message];
-    }
+    devMode.pushLog(message);
     maybeCaptureLoginUrl(message);
 }
 
@@ -428,9 +430,7 @@ function formatStateInfo(data: Record<string, unknown> | undefined) {
 
 function handleRpcPayload(payload: Record<string, unknown>) {
     // Log for dev panel
-    if (IS_DEV) {
-        rpcLog = [...rpcLog.slice(-99), `[${payload.type}] ${JSON.stringify(payload).slice(0, 200)}`];
-    }
+    devMode.pushLog(`[${payload.type}] ${JSON.stringify(payload).slice(0, 200)}`);
 
     // Feed to message accumulator for proper conversation tracking
     messageAccumulator.processEvent(payload as RpcPayload);
@@ -913,29 +913,6 @@ onDestroy(() => {
                         {/if}
                     </div>
 
-                    <!-- Dev panel (only in dev builds) -->
-                    {#if IS_DEV}
-                        <div class="mt-4 border-t border-border pt-2">
-                            <button
-                                class="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
-                                onclick={() => showDevPanel = !showDevPanel}
-                            >
-                                <ChevronRight class="h-3 w-3 transition-transform {showDevPanel ? 'rotate-90' : ''}" />
-                                Dev: RPC Log ({rpcLog.length})
-                            </button>
-                            {#if showDevPanel}
-                                <div class="mt-2 max-h-48 overflow-auto rounded bg-muted/50 p-2 font-mono text-[10px] text-muted-foreground">
-                                    {#each rpcLog as entry}
-                                        <div class="truncate">{entry}</div>
-                                    {/each}
-                                    {#if rpcLog.length === 0}
-                                        <div class="italic">No RPC events yet</div>
-                                    {/if}
-                                </div>
-                            {/if}
-                        </div>
-                    {/if}
-
                     {#if pendingUiRequest}
                         <div class="mt-4 rounded-md border border-border bg-muted/30 p-3 text-xs text-muted-foreground">
                             <div class="text-sm font-medium text-foreground">
@@ -1064,6 +1041,7 @@ onDestroy(() => {
                     bind:this={textareaEl}
                     bind:value={prompt}
                     oninput={autoGrow}
+                    onkeydown={handleInputKeydown}
                     placeholder="What would you like to do?"
                     rows="1"
                     class="w-full resize-none bg-transparent px-2 py-2 text-sm outline-none placeholder:text-muted-foreground"
