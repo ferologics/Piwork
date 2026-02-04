@@ -6,9 +6,9 @@ Based on Cowork observation + our needs.
 
 These are broken or missing - fix first:
 
-- [ ] **New Task button** - clicking does nothing
-- [ ] **Task persistence/resume** - select task from list, resume VM session
-- [ ] **Working folder selection** - "Work in a folder" checkbox + picker
+- [ ] **Task resume** - select task, restore conversation + pi session isolation
+- [ ] **Session isolation** - per-task `--session-file` (no context bleed)
+- [ ] **Working folder mount** - mount host folder into VM (blocked by 9p)
 - [ ] **Show created files** - right panel shows files agent creates
 
 ## P1: Core UX Polish
@@ -20,6 +20,7 @@ Make it feel like a real app:
 - [ ] **Artifact cards** - file preview with "Open in..." button
 - [ ] **Progress indicators** - checkmarks in right panel
 - [ ] **Profile chip** - bottom left, show user + plan/status
+- [ ] **Auth/settings** - decide MVP scope (currently untested)
 
 ## P2: Empty State & Onboarding
 

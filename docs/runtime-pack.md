@@ -42,32 +42,27 @@ Provide a **consistent, isolated Linux environment** for desktop while keeping t
 - Pack is **signed**; app verifies before install.
 - Refuse to run if verification fails.
 
-## VM Boot Flow (Proposed)
+## VM Boot Flow (Current)
 
 1. **Preflight**
    - Verify runtime pack installed and valid
    - Check accel: **HVF / WHPX / KVM**
    - If missing → show setup guidance
 
-2. **Prepare task sandbox**
-   - Create **ephemeral overlay** (qcow2) from base rootfs
-   - Create **workspace mount** (read/write)
-   - Optional **cache volume** for packages
-
-3. **Launch QEMU**
+2. **Launch QEMU**
+   - Direct boot kernel + initramfs
    - Enable accel (HVF/WHPX/KVM)
-   - Attach rootfs overlay + cache volume
-   - Attach workspace via **virtiofs** (fallback to 9p)
-   - Attach **virtio‑serial** channel for RPC
-   - Enable **user‑mode NAT (SLIRP)** by default
+   - Enable **user‑mode NAT (SLIRP)** with `hostfwd` for TCP RPC
 
-4. **Start pi in VM**
-   - Bootstrap service launches `pi --mode rpc`
-   - RPC listens on `/dev/virtio-ports/piwork.rpc`
+3. **Start pi in VM**
+   - Init script launches `nc -l -p 19384 -e node pi --mode rpc`
 
-5. **Host ↔ VM handshake**
-   - UI connects to the virtio‑serial stream
+4. **Host ↔ VM handshake**
+   - UI connects to `localhost:19384`
    - Task starts once RPC is ready
+
+> **Note:** Folder mounts via 9p are currently blocked (Alpine virt kernel lacks 9p modules).
+> **Future:** virtiofs + virtio‑serial, per‑task overlay.
 
 ## Host ↔ VM Communication
 

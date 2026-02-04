@@ -74,9 +74,9 @@ These let the AI test changes without human interaction:
 
 - **TCP RPC** via NAT port forwarding (simpler than virtio-serial)
 - **Network on by default** via QEMU user-mode NAT
-- **Fresh VM per task** (no persistence)
+- **Shared VM for now** (single VM, restarted on folder change)
 - **Dynamic linking** - Node uses Alpine's packaged libs
-- **Tasks resumable** across app restarts (session file + mounts stored)
+- **Task resume** via host-stored conversation (pi session files TODO)
 
 ## Docs
 

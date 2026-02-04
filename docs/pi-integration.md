@@ -20,20 +20,22 @@ VM (Linux)
   └─ skills/tools
 ```
 
-## RPC Transport
+## RPC Transport (current)
 
-- QEMU exposes a **virtio‑serial** channel.
-- pi runs `--mode rpc` and listens on `/dev/virtio-ports/piwork.rpc`.
-- Host reads/writes **JSONL** over this stream (same as stdin/stdout).
+- QEMU uses **user-mode NAT** with `hostfwd` to expose TCP port `19384`.
+- pi runs `--mode rpc`, wired via `nc -l -p 19384 -e node pi --mode rpc` inside the VM.
+- Host reads/writes **JSONL** over TCP `localhost:19384`.
 - Dev runtime prebakes Node + pi into the initramfs (no boot-time installs).
 - Host logs QEMU stderr to `app_data/vm/qemu.log` for debugging failed boots.
 - If `PIWORK_AUTH_PATH` was provided at pack install time, the initramfs sets `PI_CODING_AGENT_DIR=/opt/pi-agent` to use the baked `auth.json`.
 
-## Task Model
+> **Future**: move to virtio‑serial once stable.
 
-- **One VM per task** (fresh overlay per task).
+## Task Model (current)
+
+- **Single shared VM** across tasks (restarted on folder change).
 - Host starts pi → sends `prompt` commands.
-- Host **stores task metadata + transcript** (pi session files used for resume).
+- Host **stores task metadata + transcript** (pi session files still TODO).
 
 ## Event Mapping (RPC → UI)
 
@@ -42,25 +44,22 @@ VM (Linux)
 - `extension_ui_request` → permission prompts
 - `agent_end` → mark task complete + highlight artifacts
 
-## Task Persistence / Resume (v1)
+## Task Persistence / Resume (current)
 
 **Task metadata stored on host:**
 
 - `task.json`:
   - `taskId`, `title`, `status`, `createdAt`, `updatedAt`
-  - `sessionFile` (pi session JSONL path)
-  - `mounts` (approved folders + modes)
-  - `model` + `thinkingLevel`
-  - `connectorsEnabled`
+  - `workingFolder` (optional)
+  - `model` (selected)
 
-**Resume flow:**
+**Resume flow (current):**
 
-1. Start a **fresh VM**.
-2. Mount the same folders listed in `task.json`.
-3. Mount host `auth.json` for provider access.
-4. Start pi with `--session-dir` pointing at the host‑mounted tasks dir.
-5. Call `switch_session` with `sessionFile`.
-6. Rebuild UI via `get_messages` + `get_state`.
+1. UI loads `conversation.json` from task folder.
+2. Conversation is restored in the UI only.
+3. VM/PI session isolation is **not implemented yet**.
+
+**Planned:** add per‑task `--session-file` once host task folders are mounted into the VM.
 
 ## Permission Gate Extension
 
