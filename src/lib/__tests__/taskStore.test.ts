@@ -73,4 +73,19 @@ describe("taskStore", () => {
         expect(task.createdAt).toBeTruthy();
         expect(task.updatedAt).toBeTruthy();
     });
+
+    it("updates active task when archived", async () => {
+        const task = sampleTask();
+        const archived = { ...task, status: "archived" };
+
+        invokeMock.mockResolvedValue([task]);
+        await taskStore.load();
+
+        taskStore.setActive(task.id);
+
+        invokeMock.mockResolvedValue(undefined);
+        await taskStore.upsert(archived);
+
+        expect(get(taskStore.activeTaskId)).toBe(null);
+    });
 });

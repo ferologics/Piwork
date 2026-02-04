@@ -6,7 +6,9 @@ import type { TaskMetadata } from "$lib/types/task";
 
 let tasks = $state<TaskMetadata[]>([]);
 let visibleTasks = $state<TaskMetadata[]>([]);
+let activeTaskId = $state<string | null>(null);
 let unsubscribe: (() => void) | null = null;
+let unsubscribeActive: (() => void) | null = null;
 let creating = $state(false);
 let menuTaskId = $state<string | null>(null);
 let editingTaskId = $state<string | null>(null);
@@ -28,6 +30,10 @@ onMount(() => {
         visibleTasks = value.filter((task) => task.status !== "archived");
     });
 
+    unsubscribeActive = taskStore.activeTaskId.subscribe((value) => {
+        activeTaskId = value;
+    });
+
     const handleClick = () => {
         menuTaskId = null;
     };
@@ -41,6 +47,7 @@ onMount(() => {
 
 onDestroy(() => {
     unsubscribe?.();
+    unsubscribeActive?.();
 });
 
 async function handleNewTask() {
@@ -50,6 +57,7 @@ async function handleNewTask() {
     try {
         const task = taskStore.create("New Task");
         await taskStore.upsert(task);
+        taskStore.setActive(task.id);
     } finally {
         creating = false;
     }
@@ -137,8 +145,16 @@ async function archiveTask(task: TaskMetadata, event: MouseEvent) {
             {:else}
                 {#each visibleTasks as task}
                     <li class="relative">
-                        <div class="flex items-center gap-1 rounded-md px-2 py-1 hover:bg-sidebar-accent">
-                            <button class="flex flex-1 items-center gap-2 rounded-md px-2 py-2 text-sm" type="button">
+                        <div
+                            class="flex items-center gap-1 rounded-md px-2 py-1 hover:bg-sidebar-accent"
+                            class:bg-sidebar-accent={activeTaskId === task.id}
+                        >
+                            <button
+                                class="flex flex-1 items-center gap-2 rounded-md px-2 py-2 text-sm"
+                                type="button"
+                                onclick={() => taskStore.setActive(task.id)}
+                                aria-current={activeTaskId === task.id ? "true" : "false"}
+                            >
                                 <span
                                     class="h-2 w-2 rounded-full {statusColors[task.status] ?? "bg-muted-foreground"}"
                                 ></span>

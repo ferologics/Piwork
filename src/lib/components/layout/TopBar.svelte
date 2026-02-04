@@ -1,5 +1,8 @@
 <script lang="ts">
+import { onDestroy, onMount } from "svelte";
 import { Settings, PanelLeft, PanelRight } from "@lucide/svelte";
+import { taskStore } from "$lib/stores/taskStore";
+import type { TaskMetadata } from "$lib/types/task";
 
 let {
     showLeftRail = $bindable(true),
@@ -10,6 +13,19 @@ let {
     showRightPanel?: boolean;
     onOpenSettings?: (() => void) | null;
 } = $props();
+
+let activeTask: TaskMetadata | null = $state(null);
+let unsubscribeActive: (() => void) | null = null;
+
+onMount(() => {
+    unsubscribeActive = taskStore.activeTask.subscribe((value) => {
+        activeTask = value;
+    });
+});
+
+onDestroy(() => {
+    unsubscribeActive?.();
+});
 </script>
 
 <header class="flex h-12 items-center justify-between border-b border-border bg-background px-4">
@@ -22,7 +38,9 @@ let {
             <PanelLeft class="h-4 w-4" />
         </button>
         <span class="text-lg font-semibold">Piwork</span>
-        <span class="text-sm text-muted-foreground">No active task</span>
+        <span class="text-sm text-muted-foreground">
+            {activeTask ? activeTask.title || "Untitled task" : "No active task"}
+        </span>
     </div>
 
     <div class="flex items-center gap-2">
