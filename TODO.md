@@ -4,7 +4,9 @@
 
 - [x] **Tasks**: Auto-create on first message, conversation persistence per task ✓
 - [ ] **Task resume**: Click existing task → load its conversation (wired, needs UI click test)
-- [ ] **Working folder**: Selection UI + mount into VM + show files responsively
+- [ ] **Working folder**: Selection UI + mount into VM as cwd
+- [ ] **Remount on task switch**: Unmount old folder, mount new task's folder
+- [ ] **Session file per task**: Pi uses `--session-file` per task for conversation isolation
 
 ## P1: Production Ready
 
@@ -22,6 +24,9 @@
 
 ## P3: Later
 
+- [ ] **Import external files**: Attach files from outside working folder (copy in? read-only mount?)
+- [ ] **Multi-folder tasks**: Mount multiple folders per task (read-only extras?)
+- [ ] **VM per task**: Full isolation option for paranoid mode
 - [ ] **Cross-platform**: Linux/Windows support
 - [ ] **MITM network**: Proxy for visibility/control (virtio-net + stream netdev)
 - [ ] **Artifact preview**: HTML, Markdown, images, CSV in-app
@@ -52,6 +57,16 @@
 - [x] Right panel collapsed by default
 - [x] Removed dev-focused "RPC output" header
 - [x] Dev mise tasks
+
+## Architecture Decisions
+
+**Task isolation model (v1):**
+- One VM shared across all tasks
+- Each task has one working folder (read-write)
+- On task switch: remount folder + switch pi session file
+- Pi only sees the mounted folder (cwd = mount point)
+- Downloads/created files land in working folder
+- External file import = TODO (copy in for now)
 
 ## See Also
 
