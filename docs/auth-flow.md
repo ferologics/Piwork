@@ -27,7 +27,8 @@ Let users authenticate once and reuse provider credentials across tasks. Support
 
 **Current implementation (MVP):**
 
-- Settings modal lets you save API keys to `app_data/auth/default/auth.json` via Tauri commands.
+- Settings modal lets you save API keys to `app_data/auth/<profile>/auth.json` via Tauri commands.
+- Profiles are stored in localStorage (`piwork:auth-profile`, `piwork:auth-profiles`).
 - Keys are stored on host only (VM mount/sync still pending).
 
 **Phase 2 (full login UI):**
