@@ -14,6 +14,7 @@ let rpcStreaming = $state("");
 let rpcConnected = $state(false);
 let rpcConnecting = $state(false);
 let rpcError = $state<string | null>(null);
+let rpcAuthHint = $state<string | null>(null);
 let rpcStateInfo = $state<string | null>(null);
 let rpcStateRequested = $state(false);
 let rpcModelsRequested = $state(false);
@@ -53,6 +54,22 @@ function autoGrow() {
 
 function pushRpcMessage(message: string) {
     rpcMessages = [...rpcMessages, message];
+}
+
+function updateAuthHint(message: string) {
+    const lower = message.toLowerCase();
+    const needsAuth =
+        lower.includes("auth") ||
+        lower.includes("login") ||
+        lower.includes("api key") ||
+        lower.includes("credential") ||
+        lower.includes("unauthorized") ||
+        lower.includes("token");
+
+    if (!needsAuth) return;
+
+    rpcAuthHint =
+        "Auth required. Rebuild the dev runtime with PIWORK_COPY_AUTH=1 (or PIWORK_AUTH_PATH=~/.pi/agent/auth.json), then restart the app.";
 }
 
 function resolveModelOption(model: Record<string, unknown> | undefined) {
@@ -179,6 +196,7 @@ function handleRpcPayload(payload: Record<string, unknown>) {
                 const error = payload.error;
                 if (typeof error === "string") {
                     pushRpcMessage(`[error] ${error}`);
+                    updateAuthHint(error);
                 } else {
                     pushRpcMessage("[error] get_state failed");
                 }
@@ -209,6 +227,7 @@ function handleRpcPayload(payload: Record<string, unknown>) {
                 const error = payload.error;
                 if (typeof error === "string") {
                     pushRpcMessage(`[error] ${error}`);
+                    updateAuthHint(error);
                 } else {
                     pushRpcMessage("[error] get_available_models failed");
                 }
@@ -230,6 +249,7 @@ function handleRpcPayload(payload: Record<string, unknown>) {
                 const error = payload.error;
                 if (typeof error === "string") {
                     pushRpcMessage(`[error] ${error}`);
+                    updateAuthHint(error);
                 } else {
                     pushRpcMessage("[error] set_model failed");
                 }
@@ -242,6 +262,7 @@ function handleRpcPayload(payload: Record<string, unknown>) {
             const error = payload.error;
             if (typeof error === "string") {
                 pushRpcMessage(`[error] ${error}`);
+                updateAuthHint(error);
                 return;
             }
         }
@@ -330,6 +351,7 @@ function handleRpcEvent(event: RpcEvent) {
     if (event.type === "ready") {
         rpcConnected = true;
         rpcError = null;
+        rpcAuthHint = null;
         void requestState();
         void requestAvailableModels();
         return;
@@ -338,6 +360,7 @@ function handleRpcEvent(event: RpcEvent) {
     if (event.type === "error") {
         rpcError = typeof event.message === "string" ? event.message : "Runtime error";
         rpcConnected = false;
+        rpcAuthHint = null;
         rpcStateInfo = null;
         rpcStateRequested = false;
         void refreshVmLogPath();
@@ -348,6 +371,7 @@ function handleRpcEvent(event: RpcEvent) {
         if (!rpcConnected) {
             rpcConnected = true;
             rpcError = null;
+            rpcAuthHint = null;
             void requestState();
             void requestAvailableModels();
         }
@@ -365,6 +389,7 @@ async function connectRpc() {
     if (rpcClient || rpcConnecting) return;
     rpcConnecting = true;
     rpcError = null;
+    rpcAuthHint = null;
     rpcStateInfo = null;
     rpcStateRequested = false;
     rpcModelsRequested = false;
@@ -391,6 +416,7 @@ async function disconnectRpc() {
     rpcClient = null;
     rpcConnected = false;
     rpcError = null;
+    rpcAuthHint = null;
     rpcStateInfo = null;
     rpcStateRequested = false;
     rpcModelsRequested = false;
@@ -461,6 +487,11 @@ onDestroy(() => {
                         <div class="mt-1 text-[11px] text-muted-foreground">{rpcStateInfo}</div>
                     {:else if rpcStateRequested}
                         <div class="mt-1 text-[11px] text-muted-foreground">Loading state…</div>
+                    {/if}
+                    {#if rpcAuthHint}
+                        <div class="mt-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-[11px] text-amber-200">
+                            {rpcAuthHint}
+                        </div>
                     {/if}
                     <div class="mt-2 space-y-2 text-xs text-muted-foreground">
                         {#if rpcMessages.length === 0 && !rpcStreaming}
