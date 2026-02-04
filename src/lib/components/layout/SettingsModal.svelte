@@ -212,19 +212,34 @@ function persistProfile() {
     }
 }
 
-function handleProfileChange() {
+function applyProfile(nextProfile: string, showNotice: boolean) {
     clearProfileSetNotice();
+
+    if (nextProfile !== profile) {
+        profile = nextProfile;
+    }
+
+    if (showNotice) {
+        setProfileNotice(`Switched to ${nextProfile}`);
+    }
+
+    updateProfileOptions(nextProfile);
+    persistProfile();
+    void loadEntries();
+}
+
+function handleProfileChange() {
     clearProfileNotice();
 
     const normalized = normalizeProfile(profile);
-    if (normalized !== profile) {
-        profile = normalized;
-        setProfileNotice(`Switched to ${normalized}`);
-    }
+    const showNotice = normalized !== profile;
+    applyProfile(normalized, showNotice);
+}
 
-    updateProfileOptions(profile);
-    persistProfile();
-    void loadEntries();
+function selectProfile(option: string) {
+    if (option === profile) return;
+    clearProfileNotice();
+    applyProfile(option, true);
 }
 
 async function addProfile() {
@@ -234,14 +249,10 @@ async function addProfile() {
         return;
     }
 
-    profile = normalizeProfile(trimmed);
+    const normalized = normalizeProfile(trimmed);
     newProfile = "";
-    setProfileNotice(`Switched to ${profile}`);
-    clearProfileSetNotice();
     clearProfileNotice();
-    updateProfileOptions(profile);
-    persistProfile();
-    await loadEntries();
+    applyProfile(normalized, true);
 }
 
 async function copyAuthCommand() {
@@ -432,6 +443,21 @@ onDestroy(() => {
                                 Add profile
                             </button>
                         </div>
+                        {#if profileOptions.length > 0}
+                            <div class="flex flex-wrap gap-2">
+                                {#each profileOptions.slice(0, 6) as option}
+                                    <button
+                                        class="rounded-md px-2 py-1 text-[11px] {option === profile
+                                            ? 'bg-accent text-foreground'
+                                            : 'bg-secondary text-muted-foreground hover:bg-secondary/80'} disabled:opacity-60"
+                                        onclick={() => selectProfile(option)}
+                                        disabled={option === profile}
+                                    >
+                                        {option}
+                                    </button>
+                                {/each}
+                            </div>
+                        {/if}
                         {#if profileNotice}
                             <div class="text-[11px] text-emerald-400">{profileNotice}</div>
                         {/if}
