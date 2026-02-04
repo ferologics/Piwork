@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::fs::File;
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
@@ -46,6 +47,11 @@ struct VmInstance {
     child: Child,
     rpc_path: PathBuf,
     writer: Arc<Mutex<Option<std::os::unix::net::UnixStream>>>,
+}
+
+struct VmPaths {
+    rpc_path: PathBuf,
+    log_path: PathBuf,
 }
 
 #[derive(Clone, Serialize)]
@@ -103,14 +109,14 @@ pub fn start(app: &AppHandle, state: &VmState, runtime_dir: &Path) -> Result<VmS
     }
 
     let manifest = load_manifest(runtime_dir)?;
-    let rpc_path = prepare_rpc_socket(app)?;
+    let paths = prepare_vm_paths(app)?;
 
-    let child = spawn_qemu(&manifest, runtime_dir, &rpc_path)?;
+    let child = spawn_qemu(&manifest, runtime_dir, &paths)?;
     let writer: Arc<Mutex<Option<std::os::unix::net::UnixStream>>> = Arc::new(Mutex::new(None));
 
     let instance = VmInstance {
         child,
-        rpc_path: rpc_path.clone(),
+        rpc_path: paths.rpc_path.clone(),
         writer: writer.clone(),
     };
 
@@ -118,6 +124,7 @@ pub fn start(app: &AppHandle, state: &VmState, runtime_dir: &Path) -> Result<VmS
     *inner = Some(instance);
 
     let app_handle = app.clone();
+    let rpc_path = paths.rpc_path.clone();
     thread::spawn(move || match connect_rpc(&rpc_path) {
         Ok(stream) => {
             if let Ok(clone) = stream.try_clone() {
@@ -169,7 +176,7 @@ fn load_manifest(runtime_dir: &Path) -> Result<RuntimeManifest, String> {
     Ok(manifest)
 }
 
-fn prepare_rpc_socket(app: &AppHandle) -> Result<PathBuf, String> {
+fn prepare_vm_paths(app: &AppHandle) -> Result<VmPaths, String> {
     let vm_dir = app.path().app_data_dir().map_err(|error| error.to_string())?.join("vm");
     std::fs::create_dir_all(&vm_dir).map_err(|error| error.to_string())?;
 
@@ -178,17 +185,25 @@ fn prepare_rpc_socket(app: &AppHandle) -> Result<PathBuf, String> {
         std::fs::remove_file(&rpc_path).map_err(|error| error.to_string())?;
     }
 
-    Ok(rpc_path)
+    Ok(VmPaths {
+        rpc_path,
+        log_path: vm_dir.join("qemu.log"),
+    })
 }
 
-fn spawn_qemu(manifest: &RuntimeManifest, runtime_dir: &Path, rpc_path: &Path) -> Result<Child, String> {
-    let qemu_binary = manifest
-        .qemu
-        .as_ref()
-        .map_or_else(|| PathBuf::from("qemu-system-aarch64"), |path| runtime_dir.join(path));
+fn spawn_qemu(manifest: &RuntimeManifest, runtime_dir: &Path, paths: &VmPaths) -> Result<Child, String> {
+    let qemu_binary = resolve_qemu_binary(manifest, runtime_dir)?;
 
     let kernel = runtime_dir.join(&manifest.kernel);
+    if !kernel.is_file() {
+        return Err(format!("Kernel not found: {}", kernel.display()));
+    }
+
     let initrd = runtime_dir.join(&manifest.initrd);
+    if !initrd.is_file() {
+        return Err(format!("Initrd not found: {}", initrd.display()));
+    }
+
     let cmdline = manifest
         .cmdline
         .as_deref()
@@ -216,17 +231,46 @@ fn spawn_qemu(manifest: &RuntimeManifest, runtime_dir: &Path, rpc_path: &Path) -
         .arg("-netdev")
         .arg("user,id=net0")
         .arg("-chardev")
-        .arg(format!("socket,id=rpc,path={},server=on,wait=off", rpc_path.display()))
+        .arg(format!(
+            "socket,id=rpc,path={},server=on,wait=off",
+            paths.rpc_path.display()
+        ))
         .arg("-device")
         .arg("virtio-serial")
         .arg("-device")
         .arg(format!("virtserialport,chardev=rpc,name={RPC_PORT_NAME}"))
         .arg("-serial")
         .arg("null")
-        .stdout(Stdio::null())
-        .stderr(Stdio::null());
+        .stdout(Stdio::null());
+
+    let log_file = File::create(&paths.log_path).map_err(|error| format!("Failed to create QEMU log: {error}"))?;
+    command.stderr(Stdio::from(log_file));
 
     command.spawn().map_err(|error| error.to_string())
+}
+
+fn resolve_qemu_binary(manifest: &RuntimeManifest, runtime_dir: &Path) -> Result<PathBuf, String> {
+    if let Some(qemu) = &manifest.qemu {
+        let candidate = runtime_dir.join(qemu);
+        if candidate.is_file() {
+            return Ok(candidate);
+        }
+        return Err(format!("QEMU binary not found at {}", candidate.display()));
+    }
+
+    find_in_path("qemu-system-aarch64").ok_or_else(|| "QEMU not found in PATH".to_string())
+}
+
+fn find_in_path(binary: &str) -> Option<PathBuf> {
+    let path_var = std::env::var("PATH").ok()?;
+    for entry in path_var.split(':') {
+        let candidate = PathBuf::from(entry).join(binary);
+        if candidate.is_file() {
+            return Some(candidate);
+        }
+    }
+
+    None
 }
 
 fn connect_rpc(rpc_path: &Path) -> Result<std::os::unix::net::UnixStream, String> {
