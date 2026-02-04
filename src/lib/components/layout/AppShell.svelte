@@ -1,13 +1,24 @@
 <script lang="ts">
 import { onMount } from "svelte";
 import { invoke } from "@tauri-apps/api/core";
+import { devLog } from "$lib/utils/devLog";
 import SetupRequired from "$lib/components/SetupRequired.svelte";
 import { taskStore } from "$lib/stores/taskStore";
 import TopBar from "./TopBar.svelte";
 import SettingsModal from "./SettingsModal.svelte";
 import LeftRail from "./LeftRail.svelte";
-import MainView from "./MainView.svelte";
 import RightPanel from "./RightPanel.svelte";
+
+// Lazy load MainView to avoid blocking initial render
+let MainView: typeof import("./MainView.svelte").default | null = $state(null);
+
+async function loadMainView() {
+    devLog("AppShell", "loadMainView start");
+    if (MainView) return;
+    const module = await import("./MainView.svelte");
+    MainView = module.default;
+    devLog("AppShell", "loadMainView done");
+}
 
 interface RuntimeStatus {
     status: "missing" | "ready";
@@ -27,23 +38,34 @@ let runtimeError = $state<string | null>(null);
 let checkingRuntime = $state(false);
 
 async function loadRuntimeStatus() {
+    devLog("AppShell", "loadRuntimeStatus start");
     checkingRuntime = true;
     runtimeError = null;
 
     try {
+        devLog("AppShell", "invoking runtime_status...");
         runtimeStatus = await invoke<RuntimeStatus>("runtime_status");
+        devLog("AppShell", `runtime_status returned: ${runtimeStatus?.status}`);
     } catch (error) {
+        devLog("AppShell", `runtime_status error: ${error}`);
         runtimeError = error instanceof Error ? error.message : String(error);
         runtimeStatus = null;
     } finally {
+        devLog("AppShell", "loadRuntimeStatus done");
         checkingRuntime = false;
     }
 }
 
 onMount(() => {
-    void loadRuntimeStatus();
+    devLog("AppShell", "onMount");
+    void loadRuntimeStatus().then(() => {
+        devLog("AppShell", `after loadRuntimeStatus, status=${runtimeStatus?.status}`);
+        if (runtimeStatus?.status === "ready") {
+            void loadMainView();
+        }
+    });
     void taskStore.load().catch((error) => {
-        console.error("Failed to load tasks", error);
+        devLog("AppShell", `taskStore.load error: ${error}`);
     });
 });
 </script>
@@ -79,7 +101,11 @@ onMount(() => {
             {#if showLeftRail}
                 <LeftRail />
             {/if}
-            <MainView />
+            {#if MainView}
+                <MainView />
+            {:else}
+                <div class="flex flex-1 items-center justify-center text-muted-foreground">Loading…</div>
+            {/if}
             {#if showRightPanel}
                 <RightPanel />
             {/if}

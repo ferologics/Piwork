@@ -1,6 +1,5 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::time::Instant;
 use tauri::Manager;
 
 mod auth_store;
@@ -10,7 +9,7 @@ mod vm;
 const RUNTIME_MANIFEST: &str = "manifest.json";
 const RUNTIME_ENV_VAR: &str = "PIWORK_RUNTIME_DIR";
 
-#[derive(serde::Serialize)]
+#[derive(Debug, serde::Serialize)]
 #[serde(rename_all = "snake_case")]
 enum RuntimeState {
     Ready,
@@ -35,17 +34,15 @@ fn greet(name: &str) -> String {
 }
 
 #[tauri::command]
+fn dev_log(source: &str, message: &str) {
+    eprintln!("[{source}] {message}");
+}
+
+#[tauri::command]
 #[allow(clippy::needless_pass_by_value)]
 fn runtime_status(app: tauri::AppHandle) -> Result<RuntimeStatus, String> {
-    let start = Instant::now();
-    eprintln!("[runtime_status] start");
-
+    eprintln!("[rust] runtime_status called");
     let runtime_dir = runtime_dir(&app)?;
-    eprintln!(
-        "[runtime_status] runtime_dir={} ({}ms)",
-        runtime_dir.display(),
-        start.elapsed().as_millis()
-    );
     std::fs::create_dir_all(&runtime_dir).map_err(|error| error.to_string())?;
 
     let manifest_path = runtime_dir.join(RUNTIME_MANIFEST);
@@ -55,16 +52,10 @@ fn runtime_status(app: tauri::AppHandle) -> Result<RuntimeStatus, String> {
         RuntimeState::Missing
     };
 
-    let qemu_start = Instant::now();
     let qemu_path = find_qemu_binary(&runtime_dir, &manifest_path);
-    eprintln!("[runtime_status] qemu_check {}ms", qemu_start.elapsed().as_millis());
     let qemu_available = qemu_path.is_some();
-
-    let accel_start = Instant::now();
     let accel_available = check_accel_available();
-    eprintln!("[runtime_status] accel_check {}ms", accel_start.elapsed().as_millis());
-
-    eprintln!("[runtime_status] done {}ms", start.elapsed().as_millis());
+    eprintln!("[rust] runtime_status returning status={status:?}");
 
     Ok(RuntimeStatus {
         status,
@@ -237,6 +228,7 @@ pub fn run() {
         .manage(vm::VmState::default())
         .invoke_handler(tauri::generate_handler![
             greet,
+            dev_log,
             runtime_status,
             task_store_list,
             task_store_upsert,
