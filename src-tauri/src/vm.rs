@@ -105,7 +105,16 @@ pub fn start(app: &AppHandle, state: &VmState, runtime_dir: &Path) -> Result<VmS
     let mut inner = state.inner.lock().unwrap();
     if inner.is_some() {
         eprintln!("[rust:vm] already running");
-        return Ok(status(state));
+        // Build response inline to avoid deadlock (we already hold inner lock)
+        let status = state.status.lock().unwrap().clone();
+        let log_path = inner
+            .as_ref()
+            .map(|instance| instance.log_path.to_string_lossy().to_string());
+        return Ok(VmStatusResponse {
+            status,
+            rpc_port: Some(RPC_PORT),
+            log_path,
+        });
     }
 
     eprintln!("[rust:vm] loading manifest");
