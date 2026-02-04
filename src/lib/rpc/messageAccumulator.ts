@@ -84,6 +84,11 @@ export class MessageAccumulator {
     }
 
     processEvent(payload: RpcPayload): void {
+        // Debug: log what we receive
+        if (import.meta.env.DEV) {
+            console.log("[Accumulator]", payload.type, payload);
+        }
+
         switch (payload.type) {
             case "agent_start":
                 this.state.isAgentRunning = true;
@@ -120,6 +125,11 @@ export class MessageAccumulator {
                 this.handleToolExecutionEnd(payload as ToolExecutionEndEvent);
                 break;
 
+            case "message_end":
+                // Extract content from the completed message
+                this.handleMessageEnd(payload as { message?: Record<string, unknown> });
+                break;
+
             case "response":
                 // Handle command responses (errors, etc.)
                 if (payload.success === false && payload.error) {
@@ -127,6 +137,45 @@ export class MessageAccumulator {
                 }
                 break;
         }
+    }
+
+    private handleMessageEnd(payload: { message?: Record<string, unknown> }): void {
+        const message = payload.message;
+        if (!message) return;
+
+        const content = this.extractMessageContent(message);
+        if (content) {
+            const msg = this.ensureAssistantMessage();
+            this.updateOrAddBlock(msg, "text", {
+                type: "text",
+                text: content,
+                isStreaming: false,
+            });
+        }
+        this.finalizeCurrentMessage();
+    }
+
+    private extractMessageContent(message: Record<string, unknown>): string | null {
+        // String content
+        if (typeof message.content === "string") {
+            return message.content;
+        }
+
+        // Array of content blocks
+        if (Array.isArray(message.content)) {
+            const parts = message.content
+                .filter((part): part is Record<string, unknown> =>
+                    typeof part === "object" && part !== null
+                )
+                .filter((part) => part.type === "text" && typeof part.text === "string")
+                .map((part) => part.text as string);
+
+            if (parts.length > 0) {
+                return parts.join("");
+            }
+        }
+
+        return null;
     }
 
     private ensureAssistantMessage(): ConversationMessage {
