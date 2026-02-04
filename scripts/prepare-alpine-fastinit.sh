@@ -57,7 +57,15 @@ http://dl-cdn.alpinelinux.org/alpine/v3.23/community
 REPOS
 }
 
+emit_text() {
+    local text="$1"
+    printf '{"type":"message_update","assistantMessageEvent":{"type":"text_delta","contentIndex":0,"delta":"%s"}}\n' "$text" > "$RPC_PORT"
+    printf '{"type":"message_update","assistantMessageEvent":{"type":"text_end","contentIndex":0,"content":"%s"}}\n' "$text" > "$RPC_PORT"
+    printf '{"type":"message_update","assistantMessageEvent":{"type":"done","reason":"stop"}}\n' > "$RPC_PORT"
+}
+
 install_pi() {
+    emit_text "Installing pi runtime..."
     setup_repos
     apk add --no-cache ca-certificates nodejs npm bash git
     update-ca-certificates 2>/dev/null || true
@@ -65,6 +73,7 @@ install_pi() {
 }
 
 start_pi() {
+    emit_text "Starting pi RPC..."
     echo READY > "$RPC_PORT"
     pi --mode rpc < "$RPC_PORT" > "$RPC_PORT" 2>/dev/null &
 }
@@ -96,9 +105,10 @@ if [ -e "$RPC_PORT" ]; then
         start_pi
     else
         if install_pi; then
+            emit_text "pi install complete."
             start_pi
         else
-            echo '{"type":"message_update","role":"assistant","content":"Piwork stub: pi install failed"}' > "$RPC_PORT"
+            emit_text "Piwork stub: pi install failed"
             start_stub
         fi
     fi
