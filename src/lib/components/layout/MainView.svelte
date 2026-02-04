@@ -22,7 +22,7 @@ let loginCopied = $state(false);
 let loginPromptVisible = $state(false);
 let loginPromptedUrl = $state<string | null>(null);
 let loginPromptCountdown = $state<number | null>(null);
-let autoOpenLogin = $state(true);
+let autoOpenLogin = $state(false);
 let rpcStateInfo = $state<string | null>(null);
 let rpcStateRequested = $state(false);
 let rpcModelsRequested = $state(false);
@@ -740,7 +740,9 @@ async function sendPrompt() {
 onMount(() => {
     try {
         const stored = localStorage.getItem(LOGIN_AUTO_OPEN_KEY);
-        if (stored === "false") {
+        if (stored === "true") {
+            autoOpenLogin = true;
+        } else if (stored === "false") {
             autoOpenLogin = false;
         }
     } catch {
