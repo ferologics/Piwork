@@ -711,9 +711,9 @@ async function disconnectRpc() {
     pendingUiSending = false;
 }
 
-async function sendPrompt() {
+async function sendPrompt(message?: string) {
     if (!rpcClient) return;
-    const content = prompt.trim();
+    const content = (message ?? prompt).trim();
     if (!content) return;
 
     // Add user message to conversation
@@ -799,13 +799,7 @@ onDestroy(() => {
                     {/if}
                 </div>
             {:else}
-                <div class="rounded-lg border border-border bg-card p-4">
-                    <div class="text-sm font-medium">RPC output</div>
-                    {#if rpcStateInfo}
-                        <div class="mt-1 text-[11px] text-muted-foreground">{rpcStateInfo}</div>
-                    {:else if rpcStateRequested}
-                        <div class="mt-1 text-[11px] text-muted-foreground">Loading state…</div>
-                    {/if}
+                <div class="flex-1 flex flex-col">
                     {#if rpcAuthHint}
                         <div class="mt-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-[11px] text-amber-200">
                             {rpcAuthHint}
@@ -878,8 +872,55 @@ onDestroy(() => {
                     <!-- Chat messages -->
                     <div class="mt-4 space-y-4">
                         {#if conversation.messages.length === 0 && !conversation.isAgentRunning}
-                            <div class="text-center text-sm text-muted-foreground py-8">
-                                What would you like to do?
+                            <!-- Empty state with quick-start tiles -->
+                            <div class="flex flex-col items-center justify-center py-12 px-4">
+                                <div class="text-4xl mb-4">✨</div>
+                                <h2 class="text-2xl font-semibold mb-8">Let's knock something off your list</h2>
+                                
+                                <div class="grid grid-cols-3 gap-3 w-full max-w-2xl">
+                                    <button
+                                        class="flex items-center gap-3 p-4 rounded-lg bg-muted/50 hover:bg-muted text-left transition-colors"
+                                        onclick={() => sendPrompt("Create a new file for me")}
+                                    >
+                                        <span class="text-xl">📄</span>
+                                        <span class="text-sm font-medium">Create a file</span>
+                                    </button>
+                                    <button
+                                        class="flex items-center gap-3 p-4 rounded-lg bg-muted/50 hover:bg-muted text-left transition-colors"
+                                        onclick={() => sendPrompt("Help me analyze and crunch some data")}
+                                    >
+                                        <span class="text-xl">📊</span>
+                                        <span class="text-sm font-medium">Crunch data</span>
+                                    </button>
+                                    <button
+                                        class="flex items-center gap-3 p-4 rounded-lg bg-muted/50 hover:bg-muted text-left transition-colors"
+                                        onclick={() => sendPrompt("Help me make a prototype")}
+                                    >
+                                        <span class="text-xl">🖼️</span>
+                                        <span class="text-sm font-medium">Make a prototype</span>
+                                    </button>
+                                    <button
+                                        class="flex items-center gap-3 p-4 rounded-lg bg-muted/50 hover:bg-muted text-left transition-colors"
+                                        onclick={() => sendPrompt("Help me organize my files")}
+                                    >
+                                        <span class="text-xl">📁</span>
+                                        <span class="text-sm font-medium">Organize files</span>
+                                    </button>
+                                    <button
+                                        class="flex items-center gap-3 p-4 rounded-lg bg-muted/50 hover:bg-muted text-left transition-colors"
+                                        onclick={() => sendPrompt("Help me prep for a meeting")}
+                                    >
+                                        <span class="text-xl">📅</span>
+                                        <span class="text-sm font-medium">Prep for a meeting</span>
+                                    </button>
+                                    <button
+                                        class="flex items-center gap-3 p-4 rounded-lg bg-muted/50 hover:bg-muted text-left transition-colors"
+                                        onclick={() => sendPrompt("Help me draft a message")}
+                                    >
+                                        <span class="text-xl">✉️</span>
+                                        <span class="text-sm font-medium">Draft a message</span>
+                                    </button>
+                                </div>
                             </div>
                         {:else}
                             {#each conversation.messages as message}
@@ -1080,7 +1121,7 @@ onDestroy(() => {
                         <button
                             class="rounded-md bg-primary p-2 text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
                             disabled={!prompt.trim() || !rpcConnected}
-                            onclick={sendPrompt}
+                            onclick={() => sendPrompt()}
                             aria-label="Send"
                         >
                             <Send class="h-4 w-4" />

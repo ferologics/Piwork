@@ -20,7 +20,7 @@ interface RuntimeStatus {
 }
 
 let showLeftRail = $state(true);
-let showRightPanel = $state(true);
+let showRightPanel = $state(false);
 let showSettings = $state(false);
 let runtimeStatus = $state<RuntimeStatus | null>(null);
 let runtimeError = $state<string | null>(null);
