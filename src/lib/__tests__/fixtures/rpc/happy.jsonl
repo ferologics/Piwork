@@ -1,0 +1,4 @@
+{"type":"message_update","role":"assistant","content":"Starting task…"}
+{"type":"tool_execution_start","tool":"bash","input":"ls"}
+{"type":"tool_execution_end","tool":"bash","output":"file.txt"}
+{"type":"agent_end","reason":"completed"}

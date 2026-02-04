@@ -5,7 +5,7 @@
 - [x] Layout skeleton (left rail, main view, right tabs)
 - [x] Define **task persistence** storage format + location
 - [x] Implement **TaskStore** + persistence (task.json)
-- [ ] Implement **RpcClient** interface + **MockRpcClient** + JSONL fixtures
+- [x] Implement **RpcClient** interface + **MockRpcClient** + JSONL fixtures
 - [ ] Plan **full auth UI** (pi `/login` + API key entry)
 
 ## VM / Runtime Setup
