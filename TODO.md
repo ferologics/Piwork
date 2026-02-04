@@ -2,9 +2,24 @@
 
 ## Next Up
 
+- [ ] Fix empty message bubbles (message content not rendering)
 - [ ] Folder mount UI (scope selection)
 - [ ] Permission-gate extension for VM
 - [ ] Runtime pack download + install flow (non-dev)
+
+## Testing Infrastructure
+
+- [ ] **Quick testing**: Screenshot-based verification (`screencapture` + image inspection)
+  - Works now for visual verification
+  - Blocked on accessibility permissions for interaction (cliclick/AppleScript)
+- [ ] **Custom test harness**: Add `--test-mode` flag to app
+  - Expose IPC commands to query UI state (what messages are shown, etc.)
+  - Allow injecting user input via IPC (simulate typing/sending)
+  - Dump conversation state to file for inspection
+- [ ] **Proper e2e (Playwright + tauri-driver)**: 
+  - Tauri has WebDriver support via `tauri-driver`
+  - Playwright can automate, screenshot, wait for elements, assert DOM
+  - More setup but enables CI/CD testing
 
 ## Done
 
