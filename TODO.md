@@ -24,7 +24,16 @@
 - [ ] **Code cleanup**: Deep pass over all code, remove slop, consistent patterns
 - [ ] **Settings audit**: Current settings is "vibeslopped" - review what's needed
 
-## P3: Later
+## P3: Connectors
+
+- [ ] **Research Cowork connectors**: What integrations does Cowork offer? (Calendar, Slack, Google Drive, Notion, etc.)
+- [ ] **Implement basic connectors**: Start with most useful ones
+  - [ ] Calendar (Google Calendar / Apple Calendar) - for "prep for a meeting" tile
+  - [ ] File storage (Google Drive / Dropbox / iCloud) - for file access
+  - [ ] Communication (Slack / Email) - for "draft a message" tile
+  - [ ] Notes (Notion / Apple Notes) - for context/reference
+
+## P4: Later
 
 - [ ] **Import external files**: Attach files from outside working folder (copy in? read-only mount?)
 - [ ] **Multi-folder tasks**: Mount multiple folders per task (read-only extras?)
