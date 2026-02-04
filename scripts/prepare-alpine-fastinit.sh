@@ -22,6 +22,12 @@ mkdir -p "$FAST_DIR"
 
 bsdtar -xf "$INITRAMFS_ORIG" -C "$FAST_DIR"
 
+if [[ -n "${PIWORK_AUTH_PATH:-}" && -f "$PIWORK_AUTH_PATH" ]]; then
+    mkdir -p "$FAST_DIR/opt/pi-agent"
+    cp -f "$PIWORK_AUTH_PATH" "$FAST_DIR/opt/pi-agent/auth.json"
+    chmod 600 "$FAST_DIR/opt/pi-agent/auth.json" || true
+fi
+
 cat > "$FAST_DIR/init" <<'EOF'
 #!/bin/sh
 export PATH=/usr/local/bin:/usr/bin:/bin:/sbin
@@ -37,6 +43,10 @@ modprobe virtio_console 2>/dev/null || true
 
 ip link set eth0 up
 udhcpc -i eth0 -q -n -t 3 -T 1
+
+if [ -f /opt/pi-agent/auth.json ]; then
+    export PI_CODING_AGENT_DIR=/opt/pi-agent
+fi
 
 RPC_PORT=/dev/virtio-ports/piwork.rpc
 

@@ -28,6 +28,7 @@ Provide a **consistent, isolated Linux environment** for desktop while keeping t
 - **Install location (per‑user):** app data dir + `/runtime`.
 - **Dev override:** set `PIWORK_RUNTIME_DIR` to point at a local runtime pack.
 - **Local dev pack:** `mise run runtime-install-dev` (uses Alpine ISO).
+  - Optional dev auth: set `PIWORK_AUTH_PATH=~/.pi/agent/auth.json` (or `PIWORK_COPY_AUTH=1`) to bake auth into the initramfs.
 - **Updates:** app checks for new pack versions and upgrades in‑place.
 - **Rollback:** keep previous pack for one release cycle.
 

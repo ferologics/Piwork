@@ -11,6 +11,13 @@ KERNEL_CMDLINE_FILE=${KERNEL_CMDLINE_FILE:-$TMP_DIR/alpine-kernel.cmdline}
 RUNTIME_DIR=$($SCRIPT_DIR/runtime-path.sh)
 MANIFEST_PATH="$RUNTIME_DIR/manifest.json"
 
+if [[ -z "${PIWORK_AUTH_PATH:-}" && -n "${PIWORK_COPY_AUTH:-}" ]]; then
+    AUTH_CANDIDATE="$HOME/.pi/agent/auth.json"
+    if [[ -f "$AUTH_CANDIDATE" ]]; then
+        export PIWORK_AUTH_PATH="$AUTH_CANDIDATE"
+    fi
+fi
+
 mkdir -p "$TMP_DIR"
 
 if [[ ! -f "$ALPINE_ISO" ]]; then
@@ -41,5 +48,9 @@ cat > "$MANIFEST_PATH" <<EOF
     "notes": "Dev runtime pack generated from Alpine virt ISO."
 }
 EOF
+
+if [[ -n "${PIWORK_AUTH_PATH:-}" ]]; then
+    echo "Included auth.json from: $PIWORK_AUTH_PATH"
+fi
 
 echo "Runtime pack installed at: $RUNTIME_DIR"
