@@ -6,6 +6,37 @@ const tasks = writable<TaskMetadata[]>([]);
 const activeTaskId = writable<string | null>(null);
 const activeTask = derived([tasks, activeTaskId], ([list, id]) => list.find((task) => task.id === id) ?? null);
 
+// Recent folders (persisted to localStorage)
+const RECENT_FOLDERS_KEY = "piwork_recent_folders";
+const MAX_RECENT_FOLDERS = 10;
+const recentFolders = writable<string[]>(loadRecentFolders());
+
+function loadRecentFolders(): string[] {
+    try {
+        const stored = localStorage.getItem(RECENT_FOLDERS_KEY);
+        return stored ? JSON.parse(stored) : [];
+    } catch {
+        return [];
+    }
+}
+
+function saveRecentFolders(folders: string[]) {
+    try {
+        localStorage.setItem(RECENT_FOLDERS_KEY, JSON.stringify(folders));
+    } catch {
+        // Ignore storage errors
+    }
+}
+
+function addRecentFolder(folder: string) {
+    recentFolders.update((current) => {
+        const filtered = current.filter((f) => f !== folder);
+        const updated = [folder, ...filtered].slice(0, MAX_RECENT_FOLDERS);
+        saveRecentFolders(updated);
+        return updated;
+    });
+}
+
 async function loadTasks() {
     const list = await invoke<TaskMetadata[]>("task_store_list");
     tasks.set(list);
@@ -33,7 +64,7 @@ async function deleteTask(id: string) {
     ensureActiveTask(next);
 }
 
-function createTask(title: string) {
+function createTask(title: string, workingFolder: string | null = null) {
     const now = new Date().toISOString();
     const task: TaskMetadata = {
         id: crypto.randomUUID(),
@@ -42,11 +73,17 @@ function createTask(title: string) {
         createdAt: now,
         updatedAt: now,
         sessionFile: null,
+        workingFolder,
         mounts: [],
         model: null,
         thinkingLevel: null,
         connectorsEnabled: [],
     };
+
+    // Track folder in recent list
+    if (workingFolder) {
+        addRecentFolder(workingFolder);
+    }
 
     return task;
 }
@@ -97,6 +134,7 @@ export const taskStore = {
     subscribe: tasks.subscribe,
     activeTaskId: { subscribe: activeTaskId.subscribe },
     activeTask: { subscribe: activeTask.subscribe },
+    recentFolders: { subscribe: recentFolders.subscribe },
     load: loadTasks,
     upsert: upsertTask,
     delete: deleteTask,
@@ -104,4 +142,5 @@ export const taskStore = {
     setActive: setActiveTask,
     saveConversation,
     loadConversation,
+    addRecentFolder,
 };

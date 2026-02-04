@@ -305,6 +305,7 @@ fn start_test_server(app_handle: tauri::AppHandle) {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .manage(vm::VmState::default())
         .setup(|app| {
             #[cfg(debug_assertions)]

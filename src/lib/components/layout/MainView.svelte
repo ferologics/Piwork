@@ -3,12 +3,13 @@ import { onDestroy, onMount } from "svelte";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { openPath, openUrl } from "@tauri-apps/plugin-opener";
-import { Send, Paperclip, FolderOpen, ChevronDown, Loader2 } from "@lucide/svelte";
+import { Send, Paperclip, FolderOpen, Loader2 } from "@lucide/svelte";
 import { devLog } from "$lib/utils/devLog";
 import { TauriRpcClient, MessageAccumulator } from "$lib/rpc";
 import type { RpcEvent, RpcPayload, ConversationState, ContentBlock } from "$lib/rpc";
 import { taskStore } from "$lib/stores/taskStore";
 import type { TaskMetadata } from "$lib/types/task";
+import FolderSelector from "$lib/components/FolderSelector.svelte";
 
 
 let prompt = $state("");
@@ -40,6 +41,7 @@ let openingLog = $state(false);
 
 // Task tracking
 let currentTaskId = $state<string | null>(null);
+let currentWorkingFolder = $state<string | null>(null);
 let unsubscribeActiveTask: (() => void) | null = null;
 
 interface ModelOption {
@@ -731,11 +733,11 @@ async function sendPrompt(message?: string) {
     // Auto-create task if none active
     if (!currentTaskId) {
         const title = content.length > 50 ? content.substring(0, 50) + "…" : content;
-        const task = taskStore.create(title);
+        const task = taskStore.create(title, currentWorkingFolder);
         await taskStore.upsert(task);
         taskStore.setActive(task.id);
         currentTaskId = task.id;
-        devLog("MainView", `Auto-created task: ${task.id}`);
+        devLog("MainView", `Auto-created task: ${task.id} with folder: ${currentWorkingFolder}`);
     }
 
     // Add user message to conversation
@@ -785,6 +787,27 @@ async function handleTaskSwitch(newTask: TaskMetadata | null) {
     }
 
     currentTaskId = newTaskId;
+    currentWorkingFolder = newTask?.workingFolder ?? null;
+}
+
+async function handleFolderChange(folder: string | null) {
+    currentWorkingFolder = folder;
+    devLog("MainView", `Working folder changed: ${folder}`);
+
+    // Update task if we have one
+    if (currentTaskId) {
+        const list = await invoke<TaskMetadata[]>("task_store_list");
+        const task = list.find((t) => t.id === currentTaskId);
+        if (task) {
+            await taskStore.upsert({
+                ...task,
+                workingFolder: folder,
+                updatedAt: new Date().toISOString(),
+            });
+        }
+    }
+
+    // TODO: Remount folder in VM
 }
 
 onMount(() => {
@@ -1176,9 +1199,16 @@ onDestroy(() => {
                     style="overflow-y: hidden;"
                 ></textarea>
                 <div class="flex items-center justify-between">
-                    <button class="rounded-md p-1.5 hover:bg-accent" aria-label="Attach file">
-                        <Paperclip class="h-4 w-4 text-muted-foreground" />
-                    </button>
+                    <div class="flex items-center gap-1">
+                        <FolderSelector
+                            value={currentWorkingFolder}
+                            onchange={handleFolderChange}
+                            disabled={!rpcConnected}
+                        />
+                        <button class="rounded-md p-1.5 hover:bg-accent" aria-label="Attach file">
+                            <Paperclip class="h-4 w-4 text-muted-foreground" />
+                        </button>
+                    </div>
                     <div class="flex items-center gap-2">
                         <select
                             bind:value={selectedModelId}
