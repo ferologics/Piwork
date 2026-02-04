@@ -287,6 +287,13 @@ fn start_test_server(app_handle: tauri::AppHandle) {
                             let _ = app.emit("test_prompt", message);
                             let _ = stream.write_all(b"OK\n");
                         }
+                        "set_folder" => {
+                            // Emit event to frontend to change working folder
+                            let folder = json.get("folder").and_then(|v| v.as_str());
+                            eprintln!("[test-server] emitting test_set_folder: {folder:?}");
+                            let _ = app.emit("test_set_folder", folder);
+                            let _ = stream.write_all(b"OK\n");
+                        }
                         "rpc" | _ => {
                             // Direct RPC send (bypass UI)
                             let state: tauri::State<vm::VmState> = app.state();

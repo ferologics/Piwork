@@ -273,7 +273,7 @@ fn spawn_qemu(
             command
                 .arg("-fsdev")
                 .arg(format!(
-                    "local,id=workdir,path={},security_model=mapped-xattr",
+                    "local,id=workdir,path={},security_model=none",
                     folder.display()
                 ))
                 .arg("-device")

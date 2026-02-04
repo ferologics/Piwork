@@ -749,6 +749,7 @@ async function sendPrompt(message?: string) {
 }
 
 let testPromptUnlisten: (() => void) | null = null;
+let testFolderUnlisten: (() => void) | null = null;
 
 async function handleTaskSwitch(newTask: TaskMetadata | null) {
     const newTaskId = newTask?.id ?? null;
@@ -837,7 +838,7 @@ onMount(() => {
         void handleTaskSwitch(task);
     });
 
-    // Test harness listener (dev only)
+    // Test harness listeners (dev only)
     if (import.meta.env.DEV) {
         listen<string>("test_prompt", (event) => {
             devLog("TestHarness", `received test_prompt: ${event.payload}`);
@@ -845,6 +846,13 @@ onMount(() => {
             void sendPrompt();
         }).then((unlisten) => {
             testPromptUnlisten = unlisten;
+        });
+
+        listen<string | null>("test_set_folder", (event) => {
+            devLog("TestHarness", `received test_set_folder: ${event.payload}`);
+            void handleFolderChange(event.payload);
+        }).then((unlisten) => {
+            testFolderUnlisten = unlisten;
         });
     }
 });
@@ -857,6 +865,7 @@ onDestroy(() => {
     unsubscribeActiveTask?.();
     void disconnectRpc();
     testPromptUnlisten?.();
+    testFolderUnlisten?.();
 });
 </script>
 
