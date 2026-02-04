@@ -1,0 +1,82 @@
+# UI Roadmap
+
+Based on Cowork observation + our needs.
+
+## P0: Base Workflows Must Work
+
+These are broken or missing - fix first:
+
+- [ ] **New Task button** - clicking does nothing
+- [ ] **Task persistence/resume** - select task from list, resume VM session
+- [ ] **Working folder selection** - "Work in a folder" checkbox + picker
+- [ ] **Show created files** - right panel shows files agent creates
+
+## P1: Core UX Polish
+
+Make it feel like a real app:
+
+- [ ] **Task title** - editable at top of conversation
+- [ ] **Collapsible actions** - "Created a file >", "Searched the web >"
+- [ ] **Artifact cards** - file preview with "Open in..." button
+- [ ] **Progress indicators** - checkmarks in right panel
+- [ ] **Profile chip** - bottom left, show user + plan/status
+
+## P2: Empty State & Onboarding
+
+- [ ] **Shuffleable task categories** (like Cowork):
+  - "Let's knock something off your list" (current)
+  - "Pick a task, any task"
+  - "Tidy up and get organized"  
+  - "Plan for what's ahead"
+- [ ] **"See more ideas"** button to shuffle
+- [ ] **Richer task tiles** with better prompts
+
+### Cowork Task Templates (observed)
+
+**Row 1 (default):**
+- Create a file
+- Crunch data
+- Make a prototype
+- Organize files
+- Prep for a meeting
+- Draft a message
+
+**"Pick a task, any task":**
+- Optimize my week
+- Submit my expenses
+- Find insights in files
+
+**"Tidy up and get organized":**
+- Clean up my Downloads folder
+- Organize photos by event/date
+- Organize my inbox
+
+**"Plan for what's ahead":**
+- Prep for my next meeting
+- Plan my next vacation
+- Prepare for a job interview
+
+## P3: Production Ready
+
+- [ ] **Login/auth flow** - test OAuth + API key entry
+- [ ] **Runtime download** - first-run pack download + updates
+- [ ] **Settings cleanup** - review what's actually needed
+- [ ] **Doc cleanup** - consolidate/remove stale docs
+- [ ] **Code cleanup** - remove slop, consistent patterns
+
+## P4: Later
+
+- [ ] **MITM network mode** - proxy for visibility/control
+- [ ] **Cross-platform** - Linux/Windows
+- [ ] **Plugins/connectors** - web search badge, etc.
+- [ ] **Follow-up questions UI** - "How detailed?" options
+
+## Not Copying
+
+- Feedback buttons (copy/thumbs) - not useful for us
+- "Customize with plugins" - later if ever
+
+## Notes
+
+- Right panel: collapsed by default for normies, maybe expanded in dev?
+- Current settings is "vibeslopped" - needs audit
