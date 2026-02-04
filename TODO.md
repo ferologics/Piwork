@@ -2,8 +2,8 @@
 
 ## P0: Core Broken / Must Work
 
-- [ ] **Tasks**: New Task button, task switching, conversation persistence (IN PROGRESS)
-- [ ] **Task resume**: Select task from list → resume VM session with that conversation
+- [x] **Tasks**: Auto-create on first message, conversation persistence per task ✓
+- [ ] **Task resume**: Click existing task → load its conversation (wired, needs UI click test)
 - [ ] **Working folder**: Selection UI + mount into VM + show files responsively
 
 ## P1: Production Ready

@@ -440,6 +440,12 @@ function handleRpcPayload(payload: Record<string, unknown>) {
     messageAccumulator.processEvent(payload as RpcPayload);
     conversation = messageAccumulator.getState();
 
+    // Auto-save conversation when agent completes a turn
+    if (payload.type === "agent_end" && currentTaskId) {
+        void taskStore.saveConversation(currentTaskId, messageAccumulator.serialize());
+        devLog("MainView", `Auto-saved conversation after agent_end`);
+    }
+
     const type = payload.type;
 
     if (type === "response") {
@@ -721,6 +727,16 @@ async function sendPrompt(message?: string) {
     if (!rpcClient) return;
     const content = (message ?? prompt).trim();
     if (!content) return;
+
+    // Auto-create task if none active
+    if (!currentTaskId) {
+        const title = content.length > 50 ? content.substring(0, 50) + "…" : content;
+        const task = taskStore.create(title);
+        await taskStore.upsert(task);
+        taskStore.setActive(task.id);
+        currentTaskId = task.id;
+        devLog("MainView", `Auto-created task: ${task.id}`);
+    }
 
     // Add user message to conversation
     messageAccumulator.addUserMessage(content);
