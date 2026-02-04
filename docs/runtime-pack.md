@@ -25,10 +25,8 @@ Provide a **consistent, isolated Linux environment** for desktop while keeping t
 ## Packaging & Delivery
 
 - **Pack format:** `tar.zst` with `manifest.json` + signatures.
-- **Install location (per‑user):**
-  - macOS: `~/Library/Application Support/piwork/runtime/`
-  - Windows: `%LOCALAPPDATA%\piwork\runtime\`
-  - Linux: `~/.local/share/piwork/runtime/`
+- **Install location (per‑user):** app data dir + `/runtime`.
+- **Dev override:** set `PIWORK_RUNTIME_DIR` to point at a local runtime pack.
 - **Updates:** app checks for new pack versions and upgrades in‑place.
 - **Rollback:** keep previous pack for one release cycle.
 
