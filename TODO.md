@@ -21,6 +21,7 @@
 
 ## Later
 
+- [ ] Explore rootfs disk image runtime pack (Option B) + qcow2 overlays for production
 - [ ] Artifact preview (HTML, Markdown, images, CSV)
 - [ ] Canvas viewer component
 - [ ] Connector badges (web search visibility)
