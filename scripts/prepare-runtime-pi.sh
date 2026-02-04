@@ -17,8 +17,31 @@ if ! command -v node >/dev/null 2>&1; then
     exit 1
 fi
 
-PI_PACKAGE_JSON=$(node -e "console.log(require.resolve('@mariozechner/pi-coding-agent/package.json'))" 2>/dev/null || true)
-if [[ -z "$PI_PACKAGE_JSON" ]]; then
+PI_PACKAGE_JSON=""
+
+if command -v pi >/dev/null 2>&1; then
+    PI_EXEC=$(command -v pi)
+    PI_REAL=$(node -e "console.log(require('fs').realpathSync(process.argv[1]))" "$PI_EXEC" 2>/dev/null || true)
+    if [[ -n "$PI_REAL" ]]; then
+        PI_PACKAGE_JSON=$(cd "$(dirname "$PI_REAL")/.." && pwd)/package.json
+        if [[ ! -f "$PI_PACKAGE_JSON" ]]; then
+            PI_PACKAGE_JSON=""
+        fi
+    fi
+fi
+
+if [[ -z "$PI_PACKAGE_JSON" ]] && command -v npm >/dev/null 2>&1; then
+    GLOBAL_NODE_MODULES=$(npm root -g 2>/dev/null || true)
+    if [[ -n "$GLOBAL_NODE_MODULES" ]] && [[ -f "$GLOBAL_NODE_MODULES/@mariozechner/pi-coding-agent/package.json" ]]; then
+        PI_PACKAGE_JSON="$GLOBAL_NODE_MODULES/@mariozechner/pi-coding-agent/package.json"
+    fi
+fi
+
+if [[ -z "$PI_PACKAGE_JSON" ]] && [[ -d "$ROOT_DIR/node_modules" ]]; then
+    PI_PACKAGE_JSON=$(node -e "console.log(require.resolve('@mariozechner/pi-coding-agent/package.json', { paths: ['${ROOT_DIR}'] }))" 2>/dev/null || true)
+fi
+
+if [[ -z "$PI_PACKAGE_JSON" || ! -f "$PI_PACKAGE_JSON" ]]; then
     echo "@mariozechner/pi-coding-agent not found. Install with: npm install -g @mariozechner/pi-coding-agent" >&2
     exit 1
 fi
