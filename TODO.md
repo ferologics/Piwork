@@ -32,6 +32,11 @@
 - [x] VM RPC bridge (TCP port forwarding, READY via serial console)
 - [x] pi running inside VM with real RPC protocol
 - [x] Consolidated runtime build (`mise run runtime-build`)
+- [x] VM networking (CA certs + DNS for HTTPS)
+- [x] Empty state with quick-start tiles (Cowork-style)
+- [x] Right panel collapsed by default
+- [x] Removed dev-focused "RPC output" header
+- [x] Dev mise tasks (`dev-start`, `dev-prompt`, `dev-screenshot`, `dev-logs`, `dev-stop`)
 
 ## Later
 
@@ -46,11 +51,3 @@
 - [ ] MITM: TLS interception (CA install) + pinning fallbacks
 - [ ] MITM: UI controls (network mode toggle, allowlist, audit log)
 
-## Dev Tasks (mise)
-
-Add mise tasks for common dev workflows:
-- `dev:start` - start app with logging to tmp/dev/piwork.log
-- `dev:prompt "msg"` - send test prompt via test harness
-- `dev:screenshot [name]` - capture app window to tmp/dev/
-- `dev:logs` - tail -f tmp/dev/piwork.log
-- `dev:stop` - kill piwork + qemu processes
