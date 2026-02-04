@@ -25,6 +25,15 @@ mise run tauri-dev
 mise run check
 ```
 
+```bash
+mise run test
+```
+
+```bash
+mise run test-vite
+mise run test-rust
+```
+
 ### Cleanup
 
 ```bash

@@ -16,7 +16,7 @@ Build a Cowork‑style, normie‑first UI on top of **pi** using **Tauri**. Focu
 
 - Use **mise** tasks for all workflows (avoid direct `pnpm` scripts).
 - Do **not** run `pnpm exec svelte-check` directly; use `mise run compile` or `mise run check`.
-- `mise run check` = format (Biome + dprint + rustfmt) + lint (oxlint + clippy) + compile (svelte-check) + test (Vitest).
+- `mise run check` = format (Biome + dprint + rustfmt) + lint (oxlint + clippy) + compile (svelte-check + cargo check) + test (test-vite + test-rust).
 - Cleanup: `mise run clean`, `mise run clean-deep`, `mise run reset`.
 
 ## Tooling

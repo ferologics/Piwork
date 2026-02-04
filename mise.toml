@@ -1,22 +1,10 @@
-[tasks.setup]
-description = "Install dependencies"
-run = "pnpm install"
-
-[tasks.dev]
-description = "Run Vite dev server"
-run = "pnpm exec vite dev"
-
 [tasks.build]
 description = "Build the frontend"
 run = "pnpm exec vite build"
 
-[tasks.preview]
-description = "Preview the build"
-run = "pnpm exec vite preview"
-
-[tasks.format]
-description = "Format code (Biome + dprint + rustfmt)"
-run = "pnpm exec biome format --write src src-tauri/tauri.conf.json src-tauri/capabilities/default.json package.json components.json svelte.config.js vite.config.js tailwind.config.ts tsconfig.json biome.json dprint.json && dprint fmt && cargo fmt --manifest-path src-tauri/Cargo.toml"
+[tasks.check]
+description = "Format, lint, typecheck, test"
+run = "mise run format && mise run lint && mise run compile && mise run test"
 
 [tasks.clean]
 description = "Remove build artifacts"
@@ -26,34 +14,66 @@ run = "rm -rf .svelte-kit build dist package coverage src-tauri/target target no
 description = "Remove build artifacts + node_modules"
 run = "mise run clean && rm -rf node_modules"
 
-[tasks.reset]
-description = "Deep clean + setup"
-run = "mise run clean-deep && mise run setup"
-
-[tasks.lint]
-description = "Lint code (oxlint + clippy)"
-run = "pnpm exec oxlint --tsconfig tsconfig.json src && cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings"
-
 [tasks.compile]
-description = "Typecheck (svelte-check)"
-run = "pnpm exec svelte-kit sync && pnpm exec svelte-check --tsconfig ./tsconfig.json"
+description = "Typecheck (svelte-check + cargo check)"
+run = "pnpm exec svelte-kit sync && pnpm exec svelte-check --tsconfig ./tsconfig.json && cargo check --manifest-path src-tauri/Cargo.toml"
 
-[tasks.test]
-description = "Run unit tests"
-run = "pnpm exec vitest run"
+[tasks.dev]
+description = "Run Vite dev server"
+run = "pnpm exec vite dev"
 
-[tasks.check]
-description = "Format, lint, typecheck, test"
-run = "mise run format && mise run lint && mise run compile && mise run test"
-
-[tasks.tauri-dev]
-description = "Run the Tauri app"
-run = "pnpm exec tauri dev"
+[tasks.format]
+description = "Format code (Biome + dprint + rustfmt)"
+run = "pnpm exec biome format --write src src-tauri/tauri.conf.json src-tauri/capabilities/default.json package.json components.json svelte.config.js vite.config.js tailwind.config.ts tsconfig.json biome.json dprint.json && dprint fmt && cargo fmt --manifest-path src-tauri/Cargo.toml"
 
 [tasks.icons]
 description = "Regenerate app icons from assets/logo.svg"
 run = "pnpm exec tauri icon assets/logo.svg --output src-tauri/icons"
 
+[tasks.lint]
+description = "Lint code (oxlint + clippy)"
+run = "pnpm exec oxlint --tsconfig tsconfig.json src && cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings"
+
+[tasks.preview]
+description = "Preview the build"
+run = "pnpm exec vite preview"
+
+[tasks.reset]
+description = "Deep clean + setup"
+run = "mise run clean-deep && mise run setup"
+
+[tasks.runtime-clean]
+description = "Remove runtime pack"
+run = "rm -rf $(scripts/runtime-path.sh)"
+
+[tasks.runtime-install-dev]
+description = "Install dev runtime pack (local Alpine)"
+run = "scripts/runtime-install-dev-pack.sh"
+
+[tasks.runtime-path]
+description = "Print runtime pack path"
+run = "scripts/runtime-path.sh"
+
+[tasks.setup]
+description = "Install dependencies"
+run = "pnpm install"
+
 [tasks.tauri-build]
 description = "Build the Tauri app"
 run = "pnpm exec tauri build"
+
+[tasks.tauri-dev]
+description = "Run the Tauri app"
+run = "pnpm exec tauri dev"
+
+[tasks.test]
+description = "Run all tests"
+run = "mise run test-vite && mise run test-rust"
+
+[tasks.test-rust]
+description = "Run Rust tests"
+run = "cargo test --manifest-path src-tauri/Cargo.toml"
+
+[tasks.test-vite]
+description = "Run frontend tests"
+run = "pnpm exec vitest run"
