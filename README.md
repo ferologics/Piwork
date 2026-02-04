@@ -4,7 +4,7 @@ Cowork‑style, normie‑first UI on top of **pi**, built with **Tauri**.
 
 ## Status
 
-Early planning + scaffold. See `docs/` for product and runtime notes.
+Working prototype with VM-based sandbox. See `AGENTS.md` for architecture details.
 
 ## Stack
 
@@ -53,8 +53,10 @@ Rust builds use **sccache** via `.cargo/config.toml`.
 
 ## Docs
 
-- `docs/ui-layout-sketch.md`
-- `docs/ui-capability-map.md`
-- `docs/permissions-model.md`
-- `docs/runtime-pack.md`
-- `docs/pi-integration.md`
+- `AGENTS.md` - AI-focused project context and architecture
+- `TODO.md` - roadmap and task tracking
+- `docs/runtime-pack.md` - VM runtime format
+- `docs/pi-integration.md` - RPC protocol
+- `docs/auth-flow.md` - authentication flow
+- `docs/permissions-model.md` - folder access model
+- `docs/research/` - Cowork observation notes, UI sketches
