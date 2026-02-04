@@ -143,7 +143,12 @@ export class MessageAccumulator {
         const message = payload.message;
         if (!message) return;
 
+        // Ignore user message echoes - we already added the user message locally
+        if (message.role === "user") return;
+
         const content = this.extractMessageContent(message);
+        const errorMessage = typeof message.errorMessage === "string" ? message.errorMessage : null;
+
         if (content) {
             const msg = this.ensureAssistantMessage();
             this.updateOrAddBlock(msg, "text", {
@@ -151,6 +156,9 @@ export class MessageAccumulator {
                 text: content,
                 isStreaming: false,
             });
+        } else if (errorMessage) {
+            // Show error if no content but there's an error
+            this.state.error = errorMessage;
         }
         this.finalizeCurrentMessage();
     }
