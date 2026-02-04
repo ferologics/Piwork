@@ -35,6 +35,7 @@ mise run test-stop               # kill app + QEMU
 ```
 
 These let the AI test changes without human interaction:
+
 1. `test-start` launches app and waits for "listening" in logs
 2. `test-prompt` sends via TCP test server (port 19385), waits for "agent_end"
 3. `test-screenshot` captures window without stealing focus
@@ -76,7 +77,7 @@ These let the AI test changes without human interaction:
 - **Network on by default** via QEMU user-mode NAT
 - **Shared VM for now** (single VM, restarted on folder change)
 - **Dynamic linking** - Node uses Alpine's packaged libs
-- **Task resume** via host-stored conversation (pi session files TODO)
+- **Task resume** via host-stored conversation (pi session files VM-local; host persistence TODO)
 
 ## Docs
 

@@ -105,6 +105,7 @@ pub fn start(
     state: &VmState,
     runtime_dir: &Path,
     working_folder: Option<&Path>,
+    session_file: Option<&str>,
 ) -> Result<VmStatusResponse, String> {
     eprintln!("[rust:vm] start called");
     let mut inner = state.inner.lock().unwrap();
@@ -130,7 +131,7 @@ pub fn start(
     let log_path = vm_dir.join("qemu.log");
 
     eprintln!("[rust:vm] spawning qemu");
-    let child = spawn_qemu(&manifest, runtime_dir, &log_path, working_folder)?;
+    let child = spawn_qemu(&manifest, runtime_dir, &log_path, working_folder, session_file)?;
     eprintln!("[rust:vm] qemu spawned");
 
     let rpc_writer: Arc<Mutex<Option<TcpStream>>> = Arc::new(Mutex::new(None));
@@ -225,6 +226,7 @@ fn spawn_qemu(
     runtime_dir: &Path,
     log_path: &Path,
     working_folder: Option<&Path>,
+    session_file: Option<&str>,
 ) -> Result<Child, String> {
     let qemu_binary = resolve_qemu_binary(manifest, runtime_dir)?;
 
@@ -238,7 +240,15 @@ fn spawn_qemu(
         return Err(format!("Initrd not found: {}", initrd.display()));
     }
 
-    let cmdline = manifest.cmdline.as_deref().unwrap_or("quiet console=ttyAMA0");
+    let base_cmdline = manifest.cmdline.as_deref().unwrap_or("quiet console=ttyAMA0");
+    let mut cmdline = base_cmdline.to_string();
+
+    if let Some(session_file) = session_file {
+        if !session_file.is_empty() {
+            cmdline.push_str(" piwork.session_file=");
+            cmdline.push_str(session_file);
+        }
+    }
 
     // Open log file for serial output
     let log_file = std::fs::File::create(log_path).map_err(|e| e.to_string())?;

@@ -8,6 +8,12 @@ vi.mock("@tauri-apps/api/core", () => ({
     invoke: (...args: unknown[]) => invokeMock(...args),
 }));
 
+const SESSION_DIR = "/tmp/piwork/sessions";
+
+function expectedSessionFile(id: string) {
+    return `${SESSION_DIR}/${id}.json`;
+}
+
 function sampleTask(): TaskMetadata {
     return {
         id: "task-1",
@@ -36,7 +42,7 @@ describe("taskStore", () => {
         await taskStore.load();
 
         expect(invokeMock).toHaveBeenCalledWith("task_store_list");
-        expect(get(taskStore)).toEqual([task]);
+        expect(get(taskStore)[0].sessionFile).toBe(expectedSessionFile(task.id));
     });
 
     it("upserts tasks and moves them to the top", async () => {
@@ -49,8 +55,9 @@ describe("taskStore", () => {
         invokeMock.mockResolvedValue(undefined);
         await taskStore.upsert(updated);
 
-        expect(invokeMock).toHaveBeenCalledWith("task_store_upsert", { task: updated });
-        expect(get(taskStore)[0]).toEqual(updated);
+        const normalized = { ...updated, sessionFile: expectedSessionFile(updated.id) };
+        expect(invokeMock).toHaveBeenCalledWith("task_store_upsert", { task: normalized });
+        expect(get(taskStore)[0]).toEqual(normalized);
     });
 
     it("deletes tasks", async () => {
@@ -71,6 +78,7 @@ describe("taskStore", () => {
         expect(task.title).toBe("New task");
         expect(task.status).toBe("idle");
         expect(task.id).toBeTruthy();
+        expect(task.sessionFile).toBe(expectedSessionFile(task.id));
         expect(task.createdAt).toBeTruthy();
         expect(task.updatedAt).toBeTruthy();
     });

@@ -1,5 +1,12 @@
 # TODO
 
+## P0: MVP Definition
+
+- [ ] **Define MVP scope**: must-have flows for v0 (task create, run prompt, working folder)
+- [ ] **Auth/login decision**: require auth UI vs. auto-import from local pi
+- [ ] **Settings scope**: keep minimal settings or remove entirely for MVP
+- [ ] **First-run flow**: clarify what onboarding is required for MVP
+
 ## P0: Core Broken / Must Work
 
 - [x] **Tasks**: Auto-create on first message, conversation persistence per task ✓
@@ -8,7 +15,7 @@
 - [ ] **VM folder mount**: BLOCKED - Alpine virt kernel lacks 9p modules
   - Options: use standard kernel (bigger), virtiofs (complex), or build custom
 - [ ] **Remount on task switch**: Unmount old folder, mount new task's folder
-- [ ] **Session file per task**: Pi uses `--session-file` per task for conversation isolation
+- [ ] **Session file per task**: VM-local `--session-file` implemented; needs host mount for persistence
 
 ## P1: Production Ready
 

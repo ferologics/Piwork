@@ -186,13 +186,30 @@ else
     echo "No working folder mounted"
 fi
 
+SESSION_FILE=""
+for arg in $(cat /proc/cmdline); do
+    case "$arg" in
+        piwork.session_file=*)
+            SESSION_FILE="${arg#piwork.session_file=}"
+            ;;
+    esac
+done
+
+if [ -n "$SESSION_FILE" ]; then
+    SESSION_DIR=$(dirname "$SESSION_FILE")
+    mkdir -p "$SESSION_DIR"
+    echo "Session file: $SESSION_FILE"
+fi
+
 [ -f /opt/pi-agent/auth.json ] && export PI_CODING_AGENT_DIR=/opt/pi-agent
 
 echo "READY"
 
 if [ -x /usr/bin/node ] && [ -f /opt/pi/dist/cli.js ]; then
     while true; do
-        nc -l -p $RPC_PORT -e /usr/bin/node /opt/pi/dist/cli.js --mode rpc 2>&1
+        SESSION_ARGS=""
+        [ -n "$SESSION_FILE" ] && SESSION_ARGS="--session-file $SESSION_FILE"
+        nc -l -p $RPC_PORT -e /usr/bin/node /opt/pi/dist/cli.js --mode rpc $SESSION_ARGS 2>&1
         sleep 1
     done &
 fi

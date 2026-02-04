@@ -57,9 +57,15 @@ VM (Linux)
 
 1. UI loads `conversation.json` from task folder.
 2. Conversation is restored in the UI only.
-3. VM/PI session isolation is **not implemented yet**.
+3. VM/PI session files live **inside the VM** (not persisted yet).
 
-**Planned:** add per‑task `--session-file` once host task folders are mounted into the VM.
+**Session isolation (current):**
+
+- Host passes `piwork.session_file=/tmp/piwork/sessions/<taskId>.json` via kernel cmdline.
+- Init script adds `--session-file` when starting pi.
+- Prevents context bleed within a shared VM, but does **not** persist across VM restarts.
+
+**Planned:** mount host task folders into the VM and store session files there.
 
 ## Permission Gate Extension
 

@@ -6,6 +6,8 @@ const tasks = writable<TaskMetadata[]>([]);
 const activeTaskId = writable<string | null>(null);
 const activeTask = derived([tasks, activeTaskId], ([list, id]) => list.find((task) => task.id === id) ?? null);
 
+const SESSION_DIR = "/tmp/piwork/sessions";
+
 // Recent folders (persisted to localStorage)
 const RECENT_FOLDERS_KEY = "piwork_recent_folders";
 const MAX_RECENT_FOLDERS = 10;
@@ -37,18 +39,35 @@ function addRecentFolder(folder: string) {
     });
 }
 
+function sessionFileForTask(taskId: string) {
+    return `${SESSION_DIR}/${taskId}.json`;
+}
+
+function normalizeTask(task: TaskMetadata): TaskMetadata {
+    if (task.sessionFile) {
+        return task;
+    }
+
+    return {
+        ...task,
+        sessionFile: sessionFileForTask(task.id),
+    };
+}
+
 async function loadTasks() {
     const list = await invoke<TaskMetadata[]>("task_store_list");
-    tasks.set(list);
-    ensureActiveTask(list);
+    const normalized = list.map(normalizeTask);
+    tasks.set(normalized);
+    ensureActiveTask(normalized);
 }
 
 async function upsertTask(task: TaskMetadata) {
-    await invoke("task_store_upsert", { task });
+    const normalized = normalizeTask(task);
+    await invoke("task_store_upsert", { task: normalized });
     let next: TaskMetadata[] = [];
     tasks.update((current) => {
-        next = current.filter((item) => item.id !== task.id);
-        next.unshift(task);
+        next = current.filter((item) => item.id !== normalized.id);
+        next.unshift(normalized);
         return next;
     });
     ensureActiveTask(next);
@@ -66,13 +85,14 @@ async function deleteTask(id: string) {
 
 function createTask(title: string, workingFolder: string | null = null) {
     const now = new Date().toISOString();
+    const id = crypto.randomUUID();
     const task: TaskMetadata = {
-        id: crypto.randomUUID(),
+        id,
         title,
         status: "idle",
         createdAt: now,
         updatedAt: now,
-        sessionFile: null,
+        sessionFile: sessionFileForTask(id),
         workingFolder,
         mounts: [],
         model: null,

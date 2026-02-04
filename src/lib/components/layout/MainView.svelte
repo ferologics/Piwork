@@ -44,6 +44,7 @@ let openingLog = $state(false);
 // Task tracking
 let currentTaskId = $state<string | null>(null);
 let currentWorkingFolder = $state<string | null>(null);
+let currentSessionFile = $state<string | null>(null);
 let unsubscribeActiveTask: (() => void) | null = null;
 
 interface ModelOption {
@@ -636,8 +637,13 @@ async function connectRpc() {
     client.subscribe(handleRpcEvent);
 
     try {
-        devLog("MainView", `calling client.connect with folder: ${currentWorkingFolder ?? "none"}`);
-        await client.connect(currentWorkingFolder);
+        devLog(
+            "MainView",
+            `calling client.connect with folder: ${currentWorkingFolder ?? "none"}, session: ${
+                currentSessionFile ?? "none"
+            }`,
+        );
+        await client.connect(currentWorkingFolder, currentSessionFile);
         devLog("MainView", "client.connect returned");
     } catch (error) {
         devLog("MainView", `connectRpc error: ${error}`);
@@ -683,7 +689,10 @@ async function sendPrompt(message?: string) {
         await taskStore.upsert(task);
         taskStore.setActive(task.id);
         currentTaskId = task.id;
+        currentSessionFile = task.sessionFile ?? null;
+        currentWorkingFolder = task.workingFolder ?? null;
         devLog("MainView", `Auto-created task: ${task.id} with folder: ${currentWorkingFolder}`);
+        await restartVm("Restarting VM for new task session...");
     }
 
     // Add user message to conversation
@@ -697,9 +706,20 @@ async function sendPrompt(message?: string) {
 let testPromptUnlisten: (() => void) | null = null;
 let testFolderUnlisten: (() => void) | null = null;
 
+async function restartVm(reason: string) {
+    if (!rpcClient) return;
+    devLog("MainView", reason);
+    rpcConnected = false;
+    await rpcClient.stopVm();
+    rpcClient = null;
+    await connectRpc();
+}
+
 async function handleTaskSwitch(newTask: TaskMetadata | null) {
     const newTaskId = newTask?.id ?? null;
     const oldTaskId = currentTaskId;
+    const previousFolder = currentWorkingFolder;
+    const previousSession = currentSessionFile;
 
     // Skip if same task
     if (newTaskId === oldTaskId) return;
@@ -735,6 +755,17 @@ async function handleTaskSwitch(newTask: TaskMetadata | null) {
 
     currentTaskId = newTaskId;
     currentWorkingFolder = newTask?.workingFolder ?? null;
+    currentSessionFile = newTask?.sessionFile ?? null;
+
+    if (!newTaskId) {
+        return;
+    }
+
+    const shouldRestart =
+        rpcClient && (currentWorkingFolder !== previousFolder || currentSessionFile !== previousSession);
+    if (shouldRestart) {
+        await restartVm("Restarting VM for task switch (folder/session change)...");
+    }
 }
 
 async function handleFolderChange(folder: string | null) {
@@ -754,14 +785,7 @@ async function handleFolderChange(folder: string | null) {
         }
     }
 
-    // Restart VM with new folder mount
-    if (rpcClient) {
-        devLog("MainView", "Restarting VM with new folder...");
-        rpcConnected = false;
-        await rpcClient.stopVm();
-        rpcClient = null;
-        await connectRpc();
-    }
+    await restartVm("Restarting VM with new folder...");
 }
 
 onMount(() => {

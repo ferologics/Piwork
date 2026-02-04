@@ -127,10 +127,17 @@ fn vm_start(
     app: tauri::AppHandle,
     state: tauri::State<vm::VmState>,
     working_folder: Option<String>,
+    session_file: Option<String>,
 ) -> Result<vm::VmStatusResponse, String> {
     let runtime_dir = runtime_dir(&app)?;
     let folder_path = working_folder.as_ref().map(std::path::PathBuf::from);
-    vm::start(&app, &state, &runtime_dir, folder_path.as_deref())
+    vm::start(
+        &app,
+        &state,
+        &runtime_dir,
+        folder_path.as_deref(),
+        session_file.as_deref(),
+    )
 }
 
 #[tauri::command]
