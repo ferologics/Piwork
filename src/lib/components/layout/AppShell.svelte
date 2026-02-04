@@ -2,6 +2,7 @@
 import { onMount } from "svelte";
 import { invoke } from "@tauri-apps/api/core";
 import SetupRequired from "$lib/components/SetupRequired.svelte";
+import { taskStore } from "$lib/stores/taskStore";
 import TopBar from "./TopBar.svelte";
 import LeftRail from "./LeftRail.svelte";
 import MainView from "./MainView.svelte";
@@ -36,6 +37,9 @@ async function loadRuntimeStatus() {
 
 onMount(() => {
     void loadRuntimeStatus();
+    void taskStore.load().catch((error) => {
+        console.error("Failed to load tasks", error);
+    });
 });
 </script>
 
