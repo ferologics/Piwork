@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
-use std::fs::File;
 use std::io::{BufRead, BufReader, Write};
+use std::net::TcpStream;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::{Arc, Mutex};
@@ -10,7 +10,7 @@ use tauri::AppHandle;
 use tauri::Emitter;
 use tauri::Manager;
 
-const RPC_PORT_NAME: &str = "piwork.rpc";
+const RPC_PORT: u16 = 19384;
 
 #[derive(Default)]
 pub struct VmState {
@@ -31,7 +31,7 @@ pub enum VmStatus {
 #[serde(rename_all = "camelCase")]
 pub struct VmStatusResponse {
     pub status: VmStatus,
-    pub rpc_path: Option<String>,
+    pub rpc_port: Option<u16>,
     pub log_path: Option<String>,
 }
 
@@ -46,14 +46,8 @@ pub struct RuntimeManifest {
 
 struct VmInstance {
     child: Child,
-    rpc_path: PathBuf,
     log_path: PathBuf,
-    writer: Arc<Mutex<Option<std::os::unix::net::UnixStream>>>,
-}
-
-struct VmPaths {
-    rpc_path: PathBuf,
-    log_path: PathBuf,
+    rpc_writer: Arc<Mutex<Option<TcpStream>>>,
 }
 
 #[derive(Clone, Serialize)]
@@ -95,63 +89,91 @@ fn mark_stopped(app: &AppHandle) {
 pub fn status(state: &VmState) -> VmStatusResponse {
     let status = state.status.lock().unwrap().clone();
     let inner = state.inner.lock().unwrap();
-    let (rpc_path, log_path) = inner.as_ref().map_or((None, None), |instance| {
-        (
-            Some(instance.rpc_path.to_string_lossy().to_string()),
-            Some(instance.log_path.to_string_lossy().to_string()),
-        )
-    });
+    let log_path = inner
+        .as_ref()
+        .map(|instance| instance.log_path.to_string_lossy().to_string());
 
     VmStatusResponse {
         status,
-        rpc_path,
+        rpc_port: Some(RPC_PORT),
         log_path,
     }
 }
 
 pub fn start(app: &AppHandle, state: &VmState, runtime_dir: &Path) -> Result<VmStatusResponse, String> {
+    eprintln!("[rust:vm] start called");
     let mut inner = state.inner.lock().unwrap();
     if inner.is_some() {
+        eprintln!("[rust:vm] already running");
         return Ok(status(state));
     }
 
+    eprintln!("[rust:vm] loading manifest");
     let manifest = load_manifest(runtime_dir)?;
-    let paths = prepare_vm_paths(app)?;
 
-    let child = spawn_qemu(&manifest, runtime_dir, &paths)?;
-    let writer: Arc<Mutex<Option<std::os::unix::net::UnixStream>>> = Arc::new(Mutex::new(None));
+    let vm_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| e.to_string())?
+        .join("vm");
+    std::fs::create_dir_all(&vm_dir).map_err(|e| e.to_string())?;
+    let log_path = vm_dir.join("qemu.log");
+
+    eprintln!("[rust:vm] spawning qemu");
+    let child = spawn_qemu(&manifest, runtime_dir, &log_path)?;
+    eprintln!("[rust:vm] qemu spawned");
+
+    let rpc_writer: Arc<Mutex<Option<TcpStream>>> = Arc::new(Mutex::new(None));
 
     let instance = VmInstance {
         child,
-        rpc_path: paths.rpc_path.clone(),
-        log_path: paths.log_path.clone(),
-        writer: writer.clone(),
+        log_path: log_path.clone(),
+        rpc_writer: rpc_writer.clone(),
     };
 
     *state.status.lock().unwrap() = VmStatus::Starting;
     *inner = Some(instance);
+    drop(inner); // Release lock before spawning thread
 
+    // Thread to wait for READY and then connect RPC
     let app_handle = app.clone();
-    let rpc_path = paths.rpc_path.clone();
-    let log_path = paths.log_path.clone();
-    thread::spawn(move || match connect_rpc(&rpc_path) {
-        Ok(stream) => {
-            if let Ok(clone) = stream.try_clone() {
-                *writer.lock().unwrap() = Some(clone);
-            }
-            read_rpc_lines(&app_handle, stream);
-        }
-        Err(error) => {
-            emit_event(
-                &app_handle,
-                "error",
-                format!(
-                    "RPC connection failed: {error}. Check QEMU log at {}",
-                    log_path.display()
-                ),
-            );
+    thread::spawn(move || {
+        eprintln!("[rust:vm:rpc] waiting for READY signal...");
+
+        // Wait for VM to boot by polling the log file for READY
+        let ready = wait_for_ready(&log_path, Duration::from_secs(30));
+
+        if !ready {
+            eprintln!("[rust:vm:rpc] timeout waiting for READY");
+            emit_event(&app_handle, "error", "Timeout waiting for VM to boot".to_string());
             mark_stopped(&app_handle);
+            return;
         }
+
+        eprintln!("[rust:vm:rpc] READY received, connecting to RPC port...");
+        set_status(&app_handle, VmStatus::Ready);
+        emit_event(&app_handle, "ready", "READY".to_string());
+
+        // Connect to RPC port
+        match connect_rpc(RPC_PORT) {
+            Ok(stream) => {
+                eprintln!("[rust:vm:rpc] connected to TCP port {}", RPC_PORT);
+                if let Ok(clone) = stream.try_clone() {
+                    *rpc_writer.lock().unwrap() = Some(clone);
+                }
+                read_rpc_lines(&app_handle, stream);
+            }
+            Err(error) => {
+                eprintln!("[rust:vm:rpc] TCP connection failed: {}", error);
+                emit_event(
+                    &app_handle,
+                    "error",
+                    format!("RPC connection failed: {error}"),
+                );
+            }
+        }
+
+        mark_stopped(&app_handle);
     });
 
     Ok(status(state))
@@ -172,42 +194,27 @@ pub fn send(state: &VmState, message: &str) -> Result<(), String> {
         return Err("VM not running".to_string());
     };
 
-    let mut guard = instance.writer.lock().unwrap();
+    let mut guard = instance.rpc_writer.lock().unwrap();
     let Some(stream) = guard.as_mut() else {
         return Err("RPC not connected".to_string());
     };
 
     stream
         .write_all(format!("{message}\n").as_bytes())
-        .map_err(|error| error.to_string())?;
-    stream.flush().map_err(|error| error.to_string())?;
+        .map_err(|e| e.to_string())?;
+    stream.flush().map_err(|e| e.to_string())?;
 
     Ok(())
 }
 
 fn load_manifest(runtime_dir: &Path) -> Result<RuntimeManifest, String> {
     let manifest_path = runtime_dir.join("manifest.json");
-    let content = std::fs::read_to_string(&manifest_path).map_err(|error| error.to_string())?;
-    let manifest: RuntimeManifest = serde_json::from_str(&content).map_err(|error| error.to_string())?;
+    let content = std::fs::read_to_string(&manifest_path).map_err(|e| e.to_string())?;
+    let manifest: RuntimeManifest = serde_json::from_str(&content).map_err(|e| e.to_string())?;
     Ok(manifest)
 }
 
-fn prepare_vm_paths(app: &AppHandle) -> Result<VmPaths, String> {
-    let vm_dir = app.path().app_data_dir().map_err(|error| error.to_string())?.join("vm");
-    std::fs::create_dir_all(&vm_dir).map_err(|error| error.to_string())?;
-
-    let rpc_path = vm_dir.join("piwork-rpc.sock");
-    if rpc_path.exists() {
-        std::fs::remove_file(&rpc_path).map_err(|error| error.to_string())?;
-    }
-
-    Ok(VmPaths {
-        rpc_path,
-        log_path: vm_dir.join("qemu.log"),
-    })
-}
-
-fn spawn_qemu(manifest: &RuntimeManifest, runtime_dir: &Path, paths: &VmPaths) -> Result<Child, String> {
+fn spawn_qemu(manifest: &RuntimeManifest, runtime_dir: &Path, log_path: &Path) -> Result<Child, String> {
     let qemu_binary = resolve_qemu_binary(manifest, runtime_dir)?;
 
     let kernel = runtime_dir.join(&manifest.kernel);
@@ -223,7 +230,10 @@ fn spawn_qemu(manifest: &RuntimeManifest, runtime_dir: &Path, paths: &VmPaths) -
     let cmdline = manifest
         .cmdline
         .as_deref()
-        .unwrap_or("modules=loop,squashfs,sd-mod,usb-storage quiet console=ttyAMA0");
+        .unwrap_or("quiet console=ttyAMA0");
+
+    // Open log file for serial output
+    let log_file = std::fs::File::create(log_path).map_err(|e| e.to_string())?;
 
     let mut command = Command::new(qemu_binary);
     command
@@ -234,35 +244,29 @@ fn spawn_qemu(manifest: &RuntimeManifest, runtime_dir: &Path, paths: &VmPaths) -
         .arg("-smp")
         .arg("2")
         .arg("-m")
-        .arg("1024")
+        .arg("2048")
         .arg("-nographic")
         .arg("-kernel")
-        .arg(kernel)
+        .arg(&kernel)
         .arg("-initrd")
-        .arg(initrd)
+        .arg(&initrd)
         .arg("-append")
         .arg(cmdline)
+        // Network with port forwarding for RPC
         .arg("-device")
         .arg("virtio-net-pci,netdev=net0,mac=52:54:00:12:34:56")
         .arg("-netdev")
-        .arg("user,id=net0")
-        .arg("-chardev")
         .arg(format!(
-            "socket,id=rpc,path={},server=on,wait=on",
-            paths.rpc_path.display()
+            "user,id=net0,hostfwd=tcp:127.0.0.1:{}-:{}",
+            RPC_PORT, RPC_PORT
         ))
-        .arg("-device")
-        .arg("virtio-serial")
-        .arg("-device")
-        .arg(format!("virtserialport,chardev=rpc,name={RPC_PORT_NAME}"))
+        // Serial console to file (we read this for READY)
         .arg("-serial")
-        .arg("null")
-        .stdout(Stdio::null());
+        .arg(format!("file:{}", log_path.display()))
+        .stdout(Stdio::from(log_file.try_clone().map_err(|e| e.to_string())?))
+        .stderr(Stdio::null());
 
-    let log_file = File::create(&paths.log_path).map_err(|error| format!("Failed to create QEMU log: {error}"))?;
-    command.stderr(Stdio::from(log_file));
-
-    command.spawn().map_err(|error| error.to_string())
+    command.spawn().map_err(|e| e.to_string())
 }
 
 fn resolve_qemu_binary(manifest: &RuntimeManifest, runtime_dir: &Path) -> Result<PathBuf, String> {
@@ -285,37 +289,53 @@ fn find_in_path(binary: &str) -> Option<PathBuf> {
             return Some(candidate);
         }
     }
-
     None
 }
 
-fn connect_rpc(rpc_path: &Path) -> Result<std::os::unix::net::UnixStream, String> {
+fn wait_for_ready(log_path: &Path, timeout: Duration) -> bool {
+    let start = std::time::Instant::now();
+
+    while start.elapsed() < timeout {
+        if let Ok(content) = std::fs::read_to_string(log_path) {
+            if content.contains("READY") {
+                return true;
+            }
+        }
+        thread::sleep(Duration::from_millis(100));
+    }
+
+    false
+}
+
+fn connect_rpc(port: u16) -> Result<TcpStream, String> {
+    let addr = format!("127.0.0.1:{}", port);
     let mut attempts = 0;
+
     loop {
-        match std::os::unix::net::UnixStream::connect(rpc_path) {
+        match TcpStream::connect(&addr) {
             Ok(stream) => return Ok(stream),
             Err(error) => {
                 attempts += 1;
-                if attempts > 100 {
+                if attempts > 50 {
                     return Err(error.to_string());
                 }
-                thread::sleep(Duration::from_millis(50));
+                thread::sleep(Duration::from_millis(100));
             }
         }
     }
 }
 
-fn read_rpc_lines(app: &AppHandle, stream: std::os::unix::net::UnixStream) {
+fn read_rpc_lines(app: &AppHandle, stream: TcpStream) {
+    eprintln!("[rust:vm:rpc] starting to read RPC lines");
     let reader = BufReader::new(stream);
+
     for line in reader.lines().map_while(Result::ok) {
         let trimmed = line.trim();
-        if trimmed == "READY" {
-            set_status(app, VmStatus::Ready);
-            emit_event(app, "ready", trimmed.to_string());
-        } else if !trimmed.is_empty() {
+        if !trimmed.is_empty() {
+            eprintln!("[rust:vm:rpc] received: {:?}", trimmed);
             emit_event(app, "rpc", trimmed.to_string());
         }
     }
 
-    mark_stopped(app);
+    eprintln!("[rust:vm:rpc] RPC connection closed");
 }

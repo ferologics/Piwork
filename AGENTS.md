@@ -4,45 +4,68 @@
 
 Build a Cowork‑style, normie‑first UI on top of **pi** using **Tauri**. Focus on file‑scoped tasks, progress visibility, and artifacts/canvas previews.
 
-## Stack (current)
+## Stack
 
-- **Tauri 2**
-- **SvelteKit** (template from create‑tauri‑app)
-- **pnpm**
+- **Tauri 2** + **SvelteKit** + **pnpm**
 - **Tailwind 4 + shadcn‑svelte**
 - **Testing:** Vitest (RPC mock; Playwright deferred)
 
 ## Commands
 
-- Use **mise** tasks for all workflows (avoid direct `pnpm` scripts).
-- Do **not** run `pnpm exec svelte-check` directly; use `mise run compile` or `mise run check`.
-- `mise run check` = format (Biome + dprint + rustfmt) + lint (oxlint + clippy) + compile (svelte-check + cargo check) + test (test-vite + test-rust).
-- Cleanup: `mise run clean`, `mise run clean-deep`, `mise run reset`.
+Use **mise** for everything:
 
-## Tooling
+```bash
+mise run check          # format + lint + compile + test
+mise run tauri-dev      # run app (auto-builds runtime if needed)
+mise run runtime-build  # build VM runtime pack
+mise run runtime-clean  # clean runtime artifacts
+```
 
-- Rust builds use **sccache** via `.cargo/config.toml`.
+## VM Runtime
+
+**Architecture**: QEMU VM with Alpine Linux, pi runs inside via TCP RPC.
+
+**Boot time**: ~1s to READY, ~0.7s first RPC response
+
+**Files** (in `~/Library/Application Support/com.pi.work/runtime/`):
+- `vmlinuz-virt` (10MB) - Linux kernel
+- `initramfs-virt-fast` (51MB) - Alpine + Node.js + pi
+- `manifest.json` - config
+
+**How it works**:
+1. QEMU boots kernel + initramfs (direct boot, no bootloader)
+2. Init script: mount filesystems, get DHCP, print "READY" to serial
+3. `nc -l -p 19384 -e node pi --mode rpc` bridges TCP to pi stdin/stdout
+4. Host connects to `localhost:19384` for RPC
+
+**Building** (`mise run runtime-build`):
+1. Downloads Alpine ISO (cached)
+2. Extracts kernel + base initramfs
+3. Downloads Node.js + deps from Alpine APKs (16 packages)
+4. Copies pi from global npm install
+5. Bundles into initramfs with custom init script
+6. Installs to app data dir
+
+**Requires**: 2GB RAM (initramfs unpacks to tmpfs)
 
 ## Key Decisions
 
-- Desktop runtime = **QEMU runtime pack**, **fresh VM per task**.
-- **virtio‑serial** for RPC (no vsock).
-- **Network on by default** via NAT (SLIRP).
-- **No write/edit prompts**; track changes list instead.
-- **Delete/move/rename prompts** only.
-- **Tasks are resumable across restarts** (store session file + mounts).
+- **TCP RPC** via NAT port forwarding (simpler than virtio-serial)
+- **Network on by default** via QEMU user-mode NAT
+- **Fresh VM per task** (no persistence)
+- **Dynamic linking** - Node uses Alpine's packaged libs
+- **Tasks resumable** across app restarts (session file + mounts stored)
 
-## Docs to reference
+## Docs
 
-- `docs/ui-layout-sketch.md`
-- `docs/ui-capability-map.md`
-- `docs/permissions-model.md`
-- `docs/runtime-pack.md`
-- `docs/pi-integration.md`
-- `docs/auth-flow.md`
+- `docs/runtime-pack.md` - runtime pack format
+- `docs/pi-integration.md` - RPC protocol
+- `docs/auth-flow.md` - authentication
+- `docs/permissions-model.md` - folder access
+- `docs/network-mitm-spike.md` - future network interception
 
 ## Conventions
 
 - 4‑space indentation
-- Keep configs sorted when reasonable
-- Prefer clarity over cleverness
+- Use mise tasks, not direct pnpm/cargo
+- Keep configs sorted

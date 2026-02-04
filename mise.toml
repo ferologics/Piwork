@@ -43,16 +43,8 @@ description = "Deep clean + setup"
 run = "mise run clean-deep && mise run setup"
 
 [tasks.runtime-clean]
-description = "Remove runtime pack"
-run = "rm -rf $(scripts/runtime-path.sh)"
-
-[tasks.runtime-install-dev]
-description = "Install dev runtime pack (local Alpine)"
-run = "scripts/runtime-install-dev-pack.sh"
-
-[tasks.runtime-path]
-description = "Print runtime pack path"
-run = "scripts/runtime-path.sh"
+description = "Remove runtime artifacts"
+run = "rm -rf tmp/boot tmp/runtime-* tmp/initramfs-* tmp/apk-cache \"$HOME/Library/Application Support/com.pi.work/runtime\""
 
 [tasks.setup]
 description = "Install dependencies"
@@ -64,6 +56,7 @@ run = "pnpm exec tauri build"
 
 [tasks.tauri-dev]
 description = "Run the Tauri app"
+depends = ["runtime-build"]
 run = "pnpm exec tauri dev"
 
 [tasks.test]

@@ -1,0 +1,205 @@
+#!/usr/bin/env bash
+#MISE description="Build VM runtime pack (kernel, initramfs with node+pi)"
+#MISE sources=["mise-tasks/runtime-build"]
+#MISE outputs=["tmp/boot/initramfs-virt-fast"]
+set -euo pipefail
+
+ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+TMP_DIR="$ROOT_DIR/tmp"
+ALPINE_VERSION="3.23.3"
+ALPINE_ISO="$TMP_DIR/alpine-virt-${ALPINE_VERSION}-aarch64.iso"
+ALPINE_MIRROR="https://dl-cdn.alpinelinux.org/alpine"
+
+# Output paths
+BOOT_DIR="$TMP_DIR/boot"
+KERNEL="$BOOT_DIR/vmlinuz-virt"
+INITRAMFS_ORIG="$BOOT_DIR/initramfs-virt"
+INITRAMFS_FAST="$BOOT_DIR/initramfs-virt-fast"
+INITRAMFS_DIR="$TMP_DIR/initramfs-fast"
+
+# Node/pi paths
+NODE_DIR="$TMP_DIR/runtime-node"
+PI_DIR="$TMP_DIR/runtime-pi"
+
+# Runtime install location
+if [[ "$(uname -s)" == "Darwin" ]]; then
+    RUNTIME_DIR="$HOME/Library/Application Support/com.pi.work/runtime"
+else
+    RUNTIME_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/piwork/runtime"
+fi
+
+RPC_PORT=19384
+
+echo "=== Building Piwork runtime ==="
+
+#
+# 1. Download Alpine ISO if missing
+#
+if [[ ! -f "$ALPINE_ISO" ]]; then
+    echo "[1/6] Downloading Alpine ISO..."
+    mkdir -p "$TMP_DIR"
+    curl -L "$ALPINE_MIRROR/v${ALPINE_VERSION%.*}/releases/aarch64/alpine-virt-${ALPINE_VERSION}-aarch64.iso" -o "$ALPINE_ISO"
+else
+    echo "[1/6] Alpine ISO exists"
+fi
+
+#
+# 2. Extract kernel + initramfs from ISO
+#
+if [[ ! -f "$KERNEL" || ! -f "$INITRAMFS_ORIG" ]]; then
+    echo "[2/6] Extracting kernel from ISO..."
+    mkdir -p "$BOOT_DIR"
+    bsdtar -xf "$ALPINE_ISO" -C "$BOOT_DIR" boot/vmlinuz-virt boot/initramfs-virt 2>/dev/null || true
+    mv "$BOOT_DIR/boot/"* "$BOOT_DIR/" 2>/dev/null || true
+    rmdir "$BOOT_DIR/boot" 2>/dev/null || true
+else
+    echo "[2/6] Kernel exists"
+fi
+
+#
+# 3. Download Node.js + deps from Alpine packages
+#
+if [[ ! -f "$NODE_DIR/usr/bin/node" ]]; then
+    echo "[3/6] Downloading Node.js + dependencies..."
+    rm -rf "$NODE_DIR"
+    mkdir -p "$NODE_DIR" "$TMP_DIR/apk-cache"
+    
+    PACKAGES=(
+        "main/nodejs" "main/ada-libs" "main/brotli-libs" "main/c-ares"
+        "main/icu-libs" "main/icu-data-en" "main/libgcc" "main/libstdc++"
+        "main/nghttp2-libs" "main/sqlite-libs" "main/zlib" "main/zstd-libs"
+        "main/libcrypto3" "main/libssl3" "main/simdjson" "main/simdutf"
+    )
+    
+    for pkg_path in "${PACKAGES[@]}"; do
+        repo="${pkg_path%%/*}"
+        pkg="${pkg_path##*/}"
+        
+        # Get version from APKINDEX
+        version=$(curl -sL "$ALPINE_MIRROR/v${ALPINE_VERSION%.*}/$repo/aarch64/APKINDEX.tar.gz" \
+            | tar -xzO APKINDEX 2>/dev/null \
+            | grep -A1 "^P:${pkg}$" | grep "^V:" | cut -d: -f2 | head -1)
+        
+        [[ -z "$version" ]] && continue
+        
+        apk_file="${pkg}-${version}.apk"
+        apk_path="$TMP_DIR/apk-cache/$apk_file"
+        
+        [[ ! -f "$apk_path" ]] && curl -sL "$ALPINE_MIRROR/v${ALPINE_VERSION%.*}/$repo/aarch64/$apk_file" -o "$apk_path"
+        tar -xf "$apk_path" -C "$NODE_DIR" 2>/dev/null || true
+    done
+    
+    rm -f "$NODE_DIR"/.PKGINFO "$NODE_DIR"/.SIGN.* 2>/dev/null || true
+    echo "  Node $(cat "$NODE_DIR/usr/lib/node_modules/npm/package.json" 2>/dev/null | grep version | head -1 || echo "installed")"
+else
+    echo "[3/6] Node.js exists"
+fi
+
+#
+# 4. Prepare pi package
+#
+if [[ ! -f "$PI_DIR/dist/cli.js" ]]; then
+    echo "[4/6] Preparing pi package..."
+    rm -rf "$PI_DIR"
+    
+    # Find pi installation
+    PI_SOURCE=$(npm root -g 2>/dev/null)/@mariozechner/pi-coding-agent
+    [[ ! -d "$PI_SOURCE" ]] && PI_SOURCE=$(dirname "$(readlink "$(which pi)" 2>/dev/null)")/.. 2>/dev/null
+    [[ ! -d "$PI_SOURCE/dist" ]] && { echo "ERROR: Cannot find pi installation"; exit 1; }
+    
+    mkdir -p "$PI_DIR"
+    cp -r "$PI_SOURCE/dist" "$PI_SOURCE/node_modules" "$PI_SOURCE/package.json" "$PI_DIR/"
+    echo "  pi copied from $PI_SOURCE"
+else
+    echo "[4/6] pi package exists"
+fi
+
+#
+# 5. Build fast initramfs
+#
+echo "[5/6] Building initramfs..."
+rm -rf "$INITRAMFS_DIR"
+mkdir -p "$INITRAMFS_DIR"
+
+# Extract base Alpine initramfs
+bsdtar -xf "$INITRAMFS_ORIG" -C "$INITRAMFS_DIR"
+
+# Add busybox symlinks
+for cmd in mount umount ip udhcpc cat echo printf grep sed awk chmod chown mv cp rm mkdir ls ln test nc sleep; do
+    ln -sf /bin/busybox "$INITRAMFS_DIR/bin/$cmd" 2>/dev/null || true
+done
+
+# Copy Node.js runtime (Alpine APK structure)
+rsync -a "$NODE_DIR/" "$INITRAMFS_DIR/"
+
+# Copy pi package
+mkdir -p "$INITRAMFS_DIR/opt/pi"
+rsync -a "$PI_DIR/" "$INITRAMFS_DIR/opt/pi/"
+
+# Copy auth if available
+AUTH_PATH="${PIWORK_AUTH_PATH:-}"
+[[ -z "$AUTH_PATH" && -f "$HOME/.pi/agent/auth.json" ]] && AUTH_PATH="$HOME/.pi/agent/auth.json"
+if [[ -n "$AUTH_PATH" && -f "$AUTH_PATH" ]]; then
+    mkdir -p "$INITRAMFS_DIR/opt/pi-agent"
+    cp -f "$AUTH_PATH" "$INITRAMFS_DIR/opt/pi-agent/auth.json"
+    chmod 600 "$INITRAMFS_DIR/opt/pi-agent/auth.json" 2>/dev/null || true
+    echo "  Included auth from $AUTH_PATH"
+fi
+
+# Write init script
+cat > "$INITRAMFS_DIR/init" <<'INITEOF'
+#!/bin/sh
+export PATH=/usr/local/bin:/usr/bin:/bin:/sbin
+export LD_LIBRARY_PATH=/usr/lib
+export NODE_PATH=/opt/pi/node_modules
+export PI_PACKAGE_DIR=/opt/pi
+RPC_PORT=19384
+
+mount -t proc proc /proc
+mount -t sysfs sysfs /sys
+mount -t devtmpfs dev /dev
+mount -t tmpfs tmpfs /run
+
+modprobe virtio_pci 2>/dev/null || true
+modprobe virtio_net 2>/dev/null || true
+
+ip link set eth0 up
+udhcpc -i eth0 -q -n -t 3 -T 1
+
+[ -f /opt/pi-agent/auth.json ] && export PI_CODING_AGENT_DIR=/opt/pi-agent
+
+echo "READY"
+
+if [ -x /usr/bin/node ] && [ -f /opt/pi/dist/cli.js ]; then
+    while true; do
+        nc -l -p $RPC_PORT -e /usr/bin/node /opt/pi/dist/cli.js --mode rpc 2>&1
+        sleep 1
+    done &
+fi
+
+exec /bin/sh -i
+INITEOF
+chmod +x "$INITRAMFS_DIR/init"
+
+# Create cpio archive
+(cd "$INITRAMFS_DIR" && find . -print0 | cpio --null -o -H newc | gzip -9 > "$INITRAMFS_FAST")
+echo "  $(du -h "$INITRAMFS_FAST" | cut -f1) initramfs"
+
+#
+# 6. Install to runtime directory
+#
+echo "[6/6] Installing runtime..."
+mkdir -p "$RUNTIME_DIR"
+cp -f "$KERNEL" "$RUNTIME_DIR/vmlinuz-virt"
+cp -f "$INITRAMFS_FAST" "$RUNTIME_DIR/initramfs-virt-fast"
+
+cat > "$RUNTIME_DIR/manifest.json" <<EOF
+{
+    "kernel": "vmlinuz-virt",
+    "initrd": "initramfs-virt-fast",
+    "cmdline": "quiet console=ttyAMA0",
+    "rpcPort": $RPC_PORT
+}
+EOF
+
+echo "=== Runtime installed to $RUNTIME_DIR ==="

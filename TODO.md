@@ -2,30 +2,31 @@
 
 ## Next Up
 
-- [x] Layout skeleton (left rail, main view, right tabs)
-- [x] Define **task persistence** storage format + location
-- [x] Implement **TaskStore** + persistence (task.json)
-- [x] Implement **RpcClient** interface + **MockRpcClient** + JSONL fixtures
-- [x] Plan **full auth UI** (pi `/login` + API key entry)
-
-## VM / Runtime Setup
-
-- [x] Runtime setup-required UI (manifest check)
-- [x] QEMU detection + setup-required mode
-- [ ] Runtime pack download + install flow
-- [x] Hardware accel check (HVF on macOS)
-- [x] virtio-serial RPC bridge (READY handshake + JSONL stream)
-- [ ] Run pi inside VM + real RPC protocol (prebaked initramfs)
 - [ ] Folder mount UI (scope selection)
 - [ ] Permission-gate extension for VM
+- [ ] Runtime pack download + install flow (non-dev)
+
+## Done
+
+- [x] Layout skeleton (left rail, main view, right tabs)
+- [x] Task persistence (TaskStore + task.json)
+- [x] RpcClient interface + MockRpcClient
+- [x] Auth UI (pi `/login` + API key entry)
+- [x] Runtime setup-required UI
+- [x] QEMU detection + HVF check
+- [x] VM RPC bridge (TCP port forwarding, READY via serial console)
+- [x] pi running inside VM with real RPC protocol
+- [x] Consolidated runtime build (`mise run runtime-build`)
 
 ## Later
 
-- [ ] Explore rootfs disk image runtime pack (Option B) + qcow2 overlays for production
+- [ ] pi distribution: bundle pi in runtime pack instead of copying from global npm
+- [ ] Cross-platform VM testing (Linux/Windows via Parallels or similar)
+- [ ] Explore rootfs disk image (qcow2) for lower RAM usage
 - [ ] Artifact preview (HTML, Markdown, images, CSV)
 - [ ] Canvas viewer component
 - [ ] Connector badges (web search visibility)
-- [ ] Explore MITM network mode (virtio‑net + stream netdev + host JS Ethernet stack)
-- [ ] MITM integration: host stack in runtime pack + TCP proxy + allowlist policy
-- [ ] MITM integration: TLS MITM (CA install) + pinning fallbacks
-- [ ] MITM integration: UI controls (network mode toggle, allowlist, audit log)
+- [ ] MITM network mode (virtio-net + stream netdev + host stack)
+- [ ] MITM: TCP proxy + allowlist policy
+- [ ] MITM: TLS interception (CA install) + pinning fallbacks
+- [ ] MITM: UI controls (network mode toggle, allowlist, audit log)

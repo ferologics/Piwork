@@ -3,6 +3,7 @@ import { onDestroy, onMount } from "svelte";
 import { invoke } from "@tauri-apps/api/core";
 import { openPath, openUrl } from "@tauri-apps/plugin-opener";
 import { Send, Paperclip, FolderOpen, ChevronDown } from "@lucide/svelte";
+import { devLog } from "$lib/utils/devLog";
 import { TauriRpcClient } from "$lib/rpc";
 import type { RpcEvent } from "$lib/rpc";
 
@@ -676,6 +677,7 @@ function handleRpcEvent(event: RpcEvent) {
 }
 
 async function connectRpc() {
+    devLog("MainView", "connectRpc start");
     if (rpcClient || rpcConnecting) return;
     rpcConnecting = true;
     rpcError = null;
@@ -696,14 +698,18 @@ async function connectRpc() {
     client.subscribe(handleRpcEvent);
 
     try {
+        devLog("MainView", "calling client.connect (vm_start)...");
         await client.connect();
+        devLog("MainView", "client.connect returned");
         rpcClient = client;
     } catch (error) {
+        devLog("MainView", `connectRpc error: ${error}`);
         rpcError = error instanceof Error ? error.message : String(error);
         rpcConnected = false;
         void refreshVmLogPath();
         await client.disconnect().catch(() => undefined);
     } finally {
+        devLog("MainView", "connectRpc done");
         rpcConnecting = false;
     }
 }
