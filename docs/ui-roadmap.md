@@ -78,11 +78,14 @@ Make it feel like a real app:
 
 ## Research / References
 
-YouTube videos to analyze (use youtube-transcript skill):
+YouTube videos to analyze:
 - https://www.youtube.com/watch?v=UAmKyyZ-b9E - "Introducing Cowork: Claude Code for the rest of your work"
 - https://www.youtube.com/watch?v=HTu1OGWAn5w - "How to Use Claude Cowork Better Than 99% of People (Full Guide)"
 
-Could also use brave-search to find more Cowork demos/tutorials.
+**Tools:**
+- `youtube-transcript` skill - fetch transcripts
+- https://github.com/steipete/summarize - summarize video content
+- `brave-search` skill - find more Cowork demos/tutorials
 
 **Approach**: No MCP, no fancy stuff. Just pi, maybe skills later. Keep it simple.
 
