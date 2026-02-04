@@ -16,10 +16,29 @@ Use **mise** for everything:
 
 ```bash
 mise run check          # format + lint + compile + test
-mise run tauri-dev      # run app (auto-builds runtime if needed)
+mise run tauri-dev      # run app interactively (for humans)
 mise run runtime-build  # build VM runtime pack
 mise run runtime-clean  # clean runtime artifacts
 ```
+
+## AI Testing Harness
+
+File-based tasks in `mise-tasks/` for automated AI development:
+
+```bash
+mise run test-start              # start app, wait for ready
+mise run test-prompt "hello"     # send prompt, wait for response
+mise run test-screenshot name    # capture to tmp/dev/name.png
+mise run test-set-folder /path   # set working folder, restart VM
+mise run test-logs               # tail test logs
+mise run test-stop               # kill app + QEMU
+```
+
+These let the AI test changes without human interaction:
+1. `test-start` launches app and waits for "listening" in logs
+2. `test-prompt` sends via TCP test server (port 19385), waits for "agent_end"
+3. `test-screenshot` captures window without stealing focus
+4. Test server only runs in debug builds (`#[cfg(debug_assertions)]`)
 
 ## VM Runtime
 

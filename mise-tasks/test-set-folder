@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-#MISE description="Set working folder and restart VM"
+#MISE description="Set test working folder and restart VM"
 set -euo pipefail
 
 FOLDER="${1:-$HOME/dev/pui/tmp/test-workdir}"

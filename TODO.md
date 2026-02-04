@@ -47,7 +47,7 @@
 
 ## Testing Infrastructure
 
-- [x] Dev mise tasks (`dev-start`, `dev-prompt`, `dev-screenshot`, `dev-logs`, `dev-stop`)
+- [x] AI test harness (`test-start`, `test-prompt`, `test-screenshot`, `test-logs`, `test-stop`)
 - [ ] Screenshot-based verification (works, blocked on accessibility for interaction)
 - [ ] Custom test harness with `--test-mode` flag
 - [ ] Proper e2e with Playwright + tauri-driver (CI/CD)

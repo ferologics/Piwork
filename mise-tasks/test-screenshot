@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-#MISE description="Take a screenshot of Piwork window (non-disruptive)"
+#MISE description="Take test screenshot of Piwork window (non-disruptive)"
 set -euo pipefail
 
 ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)

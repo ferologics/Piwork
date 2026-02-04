@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-#MISE description="Send a prompt and wait for response"
+#MISE description="Send test prompt and wait for response"
 set -euo pipefail
 
 MESSAGE="${1:-Hello}"
