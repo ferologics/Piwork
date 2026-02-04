@@ -1,6 +1,7 @@
 <script lang="ts">
 import { onDestroy } from "svelte";
 import { invoke } from "@tauri-apps/api/core";
+import { openPath } from "@tauri-apps/plugin-opener";
 import { Trash2, X } from "@lucide/svelte";
 
 const { open = false, onClose = null } = $props<{
@@ -48,6 +49,7 @@ let notice = $state<string | null>(null);
 let commandNotice = $state<string | null>(null);
 let copyingCommand = $state(false);
 let commandCopied = $state(false);
+let openingStorePath = $state(false);
 let newProfile = $state("");
 let profileNotice = $state<string | null>(null);
 let profileError = $state<string | null>(null);
@@ -117,6 +119,17 @@ function resetCommandCopy() {
     copyingCommand = false;
     commandCopied = false;
     clearCommandNotice();
+}
+
+async function openStorePath() {
+    if (!storePath || openingStorePath) return;
+    openingStorePath = true;
+
+    try {
+        await openPath(storePath);
+    } finally {
+        openingStorePath = false;
+    }
 }
 
 function clearProfileNotice() {
@@ -351,6 +364,7 @@ function resetOnClose() {
     resetCommandCopy();
     clearProfileNotice();
     clearProfileSetNotice();
+    openingStorePath = false;
     apiKey = "";
     newProfile = "";
 }
@@ -469,6 +483,15 @@ onDestroy(() => {
                         <div class="mt-2 text-[11px] text-muted-foreground">
                             <span class="uppercase tracking-wide">Storage</span>
                             <code class="mt-1 block rounded-md bg-muted px-2 py-1">{storePath}</code>
+                            <div class="mt-2 flex flex-wrap gap-2">
+                                <button
+                                    class="rounded-md bg-secondary px-2 py-1 text-[11px] hover:bg-secondary/80 disabled:opacity-60"
+                                    onclick={openStorePath}
+                                    disabled={openingStorePath}
+                                >
+                                    {openingStorePath ? "Opening…" : "Open auth file"}
+                                </button>
+                            </div>
                         </div>
                     {/if}
                     <div class="mt-3 rounded-md border border-border bg-background px-3 py-2 text-xs text-muted-foreground">
