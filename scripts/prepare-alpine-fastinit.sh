@@ -39,8 +39,21 @@ ip link set eth0 up
 udhcpc -i eth0 -q -n -t 3 -T 1
 
 RPC_PORT=/dev/virtio-ports/piwork.rpc
+rpc_loop() {
+    local rpc_port="$1"
+    while IFS= read -r line; do
+        if echo "$line" | grep -q '"prompt"'; then
+            echo '{"type":"message_update","role":"assistant","content":"Piwork stub: received prompt"}' > "$rpc_port"
+            echo '{"type":"agent_end","reason":"completed"}' > "$rpc_port"
+        else
+            echo '{"type":"message_update","role":"assistant","content":"Piwork stub: received command"}' > "$rpc_port"
+        fi
+    done < "$rpc_port"
+}
+
 if [ -e "$RPC_PORT" ]; then
     echo READY > "$RPC_PORT"
+    rpc_loop "$RPC_PORT" &
 fi
 
 echo READY

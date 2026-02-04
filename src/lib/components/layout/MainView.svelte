@@ -43,7 +43,18 @@ function handleRpcEvent(event: RpcEvent) {
     }
 
     if (event.type === "rpc" && typeof event.message === "string") {
-        rpcMessages = [...rpcMessages, event.message];
+        let message = event.message;
+
+        try {
+            const parsed = JSON.parse(event.message) as { content?: unknown };
+            if (typeof parsed?.content === "string") {
+                message = parsed.content;
+            }
+        } catch {
+            // Ignore JSON parse errors.
+        }
+
+        rpcMessages = [...rpcMessages, message];
     }
 }
 
