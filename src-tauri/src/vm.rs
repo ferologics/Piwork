@@ -248,7 +248,7 @@ fn spawn_qemu(manifest: &RuntimeManifest, runtime_dir: &Path, paths: &VmPaths) -
         .arg("user,id=net0")
         .arg("-chardev")
         .arg(format!(
-            "socket,id=rpc,path={},server=on,wait=off",
+            "socket,id=rpc,path={},server=on,wait=on",
             paths.rpc_path.display()
         ))
         .arg("-device")

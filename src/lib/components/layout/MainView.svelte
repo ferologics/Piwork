@@ -345,6 +345,13 @@ function handleRpcEvent(event: RpcEvent) {
     }
 
     if (event.type === "rpc" && typeof event.message === "string") {
+        if (!rpcConnected) {
+            rpcConnected = true;
+            rpcError = null;
+            void requestState();
+            void requestAvailableModels();
+        }
+
         try {
             const parsed = JSON.parse(event.message) as Record<string, unknown>;
             handleRpcPayload(parsed);
