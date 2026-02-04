@@ -126,7 +126,7 @@ async function archiveTask(task: TaskMetadata, event: MouseEvent) {
 }
 </script>
 
-<aside class="flex h-full w-56 flex-col border-r border-border bg-sidebar">
+<aside class="flex h-full w-56 flex-col border-r border-border bg-sidebar overflow-hidden">
     <div class="p-3">
         <button
             class="flex w-full items-center justify-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
@@ -150,15 +150,15 @@ async function archiveTask(task: TaskMetadata, event: MouseEvent) {
                             class:bg-sidebar-accent={activeTaskId === task.id}
                         >
                             <button
-                                class="flex flex-1 items-center gap-2 rounded-md px-2 py-2 text-sm"
+                                class="flex flex-1 min-w-0 items-center gap-2 rounded-md px-2 py-2 text-sm overflow-hidden"
                                 type="button"
                                 onclick={() => taskStore.setActive(task.id)}
                                 aria-current={activeTaskId === task.id ? "true" : "false"}
                             >
                                 <span
-                                    class="h-2 w-2 rounded-full {statusColors[task.status] ?? "bg-muted-foreground"}"
+                                    class="h-2 w-2 shrink-0 rounded-full {statusColors[task.status] ?? "bg-muted-foreground"}"
                                 ></span>
-                                <MessageSquare class="h-4 w-4 text-muted-foreground" />
+                                <MessageSquare class="h-4 w-4 shrink-0 text-muted-foreground" />
                                 {#if editingTaskId === task.id}
                                     <input
                                         class="w-full rounded-md border border-border bg-background px-2 py-1 text-sm"
@@ -176,7 +176,7 @@ async function archiveTask(task: TaskMetadata, event: MouseEvent) {
                                         onblur={() => void commitRename(task.id)}
                                     />
                                 {:else}
-                                    <span class="flex-1 truncate text-left">{task.title || "Untitled task"}</span>
+                                    <span class="truncate text-left">{task.title || "Untitled task"}</span>
                                 {/if}
                             </button>
                             <button

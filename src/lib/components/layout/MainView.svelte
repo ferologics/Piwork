@@ -10,6 +10,9 @@ import type { RpcEvent, RpcPayload, ConversationState, ContentBlock } from "$lib
 import { taskStore } from "$lib/stores/taskStore";
 import type { TaskMetadata } from "$lib/types/task";
 import FolderSelector from "$lib/components/FolderSelector.svelte";
+import QuickStartTiles from "$lib/components/QuickStartTiles.svelte";
+import ExtensionUiDialog from "$lib/components/ExtensionUiDialog.svelte";
+import type { ExtensionUiRequest } from "$lib/components/ExtensionUiDialog.svelte";
 
 
 let prompt = $state("");
@@ -34,7 +37,7 @@ let rpcStateRequested = $state(false);
 let rpcModelsRequested = $state(false);
 let pendingUiRequest = $state<ExtensionUiRequest | null>(null);
 let pendingUiQueue = $state<ExtensionUiRequest[]>([]);
-let pendingUiInput = $state("");
+
 let pendingUiSending = $state(false);
 let vmLogPath = $state<string | null>(null);
 let openingLog = $state(false);
@@ -50,21 +53,7 @@ interface ModelOption {
     provider: string | null;
 }
 
-interface ExtensionUiRequest {
-    id: string;
-    method: string;
-    title?: string;
-    message?: string;
-    options?: string[];
-    placeholder?: string;
-    prefill?: string;
-    notifyType?: string;
-    statusKey?: string;
-    statusText?: string;
-    widgetKey?: string;
-    widgetLines?: string[];
-    widgetPlacement?: string;
-}
+
 
 // Preferred model patterns - filter to just these
 const PREFERRED_MODEL_PATTERNS = ["claude-opus-4-5", "gpt-5.2-codex", "gemini-3-pro"];
@@ -247,35 +236,25 @@ function parseExtensionUiRequest(payload: Record<string, unknown>): ExtensionUiR
         options: parseStringArray(payload.options),
         placeholder: typeof payload.placeholder === "string" ? payload.placeholder : undefined,
         prefill: typeof payload.prefill === "string" ? payload.prefill : undefined,
-        notifyType: typeof payload.notifyType === "string" ? payload.notifyType : undefined,
-        statusKey: typeof payload.statusKey === "string" ? payload.statusKey : undefined,
-        statusText: typeof payload.statusText === "string" ? payload.statusText : undefined,
-        widgetKey: typeof payload.widgetKey === "string" ? payload.widgetKey : undefined,
-        widgetLines: parseStringArray(payload.widgetLines),
-        widgetPlacement: typeof payload.widgetPlacement === "string" ? payload.widgetPlacement : undefined,
-    } satisfies ExtensionUiRequest;
+    };
 }
 
 function queueUiRequest(request: ExtensionUiRequest) {
     if (!pendingUiRequest) {
         pendingUiRequest = request;
-        pendingUiInput = request.prefill ?? "";
         return;
     }
-
     pendingUiQueue = [...pendingUiQueue, request];
 }
 
 function clearUiRequest() {
     pendingUiRequest = null;
-    pendingUiInput = "";
     pendingUiSending = false;
 
     if (pendingUiQueue.length > 0) {
         const [next, ...rest] = pendingUiQueue;
         pendingUiQueue = rest;
         pendingUiRequest = next;
-        pendingUiInput = next.prefill ?? "";
     }
 }
 
@@ -298,8 +277,8 @@ async function handleUiSelect(value: string) {
     await sendUiResponse({ value });
 }
 
-async function handleUiSubmit() {
-    await sendUiResponse({ value: pendingUiInput });
+async function handleUiSubmit(value: string) {
+    await sendUiResponse({ value });
 }
 
 async function handleUiCancel() {
@@ -568,13 +547,15 @@ function handleRpcPayload(payload: Record<string, unknown>) {
         }
 
         if (request.method === "setStatus") {
-            const statusText = request.statusText ?? "";
-            pushRpcMessage(`[status] ${request.statusKey ?? "status"}: ${statusText}`);
+            const statusKey = typeof payload.statusKey === "string" ? payload.statusKey : "status";
+            const statusText = typeof payload.statusText === "string" ? payload.statusText : "";
+            pushRpcMessage(`[status] ${statusKey}: ${statusText}`);
             return;
         }
 
         if (request.method === "setWidget") {
-            pushRpcMessage(`[widget] ${request.widgetKey ?? "widget"}`);
+            const widgetKey = typeof payload.widgetKey === "string" ? payload.widgetKey : "widget";
+            pushRpcMessage(`[widget] ${widgetKey}`);
             return;
         }
 
@@ -584,36 +565,6 @@ function handleRpcPayload(payload: Record<string, unknown>) {
     }
 
     // message_update, message_end, tool_execution events are handled by MessageAccumulator
-}
-
-function extractMessageContent(message: Record<string, unknown> | undefined) {
-    if (!message) return null;
-
-    if (typeof message.content === "string") {
-        return message.content;
-    }
-
-    if (Array.isArray(message.content)) {
-        const parts = message.content
-            .filter((part) => typeof part === "object" && part !== null)
-            .map((part) => part as Record<string, unknown>)
-            .filter((part) => part.type === "text" && typeof part.text === "string")
-            .map((part) => part.text as string);
-
-        if (parts.length > 0) {
-            return parts.join("");
-        }
-    }
-
-    return null;
-}
-
-function extractFallbackMessage(payload: Record<string, unknown>) {
-    if (typeof payload.content === "string") return payload.content;
-    if (typeof payload.message === "string") return payload.message;
-    if (typeof payload.type === "string") return `[${payload.type}]`;
-
-    return null;
 }
 
 function handleRpcEvent(event: RpcEvent) {
@@ -681,7 +632,6 @@ async function connectRpc() {
     rpcModelsRequested = false;
     pendingUiRequest = null;
     pendingUiQueue = [];
-    pendingUiInput = "";
     pendingUiSending = false;
 
     const client = new TauriRpcClient();
@@ -721,7 +671,6 @@ async function disconnectRpc() {
     rpcModelsRequested = false;
     pendingUiRequest = null;
     pendingUiQueue = [];
-    pendingUiInput = "";
     pendingUiSending = false;
 }
 
@@ -982,56 +931,7 @@ onDestroy(() => {
                     <!-- Chat messages -->
                     <div class="mt-4 space-y-4">
                         {#if conversation.messages.length === 0 && !conversation.isAgentRunning}
-                            <!-- Empty state with quick-start tiles -->
-                            <div class="flex flex-col items-center justify-center py-12 px-4">
-                                <div class="text-4xl mb-4">✨</div>
-                                <h2 class="text-2xl font-semibold mb-8">Let's knock something off your list</h2>
-                                
-                                <div class="grid grid-cols-3 gap-3 w-full max-w-2xl">
-                                    <button
-                                        class="flex items-center gap-3 p-4 rounded-lg bg-muted/50 hover:bg-muted text-left transition-colors"
-                                        onclick={() => sendPrompt("Create a new file for me")}
-                                    >
-                                        <span class="text-xl">📄</span>
-                                        <span class="text-sm font-medium">Create a file</span>
-                                    </button>
-                                    <button
-                                        class="flex items-center gap-3 p-4 rounded-lg bg-muted/50 hover:bg-muted text-left transition-colors"
-                                        onclick={() => sendPrompt("Help me analyze and crunch some data")}
-                                    >
-                                        <span class="text-xl">📊</span>
-                                        <span class="text-sm font-medium">Crunch data</span>
-                                    </button>
-                                    <button
-                                        class="flex items-center gap-3 p-4 rounded-lg bg-muted/50 hover:bg-muted text-left transition-colors"
-                                        onclick={() => sendPrompt("Help me make a prototype")}
-                                    >
-                                        <span class="text-xl">🖼️</span>
-                                        <span class="text-sm font-medium">Make a prototype</span>
-                                    </button>
-                                    <button
-                                        class="flex items-center gap-3 p-4 rounded-lg bg-muted/50 hover:bg-muted text-left transition-colors"
-                                        onclick={() => sendPrompt("Help me organize my files")}
-                                    >
-                                        <span class="text-xl">📁</span>
-                                        <span class="text-sm font-medium">Organize files</span>
-                                    </button>
-                                    <button
-                                        class="flex items-center gap-3 p-4 rounded-lg bg-muted/50 hover:bg-muted text-left transition-colors"
-                                        onclick={() => sendPrompt("Help me prep for a meeting")}
-                                    >
-                                        <span class="text-xl">📅</span>
-                                        <span class="text-sm font-medium">Prep for a meeting</span>
-                                    </button>
-                                    <button
-                                        class="flex items-center gap-3 p-4 rounded-lg bg-muted/50 hover:bg-muted text-left transition-colors"
-                                        onclick={() => sendPrompt("Help me draft a message")}
-                                    >
-                                        <span class="text-xl">✉️</span>
-                                        <span class="text-sm font-medium">Draft a message</span>
-                                    </button>
-                                </div>
-                            </div>
+                            <QuickStartTiles onselect={sendPrompt} />
                         {:else}
                             {#each conversation.messages as message}
                                 {@const hasContent = message.blocks.length > 0 || message.isStreaming}
@@ -1081,119 +981,14 @@ onDestroy(() => {
                     </div>
 
                     {#if pendingUiRequest}
-                        <div class="mt-4 rounded-md border border-border bg-muted/30 p-3 text-xs text-muted-foreground">
-                            <div class="text-sm font-medium text-foreground">
-                                {pendingUiRequest.title ?? "Action required"}
-                            </div>
-                            {#if pendingUiRequest.message}
-                                <div class="mt-1">{pendingUiRequest.message}</div>
-                            {/if}
-                            <div class="mt-2 text-[11px] text-muted-foreground">
-                                Method: {pendingUiRequest.method}
-                            </div>
-                            {#if pendingUiRequest.method === "confirm"}
-                                <div class="mt-3 flex gap-2">
-                                    <button
-                                        class="rounded-md bg-primary px-3 py-1 text-xs text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
-                                        onclick={() => handleUiConfirm(true)}
-                                        disabled={pendingUiSending}
-                                    >
-                                        Confirm
-                                    </button>
-                                    <button
-                                        class="rounded-md bg-secondary px-3 py-1 text-xs hover:bg-secondary/80 disabled:opacity-60"
-                                        onclick={() => handleUiConfirm(false)}
-                                        disabled={pendingUiSending}
-                                    >
-                                        Deny
-                                    </button>
-                                    <button
-                                        class="rounded-md px-3 py-1 text-xs text-muted-foreground hover:bg-accent disabled:opacity-60"
-                                        onclick={handleUiCancel}
-                                        disabled={pendingUiSending}
-                                    >
-                                        Cancel
-                                    </button>
-                                </div>
-                            {:else if pendingUiRequest.method === "select"}
-                                <div class="mt-3 flex flex-wrap gap-2">
-                                    {#each pendingUiRequest.options ?? [] as option}
-                                        <button
-                                            class="rounded-md bg-secondary px-3 py-1 text-xs hover:bg-secondary/80 disabled:opacity-60"
-                                            onclick={() => handleUiSelect(option)}
-                                            disabled={pendingUiSending}
-                                        >
-                                            {option}
-                                        </button>
-                                    {/each}
-                                    <button
-                                        class="rounded-md px-3 py-1 text-xs text-muted-foreground hover:bg-accent disabled:opacity-60"
-                                        onclick={handleUiCancel}
-                                        disabled={pendingUiSending}
-                                    >
-                                        Cancel
-                                    </button>
-                                </div>
-                            {:else if pendingUiRequest.method === "input"}
-                                <div class="mt-3 space-y-2">
-                                    <input
-                                        class="w-full rounded-md border border-border bg-background px-2 py-1 text-xs"
-                                        placeholder={pendingUiRequest.placeholder ?? "Enter a value"}
-                                        bind:value={pendingUiInput}
-                                    />
-                                    <div class="flex gap-2">
-                                        <button
-                                            class="rounded-md bg-primary px-3 py-1 text-xs text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
-                                            onclick={handleUiSubmit}
-                                            disabled={pendingUiSending}
-                                        >
-                                            Submit
-                                        </button>
-                                        <button
-                                            class="rounded-md px-3 py-1 text-xs text-muted-foreground hover:bg-accent disabled:opacity-60"
-                                            onclick={handleUiCancel}
-                                            disabled={pendingUiSending}
-                                        >
-                                            Cancel
-                                        </button>
-                                    </div>
-                                </div>
-                            {:else if pendingUiRequest.method === "editor"}
-                                <div class="mt-3 space-y-2">
-                                    <textarea
-                                        class="w-full rounded-md border border-border bg-background px-2 py-1 text-xs"
-                                        rows="4"
-                                        bind:value={pendingUiInput}
-                                    ></textarea>
-                                    <div class="flex gap-2">
-                                        <button
-                                            class="rounded-md bg-primary px-3 py-1 text-xs text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
-                                            onclick={handleUiSubmit}
-                                            disabled={pendingUiSending}
-                                        >
-                                            Submit
-                                        </button>
-                                        <button
-                                            class="rounded-md px-3 py-1 text-xs text-muted-foreground hover:bg-accent disabled:opacity-60"
-                                            onclick={handleUiCancel}
-                                            disabled={pendingUiSending}
-                                        >
-                                            Cancel
-                                        </button>
-                                    </div>
-                                </div>
-                            {:else}
-                                <div class="mt-3 flex gap-2">
-                                    <button
-                                        class="rounded-md bg-secondary px-3 py-1 text-xs hover:bg-secondary/80 disabled:opacity-60"
-                                        onclick={handleUiCancel}
-                                        disabled={pendingUiSending}
-                                    >
-                                        Dismiss
-                                    </button>
-                                </div>
-                            {/if}
-                        </div>
+                        <ExtensionUiDialog
+                            request={pendingUiRequest}
+                            sending={pendingUiSending}
+                            onconfirm={handleUiConfirm}
+                            onselect={handleUiSelect}
+                            onsubmit={handleUiSubmit}
+                            oncancel={handleUiCancel}
+                        />
                     {/if}
                 </div>
             {/if}
