@@ -1,25 +1,27 @@
 #!/usr/bin/env bash
 #MISE description="Build VM runtime pack (kernel, initramfs with node+pi)"
 #MISE sources=["mise-tasks/runtime-build"]
-#MISE outputs=["tmp/boot/initramfs-virt-fast"]
+#MISE outputs=["tmp/build/boot/initramfs-virt-fast"]
 set -euo pipefail
 
 ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 TMP_DIR="$ROOT_DIR/tmp"
+BUILD_DIR="$TMP_DIR/build"
+DOWNLOADS_DIR="$TMP_DIR/downloads"
 ALPINE_VERSION="3.23.3"
-ALPINE_ISO="$TMP_DIR/alpine-virt-${ALPINE_VERSION}-aarch64.iso"
+ALPINE_ISO="$DOWNLOADS_DIR/alpine-virt-${ALPINE_VERSION}-aarch64.iso"
 ALPINE_MIRROR="https://dl-cdn.alpinelinux.org/alpine"
 
 # Output paths
-BOOT_DIR="$TMP_DIR/boot"
+BOOT_DIR="$BUILD_DIR/boot"
 KERNEL="$BOOT_DIR/vmlinuz-virt"
 INITRAMFS_ORIG="$BOOT_DIR/initramfs-virt"
 INITRAMFS_FAST="$BOOT_DIR/initramfs-virt-fast"
-INITRAMFS_DIR="$TMP_DIR/initramfs-fast"
+INITRAMFS_DIR="$BUILD_DIR/initramfs-fast"
 
 # Node/pi paths
-NODE_DIR="$TMP_DIR/runtime-node"
-PI_DIR="$TMP_DIR/runtime-pi"
+NODE_DIR="$BUILD_DIR/runtime-node"
+PI_DIR="$BUILD_DIR/runtime-pi"
 
 # Runtime install location
 if [[ "$(uname -s)" == "Darwin" ]]; then
@@ -37,7 +39,7 @@ echo "=== Building Piwork runtime ==="
 #
 if [[ ! -f "$ALPINE_ISO" ]]; then
     echo "[1/6] Downloading Alpine ISO..."
-    mkdir -p "$TMP_DIR"
+    mkdir -p "$DOWNLOADS_DIR"
     curl -L "$ALPINE_MIRROR/v${ALPINE_VERSION%.*}/releases/aarch64/alpine-virt-${ALPINE_VERSION}-aarch64.iso" -o "$ALPINE_ISO"
 else
     echo "[1/6] Alpine ISO exists"
@@ -62,7 +64,7 @@ fi
 if [[ ! -f "$NODE_DIR/usr/bin/node" ]]; then
     echo "[3/6] Downloading Node.js + dependencies..."
     rm -rf "$NODE_DIR"
-    mkdir -p "$NODE_DIR" "$TMP_DIR/apk-cache"
+    mkdir -p "$NODE_DIR" "$BUILD_DIR/apk-cache"
     
     PACKAGES=(
         "main/nodejs" "main/ada-libs" "main/brotli-libs" "main/c-ares"
@@ -83,7 +85,7 @@ if [[ ! -f "$NODE_DIR/usr/bin/node" ]]; then
         [[ -z "$version" ]] && continue
         
         apk_file="${pkg}-${version}.apk"
-        apk_path="$TMP_DIR/apk-cache/$apk_file"
+        apk_path="$BUILD_DIR/apk-cache/$apk_file"
         
         [[ ! -f "$apk_path" ]] && curl -sL "$ALPINE_MIRROR/v${ALPINE_VERSION%.*}/$repo/aarch64/$apk_file" -o "$apk_path"
         tar -xf "$apk_path" -C "$NODE_DIR" 2>/dev/null || true

@@ -2,9 +2,14 @@
 # Take a screenshot of the Piwork app window
 # Usage: ./screenshot-piwork.sh [output-path]
 
-OUTPUT="${1:-/tmp/piwork-screenshot.png}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(dirname "$SCRIPT_DIR")"
+DEV_DIR="$ROOT_DIR/tmp/dev"
 
-# Get window ID
+mkdir -p "$DEV_DIR"
+OUTPUT="${1:-$DEV_DIR/piwork-screenshot.png}"
+
+# Get window ID (windowlist helper built separately)
 WINDOW_ID=$(/tmp/windowlist 2>/dev/null | head -1)
 
 if [ -z "$WINDOW_ID" ]; then
