@@ -48,6 +48,11 @@ let notice = $state<string | null>(null);
 let commandNotice = $state<string | null>(null);
 let copyingCommand = $state(false);
 let commandCopied = $state(false);
+let newProfile = $state("");
+let profileNotice = $state<string | null>(null);
+let profileError = $state<string | null>(null);
+let profileTimer: ReturnType<typeof setTimeout> | null = null;
+let profileSetTimer: ReturnType<typeof setTimeout> | null = null;
 
 let noticeTimer: ReturnType<typeof setTimeout> | null = null;
 let commandTimer: ReturnType<typeof setTimeout> | null = null;
@@ -109,8 +114,65 @@ function resetCommandCopy() {
     clearCommandNotice();
 }
 
+function clearProfileNotice() {
+    profileNotice = null;
+    if (profileTimer) {
+        clearTimeout(profileTimer);
+        profileTimer = null;
+    }
+}
+
+function setProfileNotice(message: string) {
+    profileNotice = message;
+    if (profileTimer) {
+        clearTimeout(profileTimer);
+    }
+    profileTimer = setTimeout(() => {
+        profileNotice = null;
+    }, 3000);
+}
+
+function clearProfileSetNotice() {
+    profileError = null;
+    if (profileSetTimer) {
+        clearTimeout(profileSetTimer);
+        profileSetTimer = null;
+    }
+}
+
+function setProfileError(message: string) {
+    profileError = message;
+    if (profileSetTimer) {
+        clearTimeout(profileSetTimer);
+    }
+    profileSetTimer = setTimeout(() => {
+        profileError = null;
+    }, 3000);
+}
+
 function buildAuthCommand() {
     return `PIWORK_COPY_AUTH=1 PIWORK_AUTH_PROFILE=${profile} mise run runtime-install-dev`;
+}
+
+function handleProfileChange() {
+    clearProfileSetNotice();
+    clearProfileNotice();
+    void loadEntries();
+}
+
+async function addProfile() {
+    const trimmed = newProfile.trim();
+    if (!trimmed) {
+        setProfileError("Profile name required.");
+        return;
+    }
+
+    profile = trimmed;
+    newProfile = "";
+    setProfileNotice(`Switched to ${trimmed}`);
+    clearProfileSetNotice();
+    clearProfileNotice();
+    await loadEntries();
 }
 
 async function copyAuthCommand() {
@@ -196,7 +258,10 @@ $effect(() => {
         error = null;
         clearNotice();
         resetCommandCopy();
+        clearProfileNotice();
+        clearProfileSetNotice();
         apiKey = "";
+        newProfile = "";
     }
 });
 
@@ -206,6 +271,12 @@ onDestroy(() => {
     }
     if (commandTimer) {
         clearTimeout(commandTimer);
+    }
+    if (profileTimer) {
+        clearTimeout(profileTimer);
+    }
+    if (profileSetTimer) {
+        clearTimeout(profileSetTimer);
     }
 });
 </script>
@@ -233,6 +304,37 @@ onDestroy(() => {
                 <div class="rounded-lg border border-border bg-muted/30 p-4">
                     <div class="text-sm font-medium">API Keys</div>
                     <div class="mt-1 text-xs text-muted-foreground">Profile: {profile}</div>
+                    <div class="mt-3 grid gap-2 text-xs">
+                        <label class="grid gap-1">
+                            <span class="text-muted-foreground">Profile</span>
+                            <input
+                                class="rounded-md border border-border bg-background px-3 py-2 text-sm"
+                                placeholder="default"
+                                bind:value={profile}
+                                onblur={handleProfileChange}
+                            />
+                        </label>
+                        <div class="flex flex-wrap items-center gap-2">
+                            <input
+                                class="rounded-md border border-border bg-background px-3 py-2 text-sm"
+                                placeholder="New profile"
+                                bind:value={newProfile}
+                            />
+                            <button
+                                class="rounded-md bg-secondary px-3 py-2 text-xs hover:bg-secondary/80 disabled:opacity-60"
+                                onclick={addProfile}
+                                disabled={!newProfile.trim()}
+                            >
+                                Add profile
+                            </button>
+                        </div>
+                        {#if profileNotice}
+                            <div class="text-[11px] text-emerald-400">{profileNotice}</div>
+                        {/if}
+                        {#if profileError}
+                            <div class="text-[11px] text-destructive">{profileError}</div>
+                        {/if}
+                    </div>
                     {#if storePath}
                         <div class="mt-2 text-[11px] text-muted-foreground">
                             <span class="uppercase tracking-wide">Storage</span>
