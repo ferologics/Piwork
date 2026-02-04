@@ -4,6 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import SetupRequired from "$lib/components/SetupRequired.svelte";
 import { taskStore } from "$lib/stores/taskStore";
 import TopBar from "./TopBar.svelte";
+import SettingsModal from "./SettingsModal.svelte";
 import LeftRail from "./LeftRail.svelte";
 import MainView from "./MainView.svelte";
 import RightPanel from "./RightPanel.svelte";
@@ -20,6 +21,7 @@ interface RuntimeStatus {
 // TODO: default to false in prod
 let showLeftRail = $state(true);
 let showRightPanel = $state(true);
+let showSettings = $state(false);
 let runtimeStatus = $state<RuntimeStatus | null>(null);
 let runtimeError = $state<string | null>(null);
 let checkingRuntime = $state(false);
@@ -72,7 +74,7 @@ onMount(() => {
     />
 {:else}
     <div class="flex h-screen flex-col overflow-hidden">
-        <TopBar bind:showLeftRail bind:showRightPanel />
+        <TopBar bind:showLeftRail bind:showRightPanel onOpenSettings={() => (showSettings = true)} />
         <div class="flex flex-1 overflow-hidden">
             {#if showLeftRail}
                 <LeftRail />
@@ -83,4 +85,5 @@ onMount(() => {
             {/if}
         </div>
     </div>
+    <SettingsModal open={showSettings} onClose={() => (showSettings = false)} />
 {/if}

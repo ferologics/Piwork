@@ -2,6 +2,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use tauri::Manager;
 
+mod auth_store;
 mod task_store;
 mod vm;
 
@@ -112,6 +113,12 @@ fn tasks_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     Ok(base_dir.join("tasks"))
 }
 
+fn auth_file(app: &tauri::AppHandle, profile: Option<String>) -> Result<PathBuf, String> {
+    let base_dir = app.path().app_data_dir().map_err(|error| error.to_string())?;
+    let profile = profile.unwrap_or_else(|| "default".to_string());
+    Ok(base_dir.join("auth").join(profile).join("auth.json"))
+}
+
 #[tauri::command]
 #[allow(clippy::needless_pass_by_value)]
 fn vm_status(state: tauri::State<vm::VmState>) -> vm::VmStatusResponse {
@@ -158,6 +165,38 @@ fn task_store_delete(app: tauri::AppHandle, task_id: String) -> Result<(), Strin
     task_store::delete_task(&tasks_dir, task_id)
 }
 
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
+fn auth_store_list(app: tauri::AppHandle, profile: Option<String>) -> Result<auth_store::AuthStoreSummary, String> {
+    let auth_path = auth_file(&app, profile)?;
+    auth_store::summary(&auth_path)
+}
+
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
+fn auth_store_set_api_key(
+    app: tauri::AppHandle,
+    provider: String,
+    key: String,
+    profile: Option<String>,
+) -> Result<auth_store::AuthStoreSummary, String> {
+    let auth_path = auth_file(&app, profile)?;
+    auth_store::set_api_key(&auth_path, &provider, &key)?;
+    auth_store::summary(&auth_path)
+}
+
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
+fn auth_store_delete(
+    app: tauri::AppHandle,
+    provider: String,
+    profile: Option<String>,
+) -> Result<auth_store::AuthStoreSummary, String> {
+    let auth_path = auth_file(&app, profile)?;
+    auth_store::delete_provider(&auth_path, &provider)?;
+    auth_store::summary(&auth_path)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -169,6 +208,9 @@ pub fn run() {
             task_store_list,
             task_store_upsert,
             task_store_delete,
+            auth_store_list,
+            auth_store_set_api_key,
+            auth_store_delete,
             vm_status,
             vm_start,
             vm_stop,

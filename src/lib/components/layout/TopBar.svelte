@@ -4,9 +4,11 @@ import { Settings, PanelLeft, PanelRight } from "@lucide/svelte";
 let {
     showLeftRail = $bindable(true),
     showRightPanel = $bindable(false),
+    onOpenSettings = null,
 }: {
     showLeftRail?: boolean;
     showRightPanel?: boolean;
+    onOpenSettings?: (() => void) | null;
 } = $props();
 </script>
 
@@ -32,7 +34,7 @@ let {
         >
             <PanelRight class="h-4 w-4" />
         </button>
-        <button class="rounded-md p-2 hover:bg-accent" aria-label="Settings">
+        <button class="rounded-md p-2 hover:bg-accent" aria-label="Settings" onclick={() => onOpenSettings?.()}>
             <Settings class="h-4 w-4" />
         </button>
     </div>

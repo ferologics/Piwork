@@ -25,6 +25,11 @@ Let users authenticate once and reuse provider credentials across tasks. Support
 2. Mount into VM at task start
 3. No UI flow yet
 
+**Current implementation (MVP):**
+
+- Settings modal lets you save API keys to `app_data/auth/default/auth.json` via Tauri commands.
+- Keys are stored on host only (VM mount/sync still pending).
+
 **Phase 2 (full login UI):**
 
 1. **Choose provider** (Claude, OpenAI, Gemini, etc.)
