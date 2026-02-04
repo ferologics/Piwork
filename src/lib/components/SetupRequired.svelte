@@ -1,7 +1,12 @@
 <script lang="ts">
 import { openPath } from "@tauri-apps/plugin-opener";
 
-const { runtimeDir, manifestPath, error = null, onRecheck = null } = $props<{
+const {
+    runtimeDir,
+    manifestPath,
+    error = null,
+    onRecheck = null,
+} = $props<{
     runtimeDir: string;
     manifestPath: string;
     error?: string | null;
