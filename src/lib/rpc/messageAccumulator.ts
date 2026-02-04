@@ -146,20 +146,31 @@ export class MessageAccumulator {
         // Ignore user message echoes - we already added the user message locally
         if (message.role === "user") return;
 
-        const content = this.extractMessageContent(message);
         const errorMessage = typeof message.errorMessage === "string" ? message.errorMessage : null;
 
-        if (content) {
-            const msg = this.ensureAssistantMessage();
-            this.updateOrAddBlock(msg, "text", {
-                type: "text",
-                text: content,
-                isStreaming: false,
-            });
+        // Check if we already have text blocks from streaming
+        const lastMsg = this.state.messages[this.state.messages.length - 1];
+        const hasTextBlocks =
+            lastMsg?.role === "assistant" &&
+            lastMsg.blocks.some((b: ContentBlock) => b.type === "text");
+
+        if (!hasTextBlocks) {
+            const content = this.extractMessageContent(message);
+            if (content) {
+                const msg = this.ensureAssistantMessage();
+                this.updateOrAddBlock(msg, "text", {
+                    type: "text",
+                    text: content,
+                    isStreaming: false,
+                });
+            } else if (errorMessage) {
+                // Show error if no content but there's an error
+                this.state.error = errorMessage;
+            }
         } else if (errorMessage) {
-            // Show error if no content but there's an error
             this.state.error = errorMessage;
         }
+
         this.finalizeCurrentMessage();
     }
 
