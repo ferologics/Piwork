@@ -70,7 +70,7 @@ This keeps the VM “talking Ethernet” while the host enforces per‑request p
    cat tmp/mitm-boot.log # BOOT_MS=...   ```
    ````
 
-You should see DHCP, ARP, and ICMP logs from the host stack. The VM uses `udhcpc` (limited retries) and pings `192.168.100.1`, which should receive a reply.
+You should see DHCP, DNS, ARP, and ICMP logs from the host stack. The VM uses `udhcpc` (limited retries), runs `nslookup example.com`, and pings `192.168.100.1`.
 
 Boot timing is written to `tmp/mitm-boot.log` as `BOOT_MS=...`.
 
@@ -87,10 +87,11 @@ CLEAN_ISO=1 scripts/mitm-clean.sh
 ## Spike results (2026‑02‑03)
 
 - ✅ Alpine aarch64 boots under QEMU with **stream netdev** (~7.6s to login on M2, first run).
-- ✅ Host stack replies to **DHCP + ARP + ICMP** (`udhcpc` gets a lease, ping succeeds).
+- ✅ Host stack replies to **DHCP + DNS + ARP + ICMP** (`udhcpc` gets a lease, `nslookup example.com` succeeds, ping succeeds).
+- ✅ Boot timing measured: ~7.6s to login on M2.
 
 ## Next steps
 
-1. Expand host stack (DHCP + DNS + TCP) to allow outbound requests.
-2. Add **allowlist policy** for a single hostname.
+1. Expand host stack (TCP) to allow outbound requests.
+2. Add **allowlist policy** for a single hostname at TCP/HTTP layer.
 3. Decide whether to proceed to TLS MITM (custom CA + re‑encryption).

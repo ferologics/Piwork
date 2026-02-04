@@ -17,9 +17,17 @@ const maxFrameSize = Number(process.env.MAX_FRAME_SIZE ?? 65535);
 const hostIp = process.env.HOST_IP ?? "192.168.100.1";
 const hostMac = process.env.HOST_MAC ?? "02:50:00:00:00:01";
 const logFrames = process.env.LOG_FRAMES === "1";
+const allowedDomains = new Set(
+    (process.env.ALLOWED_DOMAINS ?? "example.com")
+        .split(",")
+        .map((domain) => domain.trim().toLowerCase())
+        .filter(Boolean),
+);
+const dnsResponseIp = process.env.DNS_RESPONSE_IP ?? hostIp;
 
 const hostIpBytes = ipToBytes(hostIp);
 const hostMacBytes = macToBytes(hostMac);
+const dnsResponseIpBytes = ipToBytes(dnsResponseIp);
 
 await waitForSocket(socketPath, waitSeconds);
 
@@ -200,6 +208,15 @@ function handleUdp(frame, sourceMac, sourceIp, destIp, ipOffset, ihl, totalLengt
         }
         const payload = frame.subarray(payloadStart, payloadEnd);
         handleDhcp(payload, sourceMac, sourceIp, destIp, sourcePort, destPort);
+        return;
+    }
+
+    if (destPort === 53) {
+        if (!destIp.equals(hostIpBytes) && !isBroadcastIp(destIp)) {
+            return;
+        }
+        const payload = frame.subarray(payloadStart, payloadEnd);
+        handleDns(payload, sourceMac, sourceIp, sourcePort);
     }
 }
 
@@ -261,6 +278,145 @@ function handleDhcp(payload, sourceMac, _sourceIp, _destIp) {
         sendDhcpFrame(reply, sourceMac);
         console.log("DHCP ack -> 192.168.100.2");
     }
+}
+
+function handleDns(payload, sourceMac, sourceIp, sourcePort) {
+    const query = parseDnsQuery(payload);
+    if (!query) {
+        return;
+    }
+
+    const domain = query.name.toLowerCase();
+    const isAllowed = allowedDomains.has(domain);
+
+    if (!isAllowed) {
+        const response = buildDnsResponse(query, { rcode: 3 });
+        sendDnsFrame(response, sourceMac, sourceIp, sourcePort);
+        console.log(`DNS blocked -> ${domain}`);
+        return;
+    }
+
+    if (query.qtype !== 1 || query.qclass !== 1) {
+        const response = buildDnsResponse(query, { rcode: 0 });
+        sendDnsFrame(response, sourceMac, sourceIp, sourcePort);
+        console.log(`DNS no-answer -> ${domain}`);
+        return;
+    }
+
+    const response = buildDnsResponse(query, { rcode: 0, answerIp: dnsResponseIpBytes });
+    sendDnsFrame(response, sourceMac, sourceIp, sourcePort);
+    console.log(`DNS allow -> ${domain} (${dnsResponseIp})`);
+}
+
+function parseDnsQuery(payload) {
+    if (payload.length < 12) {
+        return null;
+    }
+
+    const id = payload.readUInt16BE(0);
+    const flags = payload.readUInt16BE(2);
+    const qdcount = payload.readUInt16BE(4);
+
+    if (qdcount < 1) {
+        return null;
+    }
+
+    let offset = 12;
+    const labels = [];
+
+    while (offset < payload.length) {
+        const length = payload[offset];
+        if (length === 0) {
+            offset += 1;
+            break;
+        }
+        if ((length & 0xc0) !== 0) {
+            return null;
+        }
+        offset += 1;
+        if (offset + length > payload.length) {
+            return null;
+        }
+        labels.push(payload.subarray(offset, offset + length).toString("ascii"));
+        offset += length;
+    }
+
+    if (offset + 4 > payload.length) {
+        return null;
+    }
+
+    const qtype = payload.readUInt16BE(offset);
+    const qclass = payload.readUInt16BE(offset + 2);
+    offset += 4;
+
+    const question = payload.subarray(12, offset);
+
+    return {
+        id,
+        rd: (flags & 0x0100) !== 0,
+        name: labels.join("."),
+        qtype,
+        qclass,
+        question,
+    };
+}
+
+function buildDnsResponse(query, { rcode, answerIp }) {
+    const flags = 0x8000 | (query.rd ? 0x0100 : 0) | (rcode & 0x000f);
+    const header = Buffer.alloc(12);
+    header.writeUInt16BE(query.id, 0);
+    header.writeUInt16BE(flags, 2);
+    header.writeUInt16BE(1, 4);
+    header.writeUInt16BE(answerIp ? 1 : 0, 6);
+    header.writeUInt16BE(0, 8);
+    header.writeUInt16BE(0, 10);
+
+    if (!answerIp) {
+        return Buffer.concat([header, query.question]);
+    }
+
+    const answer = Buffer.alloc(16);
+    answer.writeUInt16BE(0xc00c, 0);
+    answer.writeUInt16BE(1, 2);
+    answer.writeUInt16BE(1, 4);
+    answer.writeUInt32BE(60, 6);
+    answer.writeUInt16BE(4, 10);
+    answerIp.copy(answer, 12);
+
+    return Buffer.concat([header, query.question, answer]);
+}
+
+function sendDnsFrame(payload, clientMac, clientIp, clientPort) {
+    const udpLength = 8 + payload.length;
+    const ipLength = 20 + udpLength;
+
+    const udpHeader = Buffer.alloc(8);
+    udpHeader.writeUInt16BE(53, 0);
+    udpHeader.writeUInt16BE(clientPort, 2);
+    udpHeader.writeUInt16BE(udpLength, 4);
+    udpHeader.writeUInt16BE(0, 6);
+
+    const ipHeader = Buffer.alloc(20);
+    ipHeader.writeUInt8(0x45, 0);
+    ipHeader.writeUInt8(0, 1);
+    ipHeader.writeUInt16BE(ipLength, 2);
+    ipHeader.writeUInt16BE(0, 4);
+    ipHeader.writeUInt16BE(0, 6);
+    ipHeader.writeUInt8(64, 8);
+    ipHeader.writeUInt8(17, 9);
+    hostIpBytes.copy(ipHeader, 12);
+    clientIp.copy(ipHeader, 16);
+    ipHeader.writeUInt16BE(0, 10);
+    const ipChecksum = computeChecksum(ipHeader);
+    ipHeader.writeUInt16BE(ipChecksum, 10);
+
+    const ethernet = Buffer.alloc(14);
+    clientMac.copy(ethernet, 0);
+    hostMacBytes.copy(ethernet, 6);
+    ethernet.writeUInt16BE(0x0800, 12);
+
+    const frame = Buffer.concat([ethernet, ipHeader, udpHeader, payload]);
+    sendFrame(frame);
 }
 
 function parseDhcpOptions(buffer) {
@@ -325,7 +481,7 @@ function buildDhcpOptions(messageType) {
     options.push(Buffer.from([51, 4, (lease >> 24) & 0xff, (lease >> 16) & 0xff, (lease >> 8) & 0xff, lease & 0xff]));
     options.push(Buffer.from([1, 4, 255, 255, 255, 0]));
     options.push(Buffer.from([3, 4, ...hostIpBytes]));
-    options.push(Buffer.from([6, 4, 1, 1, 1, 1]));
+    options.push(Buffer.from([6, 4, ...hostIpBytes]));
     options.push(Buffer.from([255]));
 
     return Buffer.concat(options);

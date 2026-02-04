@@ -29,6 +29,8 @@ trap cleanup EXIT
 NETDEV_SOCKET="$NETDEV_SOCKET" \
     HOST_IP=192.168.100.1 \
     HOST_MAC=02:50:00:00:00:01 \
+    ALLOWED_DOMAINS=example.com \
+    DNS_RESPONSE_IP=93.184.216.34 \
     node "$SCRIPT_DIR/mitm-netdev-host.mjs" > "$HOST_LOG" 2>&1 &
 HOST_PID=$!
 
@@ -54,6 +56,8 @@ expect -re "#"
 send "ip link set eth0 up\r"
 expect -re "#"
 send "udhcpc -i eth0 -q -n -t 5 -T 1\r"
+expect -re "#"
+send "nslookup example.com\r"
 expect -re "#"
 send "ping -c 1 192.168.100.1\r"
 expect -re "#"
