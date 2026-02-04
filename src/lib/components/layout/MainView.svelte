@@ -183,6 +183,12 @@ async function handleUiCancel() {
     await sendUiResponse({ cancelled: true });
 }
 
+async function sendLogin() {
+    if (!rpcClient) return;
+    await rpcClient.send({ type: "prompt", message: "/login" });
+    pushRpcMessage("[info] Sent /login");
+}
+
 function ensureModelOption(option: ModelOption) {
     if (availableModels.some((model) => model.id === option.id)) {
         return;
@@ -627,6 +633,15 @@ onDestroy(() => {
                     {#if rpcAuthHint}
                         <div class="mt-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-[11px] text-amber-200">
                             {rpcAuthHint}
+                        </div>
+                        <div class="mt-2 flex gap-2">
+                            <button
+                                class="rounded-md bg-secondary px-3 py-1 text-[11px] hover:bg-secondary/80 disabled:opacity-60"
+                                onclick={sendLogin}
+                                disabled={!rpcConnected}
+                            >
+                                Send /login
+                            </button>
                         </div>
                     {/if}
                     <div class="mt-2 space-y-2 text-xs text-muted-foreground">
