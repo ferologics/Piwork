@@ -1,5 +1,7 @@
 <script lang="ts">
 import { onDestroy, onMount } from "svelte";
+import { invoke } from "@tauri-apps/api/core";
+import { openPath } from "@tauri-apps/plugin-opener";
 import { Send, Paperclip, FolderOpen, ChevronDown } from "@lucide/svelte";
 import { TauriRpcClient } from "$lib/rpc";
 import type { RpcEvent } from "$lib/rpc";
@@ -13,6 +15,14 @@ let rpcStreaming = $state("");
 let rpcConnected = $state(false);
 let rpcConnecting = $state(false);
 let rpcError = $state<string | null>(null);
+let vmLogPath = $state<string | null>(null);
+let openingLog = $state(false);
+
+interface VmStatusResponse {
+    status: "starting" | "ready" | "stopped";
+    rpcPath: string | null;
+    logPath: string | null;
+}
 
 const models = [
     { id: "claude-opus-4-5", label: "Opus 4.5" },
@@ -32,6 +42,26 @@ function autoGrow() {
 
 function pushRpcMessage(message: string) {
     rpcMessages = [...rpcMessages, message];
+}
+
+async function refreshVmLogPath() {
+    try {
+        const status = await invoke<VmStatusResponse>("vm_status");
+        vmLogPath = status.logPath;
+    } catch {
+        vmLogPath = null;
+    }
+}
+
+async function openVmLog() {
+    if (!vmLogPath || openingLog) return;
+    openingLog = true;
+
+    try {
+        await openPath(vmLogPath);
+    } finally {
+        openingLog = false;
+    }
 }
 
 function handleRpcPayload(payload: Record<string, unknown>) {
@@ -134,6 +164,7 @@ function handleRpcEvent(event: RpcEvent) {
     if (event.type === "error") {
         rpcError = typeof event.message === "string" ? event.message : "Runtime error";
         rpcConnected = false;
+        void refreshVmLogPath();
         return;
     }
 
@@ -161,6 +192,7 @@ async function connectRpc() {
     } catch (error) {
         rpcError = error instanceof Error ? error.message : String(error);
         rpcConnected = false;
+        void refreshVmLogPath();
         await client.disconnect().catch(() => undefined);
     } finally {
         rpcConnecting = false;
@@ -172,6 +204,7 @@ async function disconnectRpc() {
     await rpcClient.disconnect();
     rpcClient = null;
     rpcConnected = false;
+    rpcError = null;
 }
 
 async function sendPrompt() {
@@ -185,6 +218,7 @@ async function sendPrompt() {
 
 onMount(() => {
     void connectRpc();
+    void refreshVmLogPath();
 });
 
 onDestroy(() => {
@@ -210,13 +244,25 @@ onDestroy(() => {
                         {/if}
                     </p>
                     {#if rpcError}
-                        <button
-                            class="rounded-md bg-secondary px-4 py-2 text-sm hover:bg-secondary/80 disabled:opacity-60"
-                            onclick={connectRpc}
-                            disabled={rpcConnecting}
-                        >
-                            Retry
-                        </button>
+                        <div class="flex flex-col items-center gap-2">
+                            {#if vmLogPath}
+                                <code class="rounded-md bg-muted px-3 py-1 text-[11px]">{vmLogPath}</code>
+                                <button
+                                    class="rounded-md bg-secondary px-4 py-2 text-sm hover:bg-secondary/80 disabled:opacity-60"
+                                    onclick={openVmLog}
+                                    disabled={openingLog}
+                                >
+                                    {openingLog ? "Opening log…" : "Open QEMU log"}
+                                </button>
+                            {/if}
+                            <button
+                                class="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
+                                onclick={connectRpc}
+                                disabled={rpcConnecting}
+                            >
+                                Retry
+                            </button>
+                        </div>
                     {/if}
                 </div>
             {:else}

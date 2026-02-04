@@ -77,11 +77,15 @@ pub fn delete_task(tasks_dir: &Path, task_id: String) -> Result<(), String> {
 mod tests {
     use super::*;
     use std::path::PathBuf;
+    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    static TEMP_COUNTER: AtomicUsize = AtomicUsize::new(0);
 
     fn temp_dir() -> PathBuf {
         let suffix = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
-        std::env::temp_dir().join(format!("piwork-task-store-{suffix}"))
+        let counter = TEMP_COUNTER.fetch_add(1, Ordering::Relaxed);
+        std::env::temp_dir().join(format!("piwork-task-store-{suffix}-{counter}"))
     }
 
     fn sample_task(id: &str, updated_at: &str) -> TaskMetadata {
