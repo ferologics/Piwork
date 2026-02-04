@@ -8,8 +8,8 @@ export class TauriRpcClient implements RpcClient {
     private listeners = new Set<RpcListener>();
     private connecting = false;
 
-    async connect() {
-        devLog("RpcClient", "connect start");
+    async connect(workingFolder?: string | null) {
+        devLog("RpcClient", `connect start, workingFolder: ${workingFolder ?? "none"}`);
         if (this.unlisten || this.connecting) {
             devLog("RpcClient", "already connected or connecting");
             return;
@@ -29,7 +29,9 @@ export class TauriRpcClient implements RpcClient {
             this.unlisten = unlisten;
 
             devLog("RpcClient", "calling vm_start");
-            const result = await invoke<{ status: string }>("vm_start");
+            const result = await invoke<{ status: string }>("vm_start", {
+                workingFolder: workingFolder ?? null,
+            });
             devLog("RpcClient", `vm_start returned: ${JSON.stringify(result)}`);
 
             // If VM was already running and ready, emit a synthetic ready event

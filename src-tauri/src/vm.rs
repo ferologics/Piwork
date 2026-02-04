@@ -100,7 +100,12 @@ pub fn status(state: &VmState) -> VmStatusResponse {
     }
 }
 
-pub fn start(app: &AppHandle, state: &VmState, runtime_dir: &Path) -> Result<VmStatusResponse, String> {
+pub fn start(
+    app: &AppHandle,
+    state: &VmState,
+    runtime_dir: &Path,
+    working_folder: Option<&Path>,
+) -> Result<VmStatusResponse, String> {
     eprintln!("[rust:vm] start called");
     let mut inner = state.inner.lock().unwrap();
     if inner.is_some() {
@@ -125,7 +130,7 @@ pub fn start(app: &AppHandle, state: &VmState, runtime_dir: &Path) -> Result<VmS
     let log_path = vm_dir.join("qemu.log");
 
     eprintln!("[rust:vm] spawning qemu");
-    let child = spawn_qemu(&manifest, runtime_dir, &log_path)?;
+    let child = spawn_qemu(&manifest, runtime_dir, &log_path, working_folder)?;
     eprintln!("[rust:vm] qemu spawned");
 
     let rpc_writer: Arc<Mutex<Option<TcpStream>>> = Arc::new(Mutex::new(None));
@@ -215,7 +220,12 @@ fn load_manifest(runtime_dir: &Path) -> Result<RuntimeManifest, String> {
     Ok(manifest)
 }
 
-fn spawn_qemu(manifest: &RuntimeManifest, runtime_dir: &Path, log_path: &Path) -> Result<Child, String> {
+fn spawn_qemu(
+    manifest: &RuntimeManifest,
+    runtime_dir: &Path,
+    log_path: &Path,
+    working_folder: Option<&Path>,
+) -> Result<Child, String> {
     let qemu_binary = resolve_qemu_binary(manifest, runtime_dir)?;
 
     let kernel = runtime_dir.join(&manifest.kernel);
@@ -254,7 +264,26 @@ fn spawn_qemu(manifest: &RuntimeManifest, runtime_dir: &Path, log_path: &Path) -
         .arg("-device")
         .arg("virtio-net-pci,netdev=net0,mac=52:54:00:12:34:56")
         .arg("-netdev")
-        .arg(format!("user,id=net0,hostfwd=tcp:127.0.0.1:{RPC_PORT}-:{RPC_PORT}"))
+        .arg(format!("user,id=net0,hostfwd=tcp:127.0.0.1:{RPC_PORT}-:{RPC_PORT}"));
+
+    // Working folder mount via virtio-9p
+    if let Some(folder) = working_folder {
+        if folder.is_dir() {
+            eprintln!("[rust:vm] mounting working folder: {}", folder.display());
+            command
+                .arg("-fsdev")
+                .arg(format!(
+                    "local,id=workdir,path={},security_model=mapped-xattr",
+                    folder.display()
+                ))
+                .arg("-device")
+                .arg("virtio-9p-pci,fsdev=workdir,mount_tag=workdir");
+        } else {
+            eprintln!("[rust:vm] working folder not found: {}", folder.display());
+        }
+    }
+
+    command
         // Serial console to file (we read this for READY)
         .arg("-serial")
         .arg(format!("file:{}", log_path.display()))

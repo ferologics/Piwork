@@ -689,8 +689,8 @@ async function connectRpc() {
     client.subscribe(handleRpcEvent);
 
     try {
-        devLog("MainView", "calling client.connect (vm_start)...");
-        await client.connect();
+        devLog("MainView", `calling client.connect with folder: ${currentWorkingFolder ?? "none"}`);
+        await client.connect(currentWorkingFolder);
         devLog("MainView", "client.connect returned");
     } catch (error) {
         devLog("MainView", `connectRpc error: ${error}`);
@@ -807,7 +807,14 @@ async function handleFolderChange(folder: string | null) {
         }
     }
 
-    // TODO: Remount folder in VM
+    // Restart VM with new folder mount
+    if (rpcClient) {
+        devLog("MainView", "Restarting VM with new folder...");
+        rpcConnected = false;
+        await rpcClient.stopVm();
+        rpcClient = null;
+        await connectRpc();
+    }
 }
 
 onMount(() => {

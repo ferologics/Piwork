@@ -22,7 +22,7 @@ export class MockRpcClient implements RpcClient {
         return new MockRpcClient(events, options);
     }
 
-    async connect() {
+    async connect(_workingFolder?: string | null) {
         this.startStreaming();
     }
 

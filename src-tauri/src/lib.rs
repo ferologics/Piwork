@@ -141,9 +141,14 @@ fn vm_status(state: tauri::State<vm::VmState>) -> vm::VmStatusResponse {
 
 #[tauri::command]
 #[allow(clippy::needless_pass_by_value)]
-fn vm_start(app: tauri::AppHandle, state: tauri::State<vm::VmState>) -> Result<vm::VmStatusResponse, String> {
+fn vm_start(
+    app: tauri::AppHandle,
+    state: tauri::State<vm::VmState>,
+    working_folder: Option<String>,
+) -> Result<vm::VmStatusResponse, String> {
     let runtime_dir = runtime_dir(&app)?;
-    vm::start(&app, &state, &runtime_dir)
+    let folder_path = working_folder.as_ref().map(std::path::PathBuf::from);
+    vm::start(&app, &state, &runtime_dir, folder_path.as_deref())
 }
 
 #[tauri::command]

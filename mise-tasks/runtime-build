@@ -157,6 +157,7 @@ export LD_LIBRARY_PATH=/usr/lib
 export NODE_PATH=/opt/pi/node_modules
 export PI_PACKAGE_DIR=/opt/pi
 RPC_PORT=19384
+WORKDIR=/mnt/workdir
 
 mount -t proc proc /proc
 mount -t sysfs sysfs /sys
@@ -165,12 +166,25 @@ mount -t tmpfs tmpfs /run
 
 modprobe virtio_pci 2>/dev/null || true
 modprobe virtio_net 2>/dev/null || true
+modprobe 9pnet 2>/dev/null || true
+modprobe 9pnet_virtio 2>/dev/null || true
+modprobe 9p 2>/dev/null || true
 
 ip link set eth0 up
 udhcpc -i eth0 -q -n -t 3 -T 1
 
 # QEMU user-mode networking provides DNS at 10.0.2.3
 echo "nameserver 10.0.2.3" > /etc/resolv.conf
+
+# Mount working folder if available (9p virtio share)
+mkdir -p "$WORKDIR"
+if mount -t 9p -o trans=virtio,version=9p2000.L workdir "$WORKDIR" 2>/dev/null; then
+    echo "Mounted working folder at $WORKDIR"
+    export PI_WORKING_DIR="$WORKDIR"
+    cd "$WORKDIR"
+else
+    echo "No working folder mounted"
+fi
 
 [ -f /opt/pi-agent/auth.json ] && export PI_CODING_AGENT_DIR=/opt/pi-agent
 
