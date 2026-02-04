@@ -53,11 +53,14 @@ let profileNotice = $state<string | null>(null);
 let profileError = $state<string | null>(null);
 let profileTimer: ReturnType<typeof setTimeout> | null = null;
 let profileSetTimer: ReturnType<typeof setTimeout> | null = null;
+let profileOptions = $state<string[]>(["default"]);
 
 const PROFILE_STORAGE_KEY = "piwork:auth-profile";
+const PROFILE_LIST_KEY = "piwork:auth-profiles";
 
 let noticeTimer: ReturnType<typeof setTimeout> | null = null;
 let commandTimer: ReturnType<typeof setTimeout> | null = null;
+let wasOpen = $state(false);
 
 async function loadEntries() {
     loading = true;
@@ -152,6 +155,51 @@ function setProfileError(message: string) {
     }, 3000);
 }
 
+function normalizeProfile(value: string) {
+    const trimmed = value.trim();
+    return trimmed || "default";
+}
+
+function persistProfileOptions(options: string[]) {
+    try {
+        localStorage.setItem(PROFILE_LIST_KEY, JSON.stringify(options));
+    } catch {
+        // Ignore storage errors.
+    }
+}
+
+function loadProfileOptions() {
+    let stored: string[] = [];
+
+    try {
+        const raw = localStorage.getItem(PROFILE_LIST_KEY);
+        if (raw) {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed)) {
+                stored = parsed
+                    .filter((value) => typeof value === "string")
+                    .map((value) => value.trim())
+                    .filter((value) => value.length > 0);
+            }
+        }
+    } catch {
+        // Ignore storage errors.
+    }
+
+    const normalized = normalizeProfile(profile);
+    const merged = [normalized, "default", ...stored];
+    const unique = Array.from(new Set(merged));
+
+    profileOptions = unique;
+    persistProfileOptions(unique);
+}
+
+function updateProfileOptions(nextProfile: string) {
+    const normalized = normalizeProfile(nextProfile);
+    profileOptions = [normalized, ...profileOptions.filter((value) => value !== normalized)];
+    persistProfileOptions(profileOptions);
+}
+
 function buildAuthCommand() {
     return `PIWORK_COPY_AUTH=1 PIWORK_AUTH_PROFILE=${profile} mise run runtime-install-dev`;
 }
@@ -167,6 +215,14 @@ function persistProfile() {
 function handleProfileChange() {
     clearProfileSetNotice();
     clearProfileNotice();
+
+    const normalized = normalizeProfile(profile);
+    if (normalized !== profile) {
+        profile = normalized;
+        setProfileNotice(`Switched to ${normalized}`);
+    }
+
+    updateProfileOptions(profile);
     persistProfile();
     void loadEntries();
 }
@@ -178,11 +234,12 @@ async function addProfile() {
         return;
     }
 
-    profile = trimmed;
+    profile = normalizeProfile(trimmed);
     newProfile = "";
-    setProfileNotice(`Switched to ${trimmed}`);
+    setProfileNotice(`Switched to ${profile}`);
     clearProfileSetNotice();
     clearProfileNotice();
+    updateProfileOptions(profile);
     persistProfile();
     await loadEntries();
 }
@@ -263,30 +320,40 @@ function formatEntryType(entryType: string) {
     return entryType;
 }
 
-$effect(() => {
-    if (open) {
-        void loadEntries();
-    } else {
-        error = null;
-        clearNotice();
-        resetCommandCopy();
-        clearProfileNotice();
-        clearProfileSetNotice();
-        apiKey = "";
-        newProfile = "";
-    }
-});
-
-$effect(() => {
-    if (!open) return;
-
+function initializeOpen() {
     try {
         const stored = localStorage.getItem(PROFILE_STORAGE_KEY);
-        if (stored && stored !== profile) {
+        if (stored) {
             profile = stored;
         }
     } catch {
         // Ignore storage errors.
+    }
+
+    loadProfileOptions();
+    void loadEntries();
+}
+
+function resetOnClose() {
+    error = null;
+    clearNotice();
+    resetCommandCopy();
+    clearProfileNotice();
+    clearProfileSetNotice();
+    apiKey = "";
+    newProfile = "";
+}
+
+$effect(() => {
+    if (open && !wasOpen) {
+        wasOpen = true;
+        initializeOpen();
+        return;
+    }
+
+    if (!open && wasOpen) {
+        wasOpen = false;
+        resetOnClose();
     }
 });
 
@@ -334,6 +401,7 @@ onDestroy(() => {
                             <span class="text-muted-foreground">Profile</span>
                             <input
                                 class="rounded-md border border-border bg-background px-3 py-2 text-sm"
+                                list="profile-options"
                                 placeholder="default"
                                 bind:value={profile}
                                 onblur={handleProfileChange}
@@ -345,6 +413,11 @@ onDestroy(() => {
                                 }}
                             />
                         </label>
+                        <datalist id="profile-options">
+                            {#each profileOptions as option}
+                                <option value={option}></option>
+                            {/each}
+                        </datalist>
                         <div class="flex flex-wrap items-center gap-2">
                             <input
                                 class="rounded-md border border-border bg-background px-3 py-2 text-sm"
