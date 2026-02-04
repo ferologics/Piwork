@@ -30,6 +30,10 @@ export class MockRpcClient implements RpcClient {
         this.stopStreaming();
     }
 
+    async stopVm() {
+        this.stopStreaming();
+    }
+
     async send(command: Record<string, unknown>) {
         this.sentCommands.push(command);
     }

@@ -44,10 +44,18 @@ export class TauriRpcClient implements RpcClient {
     }
 
     async disconnect() {
+        // Just detach the event listener - don't stop VM
+        // VM persists across HMR, we just reconnect
         if (this.unlisten) {
             this.unlisten();
             this.unlisten = null;
         }
+        this.connecting = false;
+    }
+
+    async stopVm() {
+        // Actually stop the VM (for app close, not HMR)
+        this.disconnect();
         await invoke("vm_stop");
     }
 

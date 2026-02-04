@@ -670,17 +670,18 @@ async function connectRpc() {
     pendingUiSending = false;
 
     const client = new TauriRpcClient();
+    rpcClient = client;  // Set early so handlers can use it
     client.subscribe(handleRpcEvent);
 
     try {
         devLog("MainView", "calling client.connect (vm_start)...");
         await client.connect();
         devLog("MainView", "client.connect returned");
-        rpcClient = client;
     } catch (error) {
         devLog("MainView", `connectRpc error: ${error}`);
         rpcError = error instanceof Error ? error.message : String(error);
         rpcConnected = false;
+        rpcClient = null;  // Clear on error
         void refreshVmLogPath();
         await client.disconnect().catch(() => undefined);
     } finally {
