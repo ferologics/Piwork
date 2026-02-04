@@ -32,6 +32,7 @@ pub enum VmStatus {
 pub struct VmStatusResponse {
     pub status: VmStatus,
     pub rpc_path: Option<String>,
+    pub log_path: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -46,6 +47,7 @@ pub struct RuntimeManifest {
 struct VmInstance {
     child: Child,
     rpc_path: PathBuf,
+    log_path: PathBuf,
     writer: Arc<Mutex<Option<std::os::unix::net::UnixStream>>>,
 }
 
@@ -92,14 +94,19 @@ fn mark_stopped(app: &AppHandle) {
 
 pub fn status(state: &VmState) -> VmStatusResponse {
     let status = state.status.lock().unwrap().clone();
-    let rpc_path = state
-        .inner
-        .lock()
-        .unwrap()
-        .as_ref()
-        .map(|instance| instance.rpc_path.to_string_lossy().to_string());
+    let inner = state.inner.lock().unwrap();
+    let (rpc_path, log_path) = inner.as_ref().map_or((None, None), |instance| {
+        (
+            Some(instance.rpc_path.to_string_lossy().to_string()),
+            Some(instance.log_path.to_string_lossy().to_string()),
+        )
+    });
 
-    VmStatusResponse { status, rpc_path }
+    VmStatusResponse {
+        status,
+        rpc_path,
+        log_path,
+    }
 }
 
 pub fn start(app: &AppHandle, state: &VmState, runtime_dir: &Path) -> Result<VmStatusResponse, String> {
@@ -117,6 +124,7 @@ pub fn start(app: &AppHandle, state: &VmState, runtime_dir: &Path) -> Result<VmS
     let instance = VmInstance {
         child,
         rpc_path: paths.rpc_path.clone(),
+        log_path: paths.log_path.clone(),
         writer: writer.clone(),
     };
 
@@ -125,6 +133,7 @@ pub fn start(app: &AppHandle, state: &VmState, runtime_dir: &Path) -> Result<VmS
 
     let app_handle = app.clone();
     let rpc_path = paths.rpc_path.clone();
+    let log_path = paths.log_path.clone();
     thread::spawn(move || match connect_rpc(&rpc_path) {
         Ok(stream) => {
             if let Ok(clone) = stream.try_clone() {
@@ -133,7 +142,14 @@ pub fn start(app: &AppHandle, state: &VmState, runtime_dir: &Path) -> Result<VmS
             read_rpc_lines(&app_handle, stream);
         }
         Err(error) => {
-            emit_event(&app_handle, "error", format!("RPC connection failed: {error}"));
+            emit_event(
+                &app_handle,
+                "error",
+                format!(
+                    "RPC connection failed: {error}. Check QEMU log at {}",
+                    log_path.display()
+                ),
+            );
             mark_stopped(&app_handle);
         }
     });
