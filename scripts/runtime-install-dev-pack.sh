@@ -8,6 +8,8 @@ ALPINE_ISO=${ALPINE_ISO:-$TMP_DIR/alpine-virt-3.23.3-aarch64.iso}
 KERNEL_IMAGE=${ALPINE_KERNEL:-$TMP_DIR/boot/vmlinuz-virt}
 INITRD_FAST=${ALPINE_INITRD_FAST:-$TMP_DIR/boot/initramfs-virt-fast}
 KERNEL_CMDLINE_FILE=${KERNEL_CMDLINE_FILE:-$TMP_DIR/alpine-kernel.cmdline}
+PIWORK_NODE_DIR=${PIWORK_NODE_DIR:-$TMP_DIR/runtime-node}
+PIWORK_PI_DIR=${PIWORK_PI_DIR:-$TMP_DIR/runtime-pi}
 RUNTIME_DIR=$($SCRIPT_DIR/runtime-path.sh)
 MANIFEST_PATH="$RUNTIME_DIR/manifest.json"
 
@@ -43,8 +45,9 @@ if [[ ! -f "$ALPINE_ISO" ]]; then
 fi
 
 "$SCRIPT_DIR/prepare-alpine-kernel.sh"
+"$SCRIPT_DIR/prepare-runtime-pi.sh"
 rm -f "$INITRD_FAST"
-"$SCRIPT_DIR/prepare-alpine-fastinit.sh"
+PIWORK_NODE_DIR="$PIWORK_NODE_DIR" PIWORK_PI_DIR="$PIWORK_PI_DIR" "$SCRIPT_DIR/prepare-alpine-fastinit.sh"
 
 mkdir -p "$RUNTIME_DIR"
 

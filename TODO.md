@@ -15,7 +15,7 @@
 - [ ] Runtime pack download + install flow
 - [x] Hardware accel check (HVF on macOS)
 - [x] virtio-serial RPC bridge (READY handshake + JSONL stream)
-- [ ] Run pi inside VM + real RPC protocol (dev boot install path in initramfs)
+- [ ] Run pi inside VM + real RPC protocol (prebaked initramfs)
 - [ ] Folder mount UI (scope selection)
 - [ ] Permission-gate extension for VM
 

@@ -57,14 +57,16 @@ function isSelectable(task: TaskMetadata) {
 
 function ensureActiveTask(list: TaskMetadata[]) {
     const currentId = get(activeTaskId);
-    const currentTask = currentId ? list.find((task) => task.id === currentId) : null;
+    if (!currentId) {
+        return;
+    }
 
+    const currentTask = list.find((task) => task.id === currentId);
     if (currentTask && isSelectable(currentTask)) {
         return;
     }
 
-    const next = list.find((task) => isSelectable(task))?.id ?? null;
-    activeTaskId.set(next);
+    activeTaskId.set(null);
 }
 
 function setActiveTask(id: string | null) {

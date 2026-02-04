@@ -26,6 +26,7 @@ function sampleTask(): TaskMetadata {
 describe("taskStore", () => {
     beforeEach(() => {
         invokeMock.mockReset();
+        taskStore.setActive(null);
     });
 
     it("loads tasks from the backend", async () => {
@@ -72,6 +73,15 @@ describe("taskStore", () => {
         expect(task.id).toBeTruthy();
         expect(task.createdAt).toBeTruthy();
         expect(task.updatedAt).toBeTruthy();
+    });
+
+    it("does not auto-select tasks on load", async () => {
+        const task = sampleTask();
+        invokeMock.mockResolvedValue([task]);
+
+        await taskStore.load();
+
+        expect(get(taskStore.activeTaskId)).toBe(null);
     });
 
     it("updates active task when archived", async () => {

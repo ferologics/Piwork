@@ -25,7 +25,7 @@ VM (Linux)
 - QEMU exposes a **virtio‑serial** channel.
 - pi runs `--mode rpc` and listens on `/dev/virtio-ports/piwork.rpc`.
 - Host reads/writes **JSONL** over this stream (same as stdin/stdout).
-- Dev runtime currently attempts a boot-time `apk` + `npm` install of pi and falls back to stub JSONL replies (message_update deltas) if install fails.
+- Dev runtime prebakes Node + pi into the initramfs (no boot-time installs).
 - Host logs QEMU stderr to `app_data/vm/qemu.log` for debugging failed boots.
 - If `PIWORK_AUTH_PATH` was provided at pack install time, the initramfs sets `PI_CODING_AGENT_DIR=/opt/pi-agent` to use the baked `auth.json`.
 
