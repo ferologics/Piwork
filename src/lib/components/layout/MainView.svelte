@@ -19,6 +19,8 @@ let rpcLoginUrl = $state<string | null>(null);
 let openingLoginUrl = $state(false);
 let copyingLoginUrl = $state(false);
 let loginCopied = $state(false);
+let loginPromptVisible = $state(false);
+let loginPromptedUrl = $state<string | null>(null);
 let rpcStateInfo = $state<string | null>(null);
 let rpcStateRequested = $state(false);
 let rpcModelsRequested = $state(false);
@@ -92,7 +94,13 @@ function maybeCaptureLoginUrl(message: string) {
 
     const lower = message.toLowerCase();
     if (lower.includes("login") || lower.includes("oauth") || lower.includes("authorize")) {
-        rpcLoginUrl = url;
+        if (rpcLoginUrl !== url) {
+            rpcLoginUrl = url;
+            loginPromptVisible = true;
+            loginPromptedUrl = url;
+            loginCopied = false;
+            copyingLoginUrl = false;
+        }
     }
 }
 
@@ -245,9 +253,14 @@ async function openLoginUrl() {
 
     try {
         await openUrl(rpcLoginUrl);
+        loginPromptVisible = false;
     } finally {
         openingLoginUrl = false;
     }
+}
+
+function dismissLoginPrompt() {
+    loginPromptVisible = false;
 }
 
 async function copyLoginUrl() {
@@ -553,6 +566,8 @@ function handleRpcEvent(event: RpcEvent) {
         rpcLoginUrl = null;
         loginCopied = false;
         copyingLoginUrl = false;
+        loginPromptVisible = false;
+        loginPromptedUrl = null;
         void requestState();
         void requestAvailableModels();
         return;
@@ -565,6 +580,8 @@ function handleRpcEvent(event: RpcEvent) {
         rpcLoginUrl = null;
         loginCopied = false;
         copyingLoginUrl = false;
+        loginPromptVisible = false;
+        loginPromptedUrl = null;
         rpcStateInfo = null;
         rpcStateRequested = false;
         void refreshVmLogPath();
@@ -579,6 +596,8 @@ function handleRpcEvent(event: RpcEvent) {
             rpcLoginUrl = null;
             loginCopied = false;
             copyingLoginUrl = false;
+            loginPromptVisible = false;
+            loginPromptedUrl = null;
             void requestState();
             void requestAvailableModels();
         }
@@ -600,6 +619,8 @@ async function connectRpc() {
     rpcLoginUrl = null;
     loginCopied = false;
     copyingLoginUrl = false;
+    loginPromptVisible = false;
+    loginPromptedUrl = null;
     rpcStateInfo = null;
     rpcStateRequested = false;
     rpcModelsRequested = false;
@@ -634,6 +655,8 @@ async function disconnectRpc() {
     rpcLoginUrl = null;
     loginCopied = false;
     copyingLoginUrl = false;
+    loginPromptVisible = false;
+    loginPromptedUrl = null;
     rpcStateInfo = null;
     rpcStateRequested = false;
     rpcModelsRequested = false;
@@ -713,6 +736,25 @@ onDestroy(() => {
                         <div class="mt-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-[11px] text-amber-200">
                             {rpcAuthHint}
                         </div>
+                        {#if rpcLoginUrl && loginPromptVisible && loginPromptedUrl === rpcLoginUrl}
+                            <div class="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+                                <span>Login URL detected.</span>
+                                <button
+                                    class="rounded-md bg-secondary px-2 py-1 text-[11px] hover:bg-secondary/80 disabled:opacity-60"
+                                    onclick={openLoginUrl}
+                                    disabled={openingLoginUrl}
+                                >
+                                    Open now
+                                </button>
+                                <button
+                                    class="rounded-md px-2 py-1 text-[11px] text-muted-foreground hover:bg-accent disabled:opacity-60"
+                                    onclick={dismissLoginPrompt}
+                                    disabled={openingLoginUrl}
+                                >
+                                    Dismiss
+                                </button>
+                            </div>
+                        {/if}
                         {#if rpcLoginUrl}
                             <code class="mt-2 block rounded-md bg-muted px-2 py-1 text-[11px]">{rpcLoginUrl}</code>
                         {/if}
