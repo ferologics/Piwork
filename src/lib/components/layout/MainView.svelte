@@ -1,7 +1,7 @@
 <script lang="ts">
 import { onDestroy, onMount } from "svelte";
 import { invoke } from "@tauri-apps/api/core";
-import { openPath } from "@tauri-apps/plugin-opener";
+import { openPath, openUrl } from "@tauri-apps/plugin-opener";
 import { Send, Paperclip, FolderOpen, ChevronDown } from "@lucide/svelte";
 import { TauriRpcClient } from "$lib/rpc";
 import type { RpcEvent } from "$lib/rpc";
@@ -15,6 +15,8 @@ let rpcConnected = $state(false);
 let rpcConnecting = $state(false);
 let rpcError = $state<string | null>(null);
 let rpcAuthHint = $state<string | null>(null);
+let rpcLoginUrl = $state<string | null>(null);
+let openingLoginUrl = $state(false);
 let rpcStateInfo = $state<string | null>(null);
 let rpcStateRequested = $state(false);
 let rpcModelsRequested = $state(false);
@@ -74,6 +76,22 @@ function autoGrow() {
 
 function pushRpcMessage(message: string) {
     rpcMessages = [...rpcMessages, message];
+    maybeCaptureLoginUrl(message);
+}
+
+function extractUrl(message: string) {
+    const match = message.match(/https?:\/\/[^\s)]+/);
+    return match?.[0] ?? null;
+}
+
+function maybeCaptureLoginUrl(message: string) {
+    const url = extractUrl(message);
+    if (!url) return;
+
+    const lower = message.toLowerCase();
+    if (lower.includes("login") || lower.includes("oauth") || lower.includes("authorize")) {
+        rpcLoginUrl = url;
+    }
 }
 
 function updateAuthHint(message: string) {
@@ -90,6 +108,8 @@ function updateAuthHint(message: string) {
 
     rpcAuthHint =
         "Auth required. Rebuild the dev runtime with PIWORK_COPY_AUTH=1 (or PIWORK_AUTH_PATH=~/.pi/agent/auth.json), then restart the app.";
+
+    maybeCaptureLoginUrl(message);
 }
 
 function resolveModelOption(model: Record<string, unknown> | undefined) {
@@ -214,6 +234,17 @@ async function openVmLog() {
         await openPath(vmLogPath);
     } finally {
         openingLog = false;
+    }
+}
+
+async function openLoginUrl() {
+    if (!rpcLoginUrl || openingLoginUrl) return;
+    openingLoginUrl = true;
+
+    try {
+        await openUrl(rpcLoginUrl);
+    } finally {
+        openingLoginUrl = false;
     }
 }
 
@@ -386,6 +417,13 @@ function handleRpcPayload(payload: Record<string, unknown>) {
             return;
         }
 
+        if (request.message) {
+            maybeCaptureLoginUrl(request.message);
+        }
+        if (request.title) {
+            maybeCaptureLoginUrl(request.title);
+        }
+
         if (request.method === "setStatus") {
             const statusText = request.statusText ?? "";
             pushRpcMessage(`[status] ${request.statusKey ?? "status"}: ${statusText}`);
@@ -486,6 +524,7 @@ function handleRpcEvent(event: RpcEvent) {
         rpcConnected = true;
         rpcError = null;
         rpcAuthHint = null;
+        rpcLoginUrl = null;
         void requestState();
         void requestAvailableModels();
         return;
@@ -495,6 +534,7 @@ function handleRpcEvent(event: RpcEvent) {
         rpcError = typeof event.message === "string" ? event.message : "Runtime error";
         rpcConnected = false;
         rpcAuthHint = null;
+        rpcLoginUrl = null;
         rpcStateInfo = null;
         rpcStateRequested = false;
         void refreshVmLogPath();
@@ -506,6 +546,7 @@ function handleRpcEvent(event: RpcEvent) {
             rpcConnected = true;
             rpcError = null;
             rpcAuthHint = null;
+            rpcLoginUrl = null;
             void requestState();
             void requestAvailableModels();
         }
@@ -524,6 +565,7 @@ async function connectRpc() {
     rpcConnecting = true;
     rpcError = null;
     rpcAuthHint = null;
+    rpcLoginUrl = null;
     rpcStateInfo = null;
     rpcStateRequested = false;
     rpcModelsRequested = false;
@@ -555,6 +597,7 @@ async function disconnectRpc() {
     rpcConnected = false;
     rpcError = null;
     rpcAuthHint = null;
+    rpcLoginUrl = null;
     rpcStateInfo = null;
     rpcStateRequested = false;
     rpcModelsRequested = false;
@@ -634,7 +677,16 @@ onDestroy(() => {
                         <div class="mt-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-[11px] text-amber-200">
                             {rpcAuthHint}
                         </div>
-                        <div class="mt-2 flex gap-2">
+                        <div class="mt-2 flex flex-wrap gap-2">
+                            {#if rpcLoginUrl}
+                                <button
+                                    class="rounded-md bg-secondary px-3 py-1 text-[11px] hover:bg-secondary/80 disabled:opacity-60"
+                                    onclick={openLoginUrl}
+                                    disabled={openingLoginUrl}
+                                >
+                                    {openingLoginUrl ? "Opening login…" : "Open login URL"}
+                                </button>
+                            {/if}
                             <button
                                 class="rounded-md bg-secondary px-3 py-1 text-[11px] hover:bg-secondary/80 disabled:opacity-60"
                                 onclick={sendLogin}
