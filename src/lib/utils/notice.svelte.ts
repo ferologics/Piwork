@@ -27,7 +27,9 @@ export function createNotice(duration = 3000) {
     }
 
     return {
-        get value() { return value; },
+        get value() {
+            return value;
+        },
         set,
         clear,
         cleanup,

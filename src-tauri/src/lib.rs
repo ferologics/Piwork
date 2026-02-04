@@ -168,7 +168,11 @@ fn task_store_delete(app: tauri::AppHandle, task_id: String) -> Result<(), Strin
 
 #[tauri::command]
 #[allow(clippy::needless_pass_by_value)]
-fn task_store_save_conversation(app: tauri::AppHandle, task_id: String, conversation_json: String) -> Result<(), String> {
+fn task_store_save_conversation(
+    app: tauri::AppHandle,
+    task_id: String,
+    conversation_json: String,
+) -> Result<(), String> {
     let tasks_dir = tasks_dir(&app)?;
     task_store::save_conversation(&tasks_dir, &task_id, &conversation_json)
 }
@@ -248,7 +252,9 @@ fn start_test_server(app_handle: tauri::AppHandle) {
                 let reader = BufReader::new(stream.try_clone().unwrap());
                 for line in reader.lines() {
                     let Ok(line) = line else { break };
-                    if line.is_empty() { continue; }
+                    if line.is_empty() {
+                        continue;
+                    }
 
                     eprintln!("[test-server] received: {line}");
 
@@ -276,7 +282,7 @@ fn start_test_server(app_handle: tauri::AppHandle) {
                             let _ = app.emit("test_set_folder", folder);
                             let _ = stream.write_all(b"OK\n");
                         }
-                        "rpc" | _ => {
+                        _ => {
                             // Direct RPC send (bypass UI)
                             let state: tauri::State<vm::VmState> = app.state();
                             match vm::send(&state, &line) {

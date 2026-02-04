@@ -14,7 +14,6 @@ import QuickStartTiles from "$lib/components/QuickStartTiles.svelte";
 import ExtensionUiDialog from "$lib/components/ExtensionUiDialog.svelte";
 import type { ExtensionUiRequest } from "$lib/components/ExtensionUiDialog.svelte";
 
-
 let prompt = $state("");
 let textareaEl: HTMLTextAreaElement | undefined = $state();
 let rpcClient: TauriRpcClient | null = $state(null);
@@ -52,8 +51,6 @@ interface ModelOption {
     label: string;
     provider: string | null;
 }
-
-
 
 // Preferred model patterns - filter to just these
 const PREFERRED_MODEL_PATTERNS = ["claude-opus-4-5", "gpt-5.2-codex", "gemini-3-pro"];
@@ -635,7 +632,7 @@ async function connectRpc() {
     pendingUiSending = false;
 
     const client = new TauriRpcClient();
-    rpcClient = client;  // Set early so handlers can use it
+    rpcClient = client; // Set early so handlers can use it
     client.subscribe(handleRpcEvent);
 
     try {
@@ -646,7 +643,7 @@ async function connectRpc() {
         devLog("MainView", `connectRpc error: ${error}`);
         rpcError = error instanceof Error ? error.message : String(error);
         rpcConnected = false;
-        rpcClient = null;  // Clear on error
+        rpcClient = null; // Clear on error
         void refreshVmLogPath();
         await client.disconnect().catch(() => undefined);
     } finally {

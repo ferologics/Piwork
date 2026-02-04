@@ -151,8 +151,7 @@ export class MessageAccumulator {
         // Check if we already have text blocks from streaming
         const lastMsg = this.state.messages[this.state.messages.length - 1];
         const hasTextBlocks =
-            lastMsg?.role === "assistant" &&
-            lastMsg.blocks.some((b: ContentBlock) => b.type === "text");
+            lastMsg?.role === "assistant" && lastMsg.blocks.some((b: ContentBlock) => b.type === "text");
 
         if (!hasTextBlocks) {
             const content = this.extractMessageContent(message);
@@ -183,9 +182,7 @@ export class MessageAccumulator {
         // Array of content blocks
         if (Array.isArray(message.content)) {
             const parts = message.content
-                .filter((part): part is Record<string, unknown> =>
-                    typeof part === "object" && part !== null
-                )
+                .filter((part): part is Record<string, unknown> => typeof part === "object" && part !== null)
                 .filter((part) => part.type === "text" && typeof part.text === "string")
                 .map((part) => part.text as string);
 

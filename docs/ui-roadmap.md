@@ -26,7 +26,7 @@ Make it feel like a real app:
 - [ ] **Shuffleable task categories** (like Cowork):
   - "Let's knock something off your list" (current)
   - "Pick a task, any task"
-  - "Tidy up and get organized"  
+  - "Tidy up and get organized"
   - "Plan for what's ahead"
 - [ ] **"See more ideas"** button to shuffle
 - [ ] **Richer task tiles** with better prompts
@@ -34,6 +34,7 @@ Make it feel like a real app:
 ### Cowork Task Templates (observed)
 
 **Row 1 (default):**
+
 - Create a file
 - Crunch data
 - Make a prototype
@@ -42,16 +43,19 @@ Make it feel like a real app:
 - Draft a message
 
 **"Pick a task, any task":**
+
 - Optimize my week
 - Submit my expenses
 - Find insights in files
 
 **"Tidy up and get organized":**
+
 - Clean up my Downloads folder
 - Organize photos by event/date
 - Organize my inbox
 
 **"Plan for what's ahead":**
+
 - Prep for my next meeting
 - Plan my next vacation
 - Prepare for a job interview
@@ -79,10 +83,12 @@ Make it feel like a real app:
 ## Research / References
 
 YouTube videos to analyze:
+
 - https://www.youtube.com/watch?v=UAmKyyZ-b9E - "Introducing Cowork: Claude Code for the rest of your work"
 - https://www.youtube.com/watch?v=HTu1OGWAn5w - "How to Use Claude Cowork Better Than 99% of People (Full Guide)"
 
 **Tools:**
+
 - `youtube-transcript` skill - fetch transcripts
 - https://github.com/steipete/summarize - summarize video content
 - `brave-search` skill - find more Cowork demos/tutorials

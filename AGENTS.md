@@ -62,6 +62,7 @@ mise run runtime-clean  # clean runtime artifacts
 ## Docs
 
 Core technical docs:
+
 - `docs/runtime-pack.md` - runtime pack format
 - `docs/pi-integration.md` - RPC protocol
 - `docs/auth-flow.md` - authentication
@@ -71,6 +72,7 @@ Core technical docs:
 - `docs/testing-strategy.md` - test infrastructure
 
 Research/reference (in `docs/research/`):
+
 - Cowork observation notes and feature maps
 - Hero workflow ideas
 - UI layout sketches and capability maps

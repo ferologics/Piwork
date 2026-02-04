@@ -76,7 +76,7 @@ pub fn delete_task(tasks_dir: &Path, task_id: String) -> Result<(), String> {
 pub fn save_conversation(tasks_dir: &Path, task_id: &str, conversation_json: &str) -> Result<(), String> {
     let task_folder = tasks_dir.join(task_id);
     if !task_folder.exists() {
-        return Err(format!("Task folder does not exist: {}", task_id));
+        return Err(format!("Task folder does not exist: {task_id}"));
     }
 
     let conv_path = task_folder.join("conversation.json");

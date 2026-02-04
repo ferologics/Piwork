@@ -72,6 +72,7 @@
 ## Architecture Decisions
 
 **Task isolation model (v1):**
+
 - One VM shared across all tasks
 - Each task has one working folder (read-write)
 - On task switch: remount folder + switch pi session file
