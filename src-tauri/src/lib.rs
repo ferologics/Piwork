@@ -1,5 +1,6 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::time::Instant;
 use tauri::Manager;
 
 mod auth_store;
@@ -36,7 +37,15 @@ fn greet(name: &str) -> String {
 #[tauri::command]
 #[allow(clippy::needless_pass_by_value)]
 fn runtime_status(app: tauri::AppHandle) -> Result<RuntimeStatus, String> {
+    let start = Instant::now();
+    eprintln!("[runtime_status] start");
+
     let runtime_dir = runtime_dir(&app)?;
+    eprintln!(
+        "[runtime_status] runtime_dir={} ({}ms)",
+        runtime_dir.display(),
+        start.elapsed().as_millis()
+    );
     std::fs::create_dir_all(&runtime_dir).map_err(|error| error.to_string())?;
 
     let manifest_path = runtime_dir.join(RUNTIME_MANIFEST);
@@ -46,9 +55,16 @@ fn runtime_status(app: tauri::AppHandle) -> Result<RuntimeStatus, String> {
         RuntimeState::Missing
     };
 
+    let qemu_start = Instant::now();
     let qemu_path = find_qemu_binary(&runtime_dir, &manifest_path);
+    eprintln!("[runtime_status] qemu_check {}ms", qemu_start.elapsed().as_millis());
     let qemu_available = qemu_path.is_some();
+
+    let accel_start = Instant::now();
     let accel_available = check_accel_available();
+    eprintln!("[runtime_status] accel_check {}ms", accel_start.elapsed().as_millis());
+
+    eprintln!("[runtime_status] done {}ms", start.elapsed().as_millis());
 
     Ok(RuntimeStatus {
         status,
