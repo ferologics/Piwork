@@ -21,6 +21,7 @@ let copyingLoginUrl = $state(false);
 let loginCopied = $state(false);
 let loginPromptVisible = $state(false);
 let loginPromptedUrl = $state<string | null>(null);
+let loginPromptCountdown = $state<number | null>(null);
 let rpcStateInfo = $state<string | null>(null);
 let rpcStateRequested = $state(false);
 let rpcModelsRequested = $state(false);
@@ -70,6 +71,9 @@ interface VmStatusResponse {
 }
 
 const MAX_HEIGHT = 200;
+const LOGIN_PROMPT_SECONDS = 5;
+
+let loginPromptTimer: ReturnType<typeof setInterval> | null = null;
 
 function autoGrow() {
     if (!textareaEl) return;
@@ -96,12 +100,44 @@ function maybeCaptureLoginUrl(message: string) {
     if (lower.includes("login") || lower.includes("oauth") || lower.includes("authorize")) {
         if (rpcLoginUrl !== url) {
             rpcLoginUrl = url;
-            loginPromptVisible = true;
-            loginPromptedUrl = url;
             loginCopied = false;
             copyingLoginUrl = false;
+            startLoginPrompt(url);
         }
     }
+}
+
+function clearLoginPrompt() {
+    loginPromptVisible = false;
+    loginPromptedUrl = null;
+    loginPromptCountdown = null;
+
+    if (loginPromptTimer) {
+        clearInterval(loginPromptTimer);
+        loginPromptTimer = null;
+    }
+}
+
+function startLoginPrompt(url: string) {
+    clearLoginPrompt();
+    loginPromptVisible = true;
+    loginPromptedUrl = url;
+    loginPromptCountdown = LOGIN_PROMPT_SECONDS;
+
+    loginPromptTimer = setInterval(() => {
+        if (!loginPromptVisible || loginPromptedUrl !== url || loginPromptCountdown === null) {
+            clearLoginPrompt();
+            return;
+        }
+
+        if (loginPromptCountdown <= 1) {
+            clearLoginPrompt();
+            void openLoginUrl();
+            return;
+        }
+
+        loginPromptCountdown -= 1;
+    }, 1000);
 }
 
 function updateAuthHint(message: string) {
@@ -250,17 +286,17 @@ async function openVmLog() {
 async function openLoginUrl() {
     if (!rpcLoginUrl || openingLoginUrl) return;
     openingLoginUrl = true;
+    clearLoginPrompt();
 
     try {
         await openUrl(rpcLoginUrl);
-        loginPromptVisible = false;
     } finally {
         openingLoginUrl = false;
     }
 }
 
 function dismissLoginPrompt() {
-    loginPromptVisible = false;
+    clearLoginPrompt();
 }
 
 async function copyLoginUrl() {
@@ -566,8 +602,7 @@ function handleRpcEvent(event: RpcEvent) {
         rpcLoginUrl = null;
         loginCopied = false;
         copyingLoginUrl = false;
-        loginPromptVisible = false;
-        loginPromptedUrl = null;
+        clearLoginPrompt();
         void requestState();
         void requestAvailableModels();
         return;
@@ -580,8 +615,7 @@ function handleRpcEvent(event: RpcEvent) {
         rpcLoginUrl = null;
         loginCopied = false;
         copyingLoginUrl = false;
-        loginPromptVisible = false;
-        loginPromptedUrl = null;
+        clearLoginPrompt();
         rpcStateInfo = null;
         rpcStateRequested = false;
         void refreshVmLogPath();
@@ -596,8 +630,7 @@ function handleRpcEvent(event: RpcEvent) {
             rpcLoginUrl = null;
             loginCopied = false;
             copyingLoginUrl = false;
-            loginPromptVisible = false;
-            loginPromptedUrl = null;
+            clearLoginPrompt();
             void requestState();
             void requestAvailableModels();
         }
@@ -619,8 +652,7 @@ async function connectRpc() {
     rpcLoginUrl = null;
     loginCopied = false;
     copyingLoginUrl = false;
-    loginPromptVisible = false;
-    loginPromptedUrl = null;
+    clearLoginPrompt();
     rpcStateInfo = null;
     rpcStateRequested = false;
     rpcModelsRequested = false;
@@ -655,8 +687,7 @@ async function disconnectRpc() {
     rpcLoginUrl = null;
     loginCopied = false;
     copyingLoginUrl = false;
-    loginPromptVisible = false;
-    loginPromptedUrl = null;
+    clearLoginPrompt();
     rpcStateInfo = null;
     rpcStateRequested = false;
     rpcModelsRequested = false;
@@ -738,7 +769,13 @@ onDestroy(() => {
                         </div>
                         {#if rpcLoginUrl && loginPromptVisible && loginPromptedUrl === rpcLoginUrl}
                             <div class="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
-                                <span>Login URL detected.</span>
+                                <span>
+                                    {#if loginPromptCountdown !== null}
+                                        Auto-opening in {loginPromptCountdown}s.
+                                    {:else}
+                                        Login URL detected.
+                                    {/if}
+                                </span>
                                 <button
                                     class="rounded-md bg-secondary px-2 py-1 text-[11px] hover:bg-secondary/80 disabled:opacity-60"
                                     onclick={openLoginUrl}
