@@ -4,11 +4,17 @@ import { openPath } from "@tauri-apps/plugin-opener";
 const {
     runtimeDir,
     manifestPath,
+    qemuAvailable = null,
+    qemuPath = null,
+    accelAvailable = null,
     error = null,
     onRecheck = null,
 } = $props<{
     runtimeDir: string;
     manifestPath: string;
+    qemuAvailable?: boolean | null;
+    qemuPath?: string | null;
+    accelAvailable?: boolean | null;
     error?: string | null;
     onRecheck?: (() => void) | null;
 }>();
@@ -44,6 +50,28 @@ async function openRuntimeDir() {
             <div>
                 <div class="text-xs uppercase tracking-wide text-muted-foreground">Manifest path</div>
                 <code class="mt-1 block rounded-md bg-muted px-3 py-2 text-xs">{manifestPath}</code>
+            </div>
+            <div>
+                <div class="text-xs uppercase tracking-wide text-muted-foreground">QEMU</div>
+                {#if qemuAvailable}
+                    <div class="mt-1 text-xs text-emerald-400">Installed</div>
+                    {#if qemuPath}
+                        <code class="mt-1 block rounded-md bg-muted px-3 py-2 text-xs">{qemuPath}</code>
+                    {/if}
+                {:else}
+                    <div class="mt-1 text-xs text-destructive">Not found</div>
+                    <div class="mt-1 text-xs text-muted-foreground">Install with: brew install qemu</div>
+                {/if}
+            </div>
+            <div>
+                <div class="text-xs uppercase tracking-wide text-muted-foreground">Hardware acceleration</div>
+                {#if accelAvailable === null}
+                    <div class="mt-1 text-xs text-muted-foreground">Unknown</div>
+                {:else if accelAvailable}
+                    <div class="mt-1 text-xs text-emerald-400">Available</div>
+                {:else}
+                    <div class="mt-1 text-xs text-destructive">Unavailable</div>
+                {/if}
             </div>
             {#if error}
                 <div class="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">

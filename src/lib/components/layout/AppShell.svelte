@@ -12,6 +12,9 @@ interface RuntimeStatus {
     status: "missing" | "ready";
     runtimeDir: string;
     manifestPath: string;
+    qemuAvailable: boolean;
+    qemuPath: string | null;
+    accelAvailable: boolean | null;
 }
 
 // TODO: default to false in prod
@@ -51,6 +54,9 @@ onMount(() => {
     <SetupRequired
         runtimeDir={runtimeStatus.runtimeDir}
         manifestPath={runtimeStatus.manifestPath}
+        qemuAvailable={runtimeStatus.qemuAvailable}
+        qemuPath={runtimeStatus.qemuPath}
+        accelAvailable={runtimeStatus.accelAvailable}
         error={runtimeError}
         onRecheck={loadRuntimeStatus}
     />
@@ -58,6 +64,9 @@ onMount(() => {
     <SetupRequired
         runtimeDir={runtimeStatus?.runtimeDir ?? ""}
         manifestPath={runtimeStatus?.manifestPath ?? ""}
+        qemuAvailable={runtimeStatus?.qemuAvailable ?? false}
+        qemuPath={runtimeStatus?.qemuPath ?? null}
+        accelAvailable={runtimeStatus?.accelAvailable ?? null}
         error={runtimeError}
         onRecheck={loadRuntimeStatus}
     />

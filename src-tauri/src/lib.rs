@@ -1,4 +1,5 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::process::Command;
 use tauri::Manager;
 
 mod task_store;
@@ -20,6 +21,9 @@ struct RuntimeStatus {
     status: RuntimeState,
     runtime_dir: String,
     manifest_path: String,
+    qemu_available: bool,
+    qemu_path: Option<String>,
+    accel_available: Option<bool>,
 }
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
@@ -41,11 +45,57 @@ fn runtime_status(app: tauri::AppHandle) -> Result<RuntimeStatus, String> {
         RuntimeState::Missing
     };
 
+    let qemu_path = find_qemu_binary(&runtime_dir, &manifest_path);
+    let qemu_available = qemu_path.is_some();
+    let accel_available = check_accel_available();
+
     Ok(RuntimeStatus {
         status,
         runtime_dir: runtime_dir.to_string_lossy().to_string(),
         manifest_path: manifest_path.to_string_lossy().to_string(),
+        qemu_available,
+        qemu_path: qemu_path.map(|path| path.to_string_lossy().to_string()),
+        accel_available,
     })
+}
+
+fn find_qemu_binary(runtime_dir: &Path, manifest_path: &Path) -> Option<PathBuf> {
+    if manifest_path.exists() {
+        if let Ok(content) = std::fs::read_to_string(manifest_path) {
+            if let Ok(manifest) = serde_json::from_str::<vm::RuntimeManifest>(&content) {
+                if let Some(qemu) = manifest.qemu {
+                    let candidate = runtime_dir.join(qemu);
+                    if candidate.is_file() {
+                        return Some(candidate);
+                    }
+                }
+            }
+        }
+    }
+
+    find_in_path("qemu-system-aarch64")
+}
+
+fn find_in_path(binary: &str) -> Option<PathBuf> {
+    let path_var = std::env::var("PATH").ok()?;
+    for entry in path_var.split(':') {
+        let candidate = PathBuf::from(entry).join(binary);
+        if candidate.is_file() {
+            return Some(candidate);
+        }
+    }
+
+    None
+}
+
+fn check_accel_available() -> Option<bool> {
+    if cfg!(target_os = "macos") {
+        let output = Command::new("sysctl").arg("-n").arg("kern.hv_support").output().ok()?;
+        let value = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        return Some(value == "1");
+    }
+
+    None
 }
 
 fn runtime_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {

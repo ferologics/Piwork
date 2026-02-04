@@ -11,9 +11,9 @@
 ## VM / Runtime Setup
 
 - [x] Runtime setup-required UI (manifest check)
-- [ ] QEMU detection + setup-required mode
+- [x] QEMU detection + setup-required mode
 - [ ] Runtime pack download + install flow
-- [ ] Hardware accel check (HVF on macOS)
+- [x] Hardware accel check (HVF on macOS)
 - [x] virtio-serial RPC bridge (READY handshake + JSONL stream)
 - [ ] Run pi inside VM + real RPC protocol
 - [ ] Folder mount UI (scope selection)
