@@ -45,8 +45,12 @@ let loading = $state(false);
 let saving = $state(false);
 let error = $state<string | null>(null);
 let notice = $state<string | null>(null);
+let commandNotice = $state<string | null>(null);
+let copyingCommand = $state(false);
+let commandCopied = $state(false);
 
 let noticeTimer: ReturnType<typeof setTimeout> | null = null;
+let commandTimer: ReturnType<typeof setTimeout> | null = null;
 
 async function loadEntries() {
     loading = true;
@@ -79,6 +83,56 @@ function setNotice(message: string) {
     noticeTimer = setTimeout(() => {
         notice = null;
     }, 3000);
+}
+
+function clearCommandNotice() {
+    commandNotice = null;
+    if (commandTimer) {
+        clearTimeout(commandTimer);
+        commandTimer = null;
+    }
+}
+
+function setCommandNotice(message: string) {
+    commandNotice = message;
+    if (commandTimer) {
+        clearTimeout(commandTimer);
+    }
+    commandTimer = setTimeout(() => {
+        commandNotice = null;
+    }, 3000);
+}
+
+function resetCommandCopy() {
+    copyingCommand = false;
+    commandCopied = false;
+    clearCommandNotice();
+}
+
+function buildAuthCommand() {
+    return `PIWORK_COPY_AUTH=1 PIWORK_AUTH_PROFILE=${profile} mise run runtime-install-dev`;
+}
+
+async function copyAuthCommand() {
+    if (copyingCommand) return;
+
+    if (!navigator?.clipboard) {
+        setCommandNotice("Clipboard unavailable");
+        return;
+    }
+
+    copyingCommand = true;
+    commandCopied = false;
+
+    try {
+        await navigator.clipboard.writeText(buildAuthCommand());
+        commandCopied = true;
+        setCommandNotice("Command copied.");
+    } catch {
+        setCommandNotice("Failed to copy command.");
+    } finally {
+        copyingCommand = false;
+    }
 }
 
 async function saveApiKey() {
@@ -141,6 +195,7 @@ $effect(() => {
     } else {
         error = null;
         clearNotice();
+        resetCommandCopy();
         apiKey = "";
     }
 });
@@ -148,6 +203,9 @@ $effect(() => {
 onDestroy(() => {
     if (noticeTimer) {
         clearTimeout(noticeTimer);
+    }
+    if (commandTimer) {
+        clearTimeout(commandTimer);
     }
 });
 </script>
@@ -181,6 +239,26 @@ onDestroy(() => {
                             <code class="mt-1 block rounded-md bg-muted px-2 py-1">{storePath}</code>
                         </div>
                     {/if}
+                    <div class="mt-3 rounded-md border border-border bg-background px-3 py-2 text-xs text-muted-foreground">
+                        <div class="text-[11px] uppercase tracking-wide">Dev runtime auth</div>
+                        <code class="mt-2 block rounded-md bg-muted px-2 py-1">{buildAuthCommand()}</code>
+                        <div class="mt-2 flex flex-wrap items-center gap-2">
+                            <button
+                                class="rounded-md bg-secondary px-2 py-1 text-[11px] hover:bg-secondary/80 disabled:opacity-60"
+                                onclick={copyAuthCommand}
+                                disabled={copyingCommand}
+                            >
+                                {commandCopied
+                                    ? "Copied"
+                                    : copyingCommand
+                                        ? "Copying…"
+                                        : "Copy command"}
+                            </button>
+                            {#if commandNotice}
+                                <span class="text-[11px] text-muted-foreground">{commandNotice}</span>
+                            {/if}
+                        </div>
+                    </div>
 
                     <div class="mt-4 grid gap-3">
                         <label class="grid gap-1 text-xs">
