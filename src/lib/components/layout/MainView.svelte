@@ -196,7 +196,7 @@ function updateAuthHint(message: string) {
     if (!needsAuth) return;
 
     rpcAuthHint =
-        "Auth required. Rebuild the dev runtime with PIWORK_COPY_AUTH=1 (or PIWORK_AUTH_PATH=~/.pi/agent/auth.json), then restart the app.";
+        "Auth required. Login flow is untested; for now rebuild the dev runtime with PIWORK_COPY_AUTH=1 (or PIWORK_AUTH_PATH=~/.pi/agent/auth.json), then restart the app.";
 
     maybeCaptureLoginUrl(message);
 }

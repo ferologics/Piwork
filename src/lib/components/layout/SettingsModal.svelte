@@ -432,6 +432,11 @@ onDestroy(() => {
                 </button>
             </div>
 
+            <div class="mt-3 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+                Settings/auth UI is experimental and untested. Recommended path: rebuild the runtime with
+                <span class="font-mono">PIWORK_COPY_AUTH=1</span>.
+            </div>
+
             <div class="mt-6 space-y-4">
                 <div class="rounded-lg border border-border bg-muted/30 p-4">
                     <div class="text-sm font-medium">API Keys</div>
