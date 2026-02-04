@@ -154,6 +154,8 @@ if [ -e "$RPC_PORT" ]; then
             start_stub
         fi
     fi
+else
+    echo READY
 fi
 
 exec /usr/bin/sh -i

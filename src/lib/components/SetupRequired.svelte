@@ -95,5 +95,10 @@ async function openRuntimeDir() {
                 Recheck
             </button>
         </div>
+        <div class="mt-6 space-y-1 text-xs text-muted-foreground">
+            <div>Dev quickstart:</div>
+            <code class="block rounded-md bg-muted px-3 py-2">mise run runtime-install-dev</code>
+            <code class="block rounded-md bg-muted px-3 py-2">mise run tauri-dev</code>
+        </div>
     </div>
 </div>
