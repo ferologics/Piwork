@@ -2,7 +2,7 @@ use std::io::{BufRead, BufReader, Write};
 use std::net::TcpListener;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 
 mod auth_store;
 mod task_store;
@@ -224,7 +224,9 @@ fn auth_store_import_pi(
 }
 
 /// Test server for automated testing (dev mode only)
-/// Listens on port 19385 and forwards commands to the VM RPC
+/// Listens on port 19385 and accepts commands:
+/// - {"cmd":"prompt","message":"..."} - triggers UI sendPrompt flow
+/// - {"cmd":"rpc",...} - sends raw RPC to VM
 #[cfg(debug_assertions)]
 fn start_test_server(app_handle: tauri::AppHandle) {
     std::thread::spawn(move || {
@@ -248,13 +250,35 @@ fn start_test_server(app_handle: tauri::AppHandle) {
                     if line.is_empty() { continue; }
 
                     eprintln!("[test-server] received: {line}");
-                    let state: tauri::State<vm::VmState> = app.state();
-                    match vm::send(&state, &line) {
-                        Ok(()) => {
+
+                    // Parse command
+                    let parsed: Result<serde_json::Value, _> = serde_json::from_str(&line);
+                    let Ok(json) = parsed else {
+                        let _ = stream.write_all(b"ERR: invalid JSON\n");
+                        continue;
+                    };
+
+                    let cmd = json.get("cmd").and_then(|v| v.as_str()).unwrap_or("rpc");
+
+                    match cmd {
+                        "prompt" => {
+                            // Emit event to frontend to trigger sendPrompt
+                            let message = json.get("message").and_then(|v| v.as_str()).unwrap_or("");
+                            eprintln!("[test-server] emitting test_prompt: {message}");
+                            let _ = app.emit("test_prompt", message);
                             let _ = stream.write_all(b"OK\n");
                         }
-                        Err(e) => {
-                            let _ = stream.write_all(format!("ERR: {e}\n").as_bytes());
+                        "rpc" | _ => {
+                            // Direct RPC send (bypass UI)
+                            let state: tauri::State<vm::VmState> = app.state();
+                            match vm::send(&state, &line) {
+                                Ok(()) => {
+                                    let _ = stream.write_all(b"OK\n");
+                                }
+                                Err(e) => {
+                                    let _ = stream.write_all(format!("ERR: {e}\n").as_bytes());
+                                }
+                            }
                         }
                     }
                 }

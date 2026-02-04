@@ -1,6 +1,7 @@
 <script lang="ts">
 import { onDestroy, onMount } from "svelte";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { openPath, openUrl } from "@tauri-apps/plugin-opener";
 import { Send, Paperclip, FolderOpen, ChevronDown, Loader2 } from "@lucide/svelte";
 import { devLog } from "$lib/utils/devLog";
@@ -723,6 +724,8 @@ async function sendPrompt() {
     prompt = "";
 }
 
+let testPromptUnlisten: (() => void) | null = null;
+
 onMount(() => {
     try {
         const stored = localStorage.getItem(LOGIN_AUTO_OPEN_KEY);
@@ -737,10 +740,22 @@ onMount(() => {
 
     void connectRpc();
     void refreshVmLogPath();
+
+    // Test harness listener (dev only)
+    if (import.meta.env.DEV) {
+        listen<string>("test_prompt", (event) => {
+            devLog("TestHarness", `received test_prompt: ${event.payload}`);
+            prompt = event.payload;
+            void sendPrompt();
+        }).then((unlisten) => {
+            testPromptUnlisten = unlisten;
+        });
+    }
 });
 
 onDestroy(() => {
     void disconnectRpc();
+    testPromptUnlisten?.();
 });
 </script>
 
