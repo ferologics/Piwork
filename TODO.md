@@ -12,7 +12,10 @@
 - [x] **Tasks**: Auto-create on first message, conversation persistence per task ✓
 - [x] **Working folder UI**: Selection UI, recent folders dropdown, Tauri dialog ✓
 - [ ] **Runtime v2 pivot**: Replace restart-per-task-switch flow with persistent VM + task supervisor (`taskd`)
-- [ ] **Per-task process isolation**: One Linux user + one pi process per task (`/sessions/<taskId>`)
+  - [x] Phase 0a: host runtime orchestration extracted from `MainView.svelte` into `runtimeService`
+  - [x] Phase 0: feature flags + guardrails (`runtime_v2_taskd`, `runtime_v2_sync`)
+  - [x] Harness visibility: `test-dump-state` includes runtime mode/flags
+- [ ] **Per-task process isolation**: One pi process per task (`/sessions/<taskId>`, per-task Linux user deferred to hardening)
 - [ ] **Canonical session persistence**: Use `/sessions/<taskId>/session.json` for automatic resume
 - [ ] **No-reboot switching**: Implement `switch_task` path; task switch should not reboot VM
 - [ ] **Remove fallback hydration**: Delete transcript→session reconstruction from normal runtime path
@@ -86,10 +89,10 @@
 **Task isolation model (transition):**
 
 - **Current (v1 temporary):** Shared VM, restart-heavy task switching, fallback hydration when task-state mount is missing
-- **Target (v2):** Shared persistent VM + in-VM task supervisor (`taskd`) + one pi process per task user
+- **Target (v2):** Shared persistent VM + in-VM task supervisor (`taskd`) + one pi process per task
 - **Canonical session target:** `/sessions/<taskId>/session.json` (no reconstruction)
 - **Workspace target:** `/sessions/<taskId>/work` with sync-first host integration
-- **Isolation target:** task-level Unix user/process boundaries, no cross-task memory bleed
+- **Isolation target:** task-level process boundaries first; optional per-task Unix users in hardening
 
 ## See Also
 

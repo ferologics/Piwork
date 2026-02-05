@@ -29,6 +29,14 @@ struct RuntimeStatus {
     accel_available: Option<bool>,
 }
 
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct RuntimeFlags {
+    runtime_v2_taskd: bool,
+    runtime_v2_sync: bool,
+    mode: String,
+}
+
 #[tauri::command]
 fn dev_log(source: &str, message: &str) {
     eprintln!("[{source}] {message}");
@@ -88,6 +96,38 @@ fn check_accel_available() -> Option<bool> {
     }
 
     None
+}
+
+fn parse_bool_env(name: &str) -> Option<bool> {
+    let raw = std::env::var(name).ok()?;
+    let normalized = raw.trim().to_ascii_lowercase();
+
+    match normalized.as_str() {
+        "1" | "true" | "yes" | "on" => Some(true),
+        "0" | "false" | "no" | "off" => Some(false),
+        _ => None,
+    }
+}
+
+fn current_runtime_flags() -> RuntimeFlags {
+    let runtime_v2_taskd = parse_bool_env("PIWORK_RUNTIME_V2_TASKD").unwrap_or(false);
+    let requested_sync = parse_bool_env("PIWORK_RUNTIME_V2_SYNC").unwrap_or(false);
+    let runtime_v2_sync = runtime_v2_taskd && requested_sync;
+
+    RuntimeFlags {
+        runtime_v2_taskd,
+        runtime_v2_sync,
+        mode: if runtime_v2_taskd {
+            "v2_taskd".to_string()
+        } else {
+            "v1".to_string()
+        },
+    }
+}
+
+#[tauri::command]
+fn runtime_flags() -> RuntimeFlags {
+    current_runtime_flags()
 }
 
 fn runtime_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
@@ -382,6 +422,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             dev_log,
             runtime_status,
+            runtime_flags,
             task_store_list,
             task_store_upsert,
             task_store_delete,

@@ -6,18 +6,20 @@ import { listen } from "@tauri-apps/api/event";
 import { openPath, openUrl } from "@tauri-apps/plugin-opener";
 import { Send, Paperclip, FolderOpen, Loader2 } from "@lucide/svelte";
 import { devLog } from "$lib/utils/devLog";
-import { TauriRpcClient, MessageAccumulator } from "$lib/rpc";
-import type { RpcEvent, RpcPayload, ConversationState, ContentBlock, ConversationMessage } from "$lib/rpc";
+import { MessageAccumulator } from "$lib/rpc";
+import type { RpcPayload, ConversationState } from "$lib/rpc";
 import { taskStore } from "$lib/stores/taskStore";
 import type { TaskMetadata } from "$lib/types/task";
 import FolderSelector from "$lib/components/FolderSelector.svelte";
 import QuickStartTiles from "$lib/components/QuickStartTiles.svelte";
 import ExtensionUiDialog from "$lib/components/ExtensionUiDialog.svelte";
 import type { ExtensionUiRequest } from "$lib/components/ExtensionUiDialog.svelte";
+import { RuntimeService, type RuntimeMode, type RuntimeServiceSnapshot } from "$lib/services/runtimeService";
 
 let prompt = $state("");
 let textareaEl: HTMLTextAreaElement | undefined = $state();
-let rpcClient: TauriRpcClient | null = $state(null);
+let runtimeService: RuntimeService | null = $state(null);
+let unsubscribeRuntimeService: (() => void) | null = null;
 let messageAccumulator = new MessageAccumulator();
 let conversation = $state<ConversationState>(messageAccumulator.getState());
 let rpcConnected = $state(false);
@@ -42,23 +44,15 @@ let pendingUiSending = $state(false);
 let vmLogPath = $state<string | null>(null);
 let openingLog = $state(false);
 
-// Task tracking
+// Task/runtime tracking
 let currentTaskId = $state<string | null>(null);
 let currentWorkingFolder = $state<string | null>(null);
 let currentSessionFile = $state<string | null>(null);
 let taskSwitching = $state(false);
+let runtimeMode = $state<RuntimeMode>("v1");
+let runtimeV2Taskd = $state(false);
+let runtimeV2Sync = $state(false);
 let unsubscribeActiveTask: (() => void) | null = null;
-
-const TASK_SESSION_FILE = "/mnt/taskstate/session.json";
-
-const pendingRpcResponses = new Map<
-    string,
-    {
-        resolve: (payload: Record<string, unknown>) => void;
-        reject: (error: Error) => void;
-        timeout: ReturnType<typeof setTimeout>;
-    }
->();
 
 interface ModelOption {
     id: string;
@@ -82,24 +76,9 @@ function isPreferredModel(id: string): boolean {
 let availableModels = $state<ModelOption[]>([...fallbackModels]);
 let selectedModelId = $state(fallbackModels[0]?.id ?? "");
 
-interface VmStatusResponse {
-    status: "starting" | "ready" | "stopped";
-    rpcPath: string | null;
-    logPath: string | null;
-}
-
 const MAX_HEIGHT = 200;
 const LOGIN_PROMPT_SECONDS = 5;
 const LOGIN_AUTO_OPEN_KEY = "piwork:auto-open-login";
-
-const POLL_INTERVAL_MS = 100;
-const TASK_SWITCH_TIMEOUT_MS = 5000;
-const RPC_READY_TIMEOUT_MS = 6000;
-const RPC_COMMAND_TIMEOUT_MS = 5000;
-const TASK_STATE_MOUNT_CHECK_TIMEOUT_MS = 1500;
-const SESSION_DIR_CREATE_TIMEOUT_MS = 2000;
-const SESSION_WRITE_TIMEOUT_MS = 5000;
-const SESSION_SWITCH_TIMEOUT_MS = 3000;
 
 let loginPromptTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -259,6 +238,23 @@ function parseExtensionUiRequest(payload: Record<string, unknown>): ExtensionUiR
     };
 }
 
+function applyRuntimeSnapshot(snapshot: RuntimeServiceSnapshot) {
+    rpcConnected = snapshot.rpcConnected;
+    rpcConnecting = snapshot.rpcConnecting;
+    rpcError = snapshot.rpcError;
+    currentTaskId = snapshot.currentTaskId;
+    currentWorkingFolder = snapshot.currentWorkingFolder;
+    currentSessionFile = snapshot.currentSessionFile;
+    taskSwitching = snapshot.taskSwitching;
+    runtimeMode = snapshot.mode;
+    runtimeV2Taskd = snapshot.runtimeV2Taskd;
+    runtimeV2Sync = snapshot.runtimeV2Sync;
+}
+
+function getRpcClient() {
+    return runtimeService?.getRpcClient() ?? null;
+}
+
 function queueUiRequest(request: ExtensionUiRequest) {
     if (!pendingUiRequest) {
         pendingUiRequest = request;
@@ -279,11 +275,11 @@ function clearUiRequest() {
 }
 
 async function sendUiResponse(response: Record<string, unknown>) {
-    if (!rpcClient || !pendingUiRequest || pendingUiSending) return;
+    if (!runtimeService || !pendingUiRequest || pendingUiSending) return;
     pendingUiSending = true;
 
     try {
-        await rpcClient.send({ type: "extension_ui_response", id: pendingUiRequest.id, ...response });
+        await runtimeService.send({ type: "extension_ui_response", id: pendingUiRequest.id, ...response });
     } finally {
         clearUiRequest();
     }
@@ -306,8 +302,8 @@ async function handleUiCancel() {
 }
 
 async function sendLogin() {
-    if (!rpcClient) return;
-    await rpcClient.send({ type: "prompt", message: "/login" });
+    if (!runtimeService) return;
+    await runtimeService.send({ type: "prompt", message: "/login" });
     pushRpcMessage("[info] Sent /login");
 }
 
@@ -320,12 +316,7 @@ function ensureModelOption(option: ModelOption) {
 }
 
 async function refreshVmLogPath() {
-    try {
-        const status = await invoke<VmStatusResponse>("vm_status");
-        vmLogPath = status.logPath;
-    } catch {
-        vmLogPath = null;
-    }
+    vmLogPath = await RuntimeService.refreshVmLogPath();
 }
 
 async function openVmLog() {
@@ -380,19 +371,19 @@ async function copyLoginUrl() {
 }
 
 async function requestState() {
-    if (!rpcClient || rpcStateRequested) return;
+    if (!runtimeService || rpcStateRequested) return;
     rpcStateRequested = true;
-    await rpcClient.send({ type: "get_state" });
+    await runtimeService.send({ type: "get_state" });
 }
 
 async function requestAvailableModels() {
-    if (!rpcClient || rpcModelsRequested) return;
+    if (!runtimeService || rpcModelsRequested) return;
     rpcModelsRequested = true;
-    await rpcClient.send({ type: "get_available_models" });
+    await runtimeService.send({ type: "get_available_models" });
 }
 
 async function handleModelChange() {
-    if (!rpcClient) return;
+    if (!runtimeService) return;
 
     const selected = availableModels.find((model) => model.id === selectedModelId) ?? null;
     if (!selected?.provider) {
@@ -400,7 +391,7 @@ async function handleModelChange() {
         return;
     }
 
-    await rpcClient.send({ type: "set_model", provider: selected.provider, modelId: selected.id });
+    await runtimeService.send({ type: "set_model", provider: selected.provider, modelId: selected.id });
 }
 
 function formatStateInfo(data: Record<string, unknown> | undefined) {
@@ -436,234 +427,6 @@ function formatStateInfo(data: Record<string, unknown> | undefined) {
     return parts.length > 0 ? parts.join(" · ") : null;
 }
 
-function shellQuote(value: string): string {
-    return `'${value.replace(/'/g, `'\\''`)}'`;
-}
-
-function contentBlockToSessionText(block: ContentBlock): string | null {
-    switch (block.type) {
-        case "text": {
-            const text = block.text.trim();
-            return text.length > 0 ? text : null;
-        }
-        case "tool_call": {
-            const name = (block.name || "tool").trim();
-            const input = block.input.trim();
-            return input.length > 0 ? `[tool:${name}] ${input}` : `[tool:${name}]`;
-        }
-        case "tool_result": {
-            const output = block.output.trim();
-            if (output.length === 0) {
-                return null;
-            }
-            return block.isError ? `[tool-error] ${output}` : output;
-        }
-        default:
-            return null;
-    }
-}
-
-function conversationToSessionJsonl(taskId: string, messages: ConversationMessage[]): string {
-    const now = new Date().toISOString();
-    const lines: string[] = [
-        JSON.stringify({
-            type: "session",
-            version: 3,
-            id: taskId,
-            timestamp: now,
-            cwd: "/",
-        }),
-    ];
-
-    let parentId: string | null = null;
-
-    for (const message of messages) {
-        if (message.role !== "user") {
-            continue;
-        }
-
-        const text = message.blocks
-            .map(contentBlockToSessionText)
-            .filter((part): part is string => Boolean(part))
-            .join("\n\n")
-            .trim();
-
-        if (!text) {
-            continue;
-        }
-
-        const entryId = crypto.randomUUID().replaceAll("-", "").slice(0, 8);
-        lines.push(
-            JSON.stringify({
-                type: "message",
-                id: entryId,
-                parentId,
-                timestamp: new Date().toISOString(),
-                message: {
-                    role: "user",
-                    content: [{ type: "text", text }],
-                    timestamp: Date.now(),
-                },
-            }),
-        );
-
-        parentId = entryId;
-    }
-
-    return `${lines.join("\n")}\n`;
-}
-
-function clearPendingRpcResponses(reason: string) {
-    for (const [id, pending] of pendingRpcResponses) {
-        clearTimeout(pending.timeout);
-        pending.reject(new Error(reason));
-        pendingRpcResponses.delete(id);
-    }
-}
-
-async function sendRpcCommandWithResponse(
-    command: Record<string, unknown>,
-    timeoutMs = RPC_COMMAND_TIMEOUT_MS,
-): Promise<Record<string, unknown>> {
-    if (!rpcClient) {
-        throw new Error("RPC client unavailable");
-    }
-
-    const id = crypto.randomUUID();
-    const client = rpcClient;
-
-    return await new Promise<Record<string, unknown>>((resolve, reject) => {
-        const timeout = setTimeout(() => {
-            pendingRpcResponses.delete(id);
-            reject(new Error(`RPC command timed out: ${String(command.type ?? "unknown")}`));
-        }, timeoutMs);
-
-        pendingRpcResponses.set(id, { resolve, reject, timeout });
-
-        void client.send({ id, ...command }).catch((error) => {
-            clearTimeout(timeout);
-            pendingRpcResponses.delete(id);
-            reject(error instanceof Error ? error : new Error(String(error)));
-        });
-    });
-}
-
-function rpcBashExitCode(response: Record<string, unknown>): number {
-    if (response.type !== "response" || response.command !== "bash") {
-        return 0;
-    }
-
-    const data = typeof response.data === "object" && response.data ? (response.data as Record<string, unknown>) : null;
-    return typeof data?.exitCode === "number" ? data.exitCode : 0;
-}
-
-function ensureRpcCommandSuccess(response: Record<string, unknown>, label: string) {
-    if (response.type !== "response") {
-        return;
-    }
-
-    if (response.success === false) {
-        const error = typeof response.error === "string" ? response.error : `${label} failed`;
-        throw new Error(error);
-    }
-
-    if (response.command === "bash") {
-        const exitCode = rpcBashExitCode(response);
-        if (exitCode !== 0) {
-            const data =
-                typeof response.data === "object" && response.data ? (response.data as Record<string, unknown>) : null;
-            const output = typeof data?.output === "string" ? data.output.trim() : "";
-            throw new Error(output || `${label} failed with exit code ${exitCode}`);
-        }
-    }
-}
-
-async function isTaskStateMounted() {
-    const response = await sendRpcCommandWithResponse(
-        {
-            type: "bash",
-            command: "grep -F ' /mnt/taskstate ' /proc/mounts >/dev/null",
-        },
-        TASK_STATE_MOUNT_CHECK_TIMEOUT_MS,
-    );
-
-    if (response.type !== "response" || response.command !== "bash") {
-        return false;
-    }
-
-    return rpcBashExitCode(response) === 0;
-}
-
-async function restoreTaskSessionInVm(taskId: string, sessionPath: string, state: ConversationState) {
-    if (!rpcClient || !rpcConnected) {
-        return;
-    }
-
-    const slashIndex = sessionPath.lastIndexOf("/");
-    const sessionDir = slashIndex >= 0 ? sessionPath.slice(0, slashIndex) : "/tmp/piwork/sessions";
-
-    const mkdirResponse = await sendRpcCommandWithResponse(
-        {
-            type: "bash",
-            command: `mkdir -p ${shellQuote(sessionDir)}`,
-        },
-        SESSION_DIR_CREATE_TIMEOUT_MS,
-    );
-    ensureRpcCommandSuccess(mkdirResponse, "mkdir session dir");
-
-    if (state.messages.length > 0) {
-        const sessionJsonl = conversationToSessionJsonl(taskId, state.messages);
-
-        let delimiter = `__PIWORK_SESSION_${crypto.randomUUID().replaceAll("-", "_")}__`;
-        while (sessionJsonl.includes(delimiter)) {
-            delimiter = `__PIWORK_SESSION_${crypto.randomUUID().replaceAll("-", "_")}__`;
-        }
-
-        const writeResponse = await sendRpcCommandWithResponse(
-            {
-                type: "bash",
-                command: `cat > ${shellQuote(sessionPath)} <<'${delimiter}'\n${sessionJsonl}${delimiter}\n`,
-            },
-            SESSION_WRITE_TIMEOUT_MS,
-        );
-        ensureRpcCommandSuccess(writeResponse, "write session file");
-        devLog("MainView", `Hydrated VM session for task ${taskId}`);
-    }
-
-    const switchResponse = await sendRpcCommandWithResponse(
-        {
-            type: "switch_session",
-            sessionPath,
-        },
-        SESSION_SWITCH_TIMEOUT_MS,
-    );
-    ensureRpcCommandSuccess(switchResponse, "switch_session");
-    devLog("MainView", `Switched RPC session to ${sessionPath}`);
-
-    void requestState();
-}
-
-async function ensureTaskSessionReady(taskId: string, sessionPath: string, state: ConversationState) {
-    await waitForRpcReady().catch(() => undefined);
-    if (!rpcClient || !rpcConnected) {
-        return;
-    }
-
-    try {
-        const mounted = await isTaskStateMounted();
-        if (mounted) {
-            devLog("MainView", "Task state mount detected; using persisted session file");
-            void requestState();
-            return;
-        }
-
-        devLog("MainView", "Task state mount missing; hydrating session from host transcript");
-        await restoreTaskSessionInVm(taskId, sessionPath, state);
-    } catch (error) {
-        devLog("MainView", `Failed to prepare task session: ${error}`);
-    }
-}
-
 function handleRpcPayload(payload: Record<string, unknown>) {
     // Feed to message accumulator for proper conversation tracking
     messageAccumulator.processEvent(payload as RpcPayload);
@@ -678,16 +441,6 @@ function handleRpcPayload(payload: Record<string, unknown>) {
     const type = payload.type;
 
     if (type === "response") {
-        const responseId = typeof payload.id === "string" ? payload.id : null;
-        if (responseId) {
-            const pending = pendingRpcResponses.get(responseId);
-            if (pending) {
-                clearTimeout(pending.timeout);
-                pendingRpcResponses.delete(responseId);
-                pending.resolve(payload);
-            }
-        }
-
         const command = typeof payload.command === "string" ? payload.command : null;
 
         if (command === "get_state") {
@@ -825,39 +578,14 @@ function handleRpcPayload(payload: Record<string, unknown>) {
     // message_update, message_end, tool_execution events are handled by MessageAccumulator
 }
 
-function handleRpcEvent(event: RpcEvent) {
-    if (event.type === "ready") {
-        rpcConnected = true;
-        rpcError = null;
-        rpcAuthHint = null;
-        rpcLoginUrl = null;
-        loginCopied = false;
-        copyingLoginUrl = false;
-        clearLoginPrompt();
-        void requestState();
-        void requestAvailableModels();
+async function initializeRuntimeService() {
+    if (runtimeService) {
         return;
     }
 
-    if (event.type === "error") {
-        rpcError = typeof event.message === "string" ? event.message : "Runtime error";
-        rpcConnected = false;
-        rpcAuthHint = null;
-        rpcLoginUrl = null;
-        loginCopied = false;
-        copyingLoginUrl = false;
-        clearLoginPrompt();
-        rpcStateInfo = null;
-        rpcStateRequested = false;
-        clearPendingRpcResponses(rpcError ?? "Runtime error");
-        void refreshVmLogPath();
-        return;
-    }
-
-    if (event.type === "rpc" && typeof event.message === "string") {
-        if (!rpcConnected) {
-            rpcConnected = true;
-            rpcError = null;
+    const flags = await RuntimeService.loadFlags();
+    runtimeService = new RuntimeService(flags, {
+        onConnected: () => {
             rpcAuthHint = null;
             rpcLoginUrl = null;
             loginCopied = false;
@@ -865,22 +593,32 @@ function handleRpcEvent(event: RpcEvent) {
             clearLoginPrompt();
             void requestState();
             void requestAvailableModels();
-        }
+        },
+        onError: () => {
+            rpcAuthHint = null;
+            rpcLoginUrl = null;
+            loginCopied = false;
+            copyingLoginUrl = false;
+            clearLoginPrompt();
+            rpcStateInfo = null;
+            rpcStateRequested = false;
+            rpcModelsRequested = false;
+            void refreshVmLogPath();
+        },
+        onRpcPayload: handleRpcPayload,
+        onRawRpcMessage: pushRpcMessage,
+        onStateRefreshRequested: () => {
+            void requestState();
+        },
+    });
 
-        try {
-            const parsed = JSON.parse(event.message) as Record<string, unknown>;
-            handleRpcPayload(parsed);
-        } catch {
-            pushRpcMessage(event.message);
-        }
-    }
+    unsubscribeRuntimeService = runtimeService.subscribe(applyRuntimeSnapshot);
+    devLog("MainView", `Runtime mode: ${flags.mode} (taskd=${flags.runtimeV2Taskd}, sync=${flags.runtimeV2Sync})`);
 }
 
 async function connectRpc() {
-    devLog("MainView", "connectRpc start");
-    if (rpcClient || rpcConnecting) return;
-    rpcConnecting = true;
-    rpcError = null;
+    if (!runtimeService) return;
+
     rpcAuthHint = null;
     rpcLoginUrl = null;
     loginCopied = false;
@@ -893,38 +631,13 @@ async function connectRpc() {
     pendingUiQueue = [];
     pendingUiSending = false;
 
-    const client = new TauriRpcClient();
-    rpcClient = client; // Set early so handlers can use it
-    client.subscribe(handleRpcEvent);
-
-    try {
-        devLog(
-            "MainView",
-            `calling client.connect with folder: ${currentWorkingFolder ?? "none"}, task: ${currentTaskId ?? "none"}`,
-        );
-        await client.connect(currentWorkingFolder, currentTaskId);
-        devLog("MainView", "client.connect returned");
-    } catch (error) {
-        devLog("MainView", `connectRpc error: ${error}`);
-        rpcError = error instanceof Error ? error.message : String(error);
-        rpcConnected = false;
-        clearPendingRpcResponses(rpcError ?? "Failed to connect RPC");
-        rpcClient = null; // Clear on error
-        void refreshVmLogPath();
-        await client.disconnect().catch(() => undefined);
-    } finally {
-        devLog("MainView", "connectRpc done");
-        rpcConnecting = false;
-    }
+    await runtimeService.connectRpc();
 }
 
 async function disconnectRpc() {
-    if (!rpcClient) return;
-    await rpcClient.disconnect();
-    clearPendingRpcResponses("RPC disconnected");
-    rpcClient = null;
-    rpcConnected = false;
-    rpcError = null;
+    if (!runtimeService) return;
+
+    await runtimeService.disconnectRpc();
     rpcAuthHint = null;
     rpcLoginUrl = null;
     loginCopied = false;
@@ -938,38 +651,9 @@ async function disconnectRpc() {
     pendingUiSending = false;
 }
 
-async function waitForCondition(condition: () => boolean, timeoutMs: number, timeoutMessage: string): Promise<void> {
-    if (condition()) {
-        return;
-    }
-
-    const startedAt = Date.now();
-    await new Promise<void>((resolve, reject) => {
-        const timer = setInterval(() => {
-            if (condition()) {
-                clearInterval(timer);
-                resolve();
-                return;
-            }
-
-            if (Date.now() - startedAt > timeoutMs) {
-                clearInterval(timer);
-                reject(new Error(timeoutMessage));
-            }
-        }, POLL_INTERVAL_MS);
-    });
-}
-
-async function waitForTaskSwitchComplete(timeoutMs = TASK_SWITCH_TIMEOUT_MS): Promise<void> {
-    await waitForCondition(() => !taskSwitching, timeoutMs, "Task switch still in progress");
-}
-
-async function waitForRpcReady(timeoutMs = RPC_READY_TIMEOUT_MS): Promise<void> {
-    await waitForCondition(() => rpcConnected, timeoutMs, "RPC not ready");
-}
-
 async function sendPrompt(message?: string) {
-    if (!rpcClient) return;
+    if (!runtimeService) return;
+
     const content = (message ?? prompt).trim();
     if (!content) return;
 
@@ -982,15 +666,15 @@ async function sendPrompt(message?: string) {
         devLog("MainView", `Auto-created task: ${task.id} with folder: ${currentWorkingFolder}`);
     }
 
-    await waitForTaskSwitchComplete().catch((error) => {
+    await runtimeService.waitForTaskSwitchComplete().catch((error) => {
         devLog("MainView", `Task switch not ready for prompt: ${error}`);
     });
 
-    await waitForRpcReady().catch((error) => {
+    await runtimeService.waitForRpcReady().catch((error) => {
         devLog("MainView", `RPC not ready for prompt: ${error}`);
     });
 
-    if (!rpcClient || !rpcConnected || taskSwitching) {
+    if (!getRpcClient() || !rpcConnected || taskSwitching) {
         return;
     }
 
@@ -998,7 +682,7 @@ async function sendPrompt(message?: string) {
     messageAccumulator.addUserMessage(content);
     conversation = messageAccumulator.getState();
 
-    await rpcClient.send({ type: "prompt", message: content });
+    await runtimeService.send({ type: "prompt", message: content });
     prompt = "";
 }
 
@@ -1008,15 +692,6 @@ let testTaskUnlisten: (() => void) | null = null;
 let testCreateTaskUnlisten: (() => void) | null = null;
 let testDeleteAllTasksUnlisten: (() => void) | null = null;
 let testDumpStateUnlisten: (() => void) | null = null;
-
-async function restartVm(reason: string) {
-    if (!rpcClient) return;
-    devLog("MainView", reason);
-    rpcConnected = false;
-    await rpcClient.stopVm();
-    rpcClient = null;
-    await connectRpc();
-}
 
 async function saveConversationForTask(taskId: string | null): Promise<void> {
     if (!taskId || messageAccumulator.getState().messages.length === 0) {
@@ -1078,58 +753,26 @@ async function persistWorkingFolderForActiveTask(folder: string | null): Promise
 }
 
 async function handleTaskSwitch(newTask: TaskMetadata | null): Promise<void> {
-    const newTaskId = newTask?.id ?? null;
-    const oldTaskId = currentTaskId;
-    const previousFolder = currentWorkingFolder;
-
-    if (newTaskId === oldTaskId) {
+    if (!runtimeService) {
         return;
     }
 
-    devLog("MainView", `Task switch: ${oldTaskId} -> ${newTaskId}`);
-
-    taskSwitching = true;
-
-    try {
-        await saveConversationForTask(oldTaskId);
-        await loadConversationForTask(newTaskId);
-
-        currentTaskId = newTaskId;
-        currentWorkingFolder = newTask?.workingFolder ?? null;
-        currentSessionFile = newTaskId ? TASK_SESSION_FILE : null;
-
-        if (!newTaskId || !rpcClient) {
-            return;
-        }
-
-        const folderChanged = currentWorkingFolder !== previousFolder;
-        const reason = folderChanged
-            ? "Restarting VM for task switch (folder change)..."
-            : "Restarting VM for task switch...";
-
-        await restartVm(reason);
-        await ensureTaskSessionReady(newTaskId, TASK_SESSION_FILE, conversation);
-    } finally {
-        taskSwitching = false;
-    }
+    await runtimeService.handleTaskSwitch(newTask, {
+        saveConversationForTask,
+        loadConversationForTask,
+        getConversationState: () => conversation,
+    });
 }
 
 async function handleFolderChange(folder: string | null): Promise<void> {
-    currentWorkingFolder = folder;
-    devLog("MainView", `Working folder changed: ${folder}`);
-
-    taskSwitching = true;
-
-    try {
-        await persistWorkingFolderForActiveTask(folder);
-        await restartVm("Restarting VM with new folder...");
-
-        if (currentTaskId) {
-            await ensureTaskSessionReady(currentTaskId, TASK_SESSION_FILE, conversation);
-        }
-    } finally {
-        taskSwitching = false;
+    if (!runtimeService) {
+        return;
     }
+
+    await runtimeService.handleFolderChange(folder, {
+        persistWorkingFolderForActiveTask,
+        getConversationState: () => conversation,
+    });
 }
 
 onMount(() => {
@@ -1144,13 +787,21 @@ onMount(() => {
         // Ignore storage errors.
     }
 
-    void connectRpc();
-    void refreshVmLogPath();
+    void (async () => {
+        try {
+            await initializeRuntimeService();
+            await connectRpc();
 
-    // Subscribe to active task changes
-    unsubscribeActiveTask = taskStore.activeTask.subscribe((task) => {
-        void handleTaskSwitch(task);
-    });
+            // Subscribe to active task changes
+            unsubscribeActiveTask = taskStore.activeTask.subscribe((task) => {
+                void handleTaskSwitch(task);
+            });
+        } catch (error) {
+            devLog("MainView", `Failed to initialize runtime service: ${error}`);
+        }
+    })();
+
+    void refreshVmLogPath();
 
     // Test harness listeners (dev only)
     if (import.meta.env.DEV) {
@@ -1203,7 +854,7 @@ onMount(() => {
                 "TestHarness",
                 `state: task=${currentTaskId ?? "none"} session=${currentSessionFile ?? "none"} folder=${
                     currentWorkingFolder ?? "none"
-                } messages=${messageCount} streaming=${hasStreaming} switching=${taskSwitching}`,
+                } messages=${messageCount} streaming=${hasStreaming} switching=${taskSwitching} mode=${runtimeMode} taskd=${runtimeV2Taskd} sync=${runtimeV2Sync}`,
             );
         }).then((unlisten) => {
             testDumpStateUnlisten = unlisten;
@@ -1217,6 +868,7 @@ onDestroy(() => {
         void taskStore.saveConversation(currentTaskId, messageAccumulator.serialize());
     }
     unsubscribeActiveTask?.();
+    unsubscribeRuntimeService?.();
     void disconnectRpc();
     testPromptUnlisten?.();
     testFolderUnlisten?.();
