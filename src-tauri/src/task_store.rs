@@ -74,6 +74,25 @@ pub fn delete_task(tasks_dir: &Path, task_id: String) -> Result<(), String> {
     Ok(())
 }
 
+pub fn delete_all_tasks(tasks_dir: &Path) -> Result<(), String> {
+    if !tasks_dir.exists() {
+        return Ok(());
+    }
+
+    for entry in std::fs::read_dir(tasks_dir).map_err(|error| error.to_string())? {
+        let entry = entry.map_err(|error| error.to_string())?;
+        let path = entry.path();
+
+        if path.is_dir() {
+            std::fs::remove_dir_all(&path).map_err(|error| error.to_string())?;
+        } else {
+            std::fs::remove_file(&path).map_err(|error| error.to_string())?;
+        }
+    }
+
+    Ok(())
+}
+
 pub fn save_conversation(tasks_dir: &Path, task_id: &str, conversation_json: &str) -> Result<(), String> {
     let task_folder = tasks_dir.join(task_id);
     if !task_folder.exists() {
@@ -165,6 +184,22 @@ mod tests {
 
         upsert_task(&dir, &task).expect("upsert");
         delete_task(&dir, "task-1".to_string()).expect("delete");
+
+        let tasks = list_tasks(&dir).expect("list");
+        assert!(tasks.is_empty());
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn delete_all_tasks_removes_dirs() {
+        let dir = temp_dir();
+        let task_one = sample_task("task-1", "2026-02-04T00:00:01Z");
+        let task_two = sample_task("task-2", "2026-02-04T00:00:02Z");
+
+        upsert_task(&dir, &task_one).expect("upsert one");
+        upsert_task(&dir, &task_two).expect("upsert two");
+        delete_all_tasks(&dir).expect("delete all");
 
         let tasks = list_tasks(&dir).expect("list");
         assert!(tasks.is_empty());

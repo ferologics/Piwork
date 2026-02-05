@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+#MISE description="Delete all tasks (test harness)"
+set -euo pipefail
+
+if ! nc -z localhost 19385 2>/dev/null; then
+    echo "Test server not running. Run: mise run test-start"
+    exit 1
+fi
+
+echo '{"cmd":"delete_all_tasks"}' | nc -w 2 localhost 19385

@@ -106,7 +106,7 @@ pub fn start(
     state: &VmState,
     runtime_dir: &Path,
     working_folder: Option<&Path>,
-    session_file: Option<&str>,
+    task_state_dir: Option<&Path>,
 ) -> Result<VmStatusResponse, String> {
     eprintln!("[rust:vm] start called");
     let mut inner = state.inner.lock().unwrap();
@@ -132,7 +132,7 @@ pub fn start(
     let log_path = vm_dir.join("qemu.log");
 
     eprintln!("[rust:vm] spawning qemu");
-    let child = spawn_qemu(&manifest, runtime_dir, &log_path, working_folder, session_file)?;
+    let child = spawn_qemu(&manifest, runtime_dir, &log_path, working_folder, task_state_dir)?;
     eprintln!("[rust:vm] qemu spawned");
 
     let rpc_writer: Arc<Mutex<Option<TcpStream>>> = Arc::new(Mutex::new(None));
@@ -223,12 +223,26 @@ fn load_manifest(runtime_dir: &Path) -> Result<RuntimeManifest, String> {
     Ok(manifest)
 }
 
+fn attach_9p_mount(command: &mut Command, id: &str, mount_tag: &str, path: &Path, label: &str) {
+    if !path.is_dir() {
+        eprintln!("[rust:vm] {label} not found: {}", path.display());
+        return;
+    }
+
+    eprintln!("[rust:vm] mounting {label}: {}", path.display());
+    command
+        .arg("-fsdev")
+        .arg(format!("local,id={id},path={},security_model=none", path.display()))
+        .arg("-device")
+        .arg(format!("virtio-9p-pci,fsdev={id},mount_tag={mount_tag}"));
+}
+
 fn spawn_qemu(
     manifest: &RuntimeManifest,
     runtime_dir: &Path,
     log_path: &Path,
     working_folder: Option<&Path>,
-    session_file: Option<&str>,
+    task_state_dir: Option<&Path>,
 ) -> Result<Child, String> {
     let qemu_binary = resolve_qemu_binary(manifest, runtime_dir)?;
 
@@ -245,11 +259,8 @@ fn spawn_qemu(
     let base_cmdline = manifest.cmdline.as_deref().unwrap_or("quiet console=ttyAMA0");
     let mut cmdline = base_cmdline.to_string();
 
-    if let Some(session_file) = session_file {
-        if !session_file.is_empty() {
-            cmdline.push_str(" piwork.session_file=");
-            cmdline.push_str(session_file);
-        }
+    if task_state_dir.is_some() {
+        cmdline.push_str(" piwork.session_file=/mnt/taskstate/session.json");
     }
 
     // Open log file for serial output
@@ -282,19 +293,12 @@ fn spawn_qemu(
 
     // Working folder mount via virtio-9p
     if let Some(folder) = working_folder {
-        if folder.is_dir() {
-            eprintln!("[rust:vm] mounting working folder: {}", folder.display());
-            command
-                .arg("-fsdev")
-                .arg(format!(
-                    "local,id=workdir,path={},security_model=none",
-                    folder.display()
-                ))
-                .arg("-device")
-                .arg("virtio-9p-pci,fsdev=workdir,mount_tag=workdir");
-        } else {
-            eprintln!("[rust:vm] working folder not found: {}", folder.display());
-        }
+        attach_9p_mount(&mut command, "workdir", "workdir", folder, "working folder");
+    }
+
+    // Task state mount via virtio-9p
+    if let Some(task_state) = task_state_dir {
+        attach_9p_mount(&mut command, "taskstate", "taskstate", task_state, "task state dir");
     }
 
     command

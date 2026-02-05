@@ -33,9 +33,9 @@ VM (Linux)
 
 ## Task Model (current)
 
-- **Single shared VM** across tasks (restarted on folder change).
+- **Single shared VM** across tasks (restarted on task/folder switch).
 - Host starts pi → sends `prompt` commands.
-- Host **stores task metadata + transcript** (pi session files still TODO).
+- Host stores task metadata + transcript and mounts the active task directory for pi session persistence.
 
 ## Event Mapping (RPC → UI)
 
@@ -56,16 +56,16 @@ VM (Linux)
 **Resume flow (current):**
 
 1. UI loads `conversation.json` from task folder.
-2. Conversation is restored in the UI only.
-3. VM/PI session files live **inside the VM** (not persisted yet).
+2. VM is restarted with the active task directory mounted at `/mnt/taskstate`.
+3. Host passes `piwork.session_file=/mnt/taskstate/session.json` via kernel cmdline.
+4. Init script starts pi with `--session /mnt/taskstate/session.json`.
+5. If the file exists, pi resumes automatically; otherwise it creates a new session file in the task folder.
 
 **Session isolation (current):**
 
-- Host passes `piwork.session_file=/tmp/piwork/sessions/<taskId>.json` via kernel cmdline.
-- Init script adds `--session-file` when starting pi.
-- Prevents context bleed within a shared VM, but does **not** persist across VM restarts.
-
-**Planned:** mount host task folders into the VM and store session files there.
+- VM only mounts the **active task state directory** (not the whole tasks root).
+- pi session file is canonical per task: `/mnt/taskstate/session.json`.
+- Task switching remounts paths by restarting the shared VM.
 
 ## Permission Gate Extension
 

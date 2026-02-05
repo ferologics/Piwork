@@ -1,6 +1,7 @@
 <script lang="ts">
 import { onDestroy, onMount } from "svelte";
-import { Plus, MessageSquare, MoreHorizontal, Pencil, Archive } from "@lucide/svelte";
+import { dev } from "$app/environment";
+import { Plus, MessageSquare, MoreHorizontal, Pencil, Archive, Trash2 } from "@lucide/svelte";
 import { taskStore } from "$lib/stores/taskStore";
 import type { TaskMetadata } from "$lib/types/task";
 
@@ -10,6 +11,7 @@ let activeTaskId = $state<string | null>(null);
 let unsubscribe: (() => void) | null = null;
 let unsubscribeActive: (() => void) | null = null;
 let creating = $state(false);
+let deletingAll = $state(false);
 let menuTaskId = $state<string | null>(null);
 let editingTaskId = $state<string | null>(null);
 let editingTitle = $state("");
@@ -60,6 +62,17 @@ async function handleNewTask() {
         taskStore.setActive(task.id);
     } finally {
         creating = false;
+    }
+}
+
+async function handleDeleteAllTasks() {
+    if (deletingAll || tasks.length === 0) return;
+
+    deletingAll = true;
+    try {
+        await taskStore.deleteAll();
+    } finally {
+        deletingAll = false;
     }
 }
 
@@ -127,7 +140,17 @@ async function archiveTask(task: TaskMetadata, event: MouseEvent) {
 </script>
 
 <aside class="flex h-full w-56 flex-col border-r border-border bg-sidebar overflow-hidden">
-    <div class="p-3">
+    <div class="p-3 space-y-2">
+        {#if dev}
+            <button
+                class="flex w-full items-center justify-center gap-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs font-medium text-destructive hover:bg-destructive/20 disabled:opacity-60"
+                onclick={handleDeleteAllTasks}
+                disabled={deletingAll || tasks.length === 0}
+            >
+                <Trash2 class="h-3.5 w-3.5" />
+                {deletingAll ? "Wiping…" : "Delete All Tasks"}
+            </button>
+        {/if}
         <button
             class="flex w-full items-center justify-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
             onclick={handleNewTask}

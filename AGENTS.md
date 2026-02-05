@@ -33,8 +33,8 @@ mise run test-screenshot name    # capture to tmp/dev/name.png
 mise run test-set-folder /path   # set working folder, restart VM
 mise run test-set-task <id>      # set active task in UI
 mise run test-create-task "Title" [folder]  # create a task
+mise run test-delete-tasks       # delete all tasks
 mise run test-dump-state         # log active task/session/message count
-mise run test-verify-resume      # verify task resume + session isolation
 mise run test-logs               # tail test logs
 mise run test-stop               # kill app + QEMU
 ```
@@ -45,6 +45,18 @@ These let the AI test changes without human interaction:
 2. `test-prompt` sends via TCP test server (port 19385), waits for "agent_end"
 3. `test-screenshot` captures window without stealing focus
 4. Test server only runs in debug builds (`#[cfg(debug_assertions)]`)
+
+### AI testing workflow (important)
+
+- Prefer **ad-hoc primitive tasks** (`test-create-task`, `test-set-task`, `test-prompt`, `test-dump-state`, `test-screenshot`) over monolithic end-to-end scripts.
+- For any UI/state claim, capture all three before concluding:
+  1. `test-dump-state` (state snapshot)
+  2. `test-screenshot <name>` (visual proof)
+  3. relevant log lines (`tmp/dev/piwork.log`, `qemu.log`) only as supporting evidence
+- For async transitions (task switch, VM restart), wait/poll explicitly; do not rely on fixed sleeps alone.
+- For resume checks, validate semantics (e.g. task-local memory question with unique seed text), not only message counts.
+- Do not add new `mise` tasks for one-off debugging flows; only add reusable primitives.
+- Always run `mise run test-stop` after automated testing to avoid stale ports/processes.
 
 ## VM Runtime
 
@@ -85,9 +97,9 @@ Auth options (dev):
 
 - **TCP RPC** via NAT port forwarding (simpler than virtio-serial)
 - **Network on by default** via QEMU user-mode NAT
-- **Shared VM for now** (single VM, restarted on folder change)
+- **Shared VM for now** (single VM, restarted on task/folder switch to remount active paths)
 - **Dynamic linking** - Node uses Alpine's packaged libs
-- **Task resume** via host-stored conversation (pi session files VM-local; host persistence TODO)
+- **Task resume** via host-backed per-task session file (`/mnt/taskstate/session.json`) + host transcript cache
 
 ## Docs
 

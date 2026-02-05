@@ -10,12 +10,15 @@
 ## P0: Core Broken / Must Work
 
 - [x] **Tasks**: Auto-create on first message, conversation persistence per task ✓
-- [ ] **Task resume**: Click existing task → load its conversation (wired, needs UI click test)
 - [x] **Working folder UI**: Selection UI, recent folders dropdown, Tauri dialog ✓
-- [ ] **VM folder mount**: BLOCKED - Alpine virt kernel lacks 9p modules
-  - Options: use standard kernel (bigger), virtiofs (complex), or build custom
-- [ ] **Remount on task switch**: Unmount old folder, mount new task's folder
-- [ ] **Session file per task**: VM-local `--session-file` implemented; needs host mount for persistence
+- [ ] **Runtime v2 pivot**: Replace restart-per-task-switch flow with persistent VM + task supervisor (`taskd`)
+- [ ] **Per-task process isolation**: One Linux user + one pi process per task (`/sessions/<taskId>`)
+- [ ] **Canonical session persistence**: Use `/sessions/<taskId>/session.json` for automatic resume
+- [ ] **No-reboot switching**: Implement `switch_task` path; task switch should not reboot VM
+- [ ] **Remove fallback hydration**: Delete transcript→session reconstruction from normal runtime path
+- [ ] **Task resume semantics**: Validate memory continuity + no cross-task context bleed
+- [ ] **Task switch latency target**: Warm switch completes in a few seconds, no long spinner
+- [ ] **Task workspace model**: Ship sync-first workspace (`/sessions/<taskId>/work`), evaluate live mount later
 
 ## P1: Production Ready
 
@@ -23,6 +26,7 @@
 - [ ] **Runtime download**: First-run pack download + updates (non-dev flow)
 - [ ] **Bundle pi**: Include pi in runtime pack instead of copying from global npm
 - [ ] **Bundle skills?**: Maybe include useful skills in runtime
+- [ ] **Markdown rendering**: Render agent responses with markdown (bold, lists, code)
 - [ ] **Onboarding polish**: Make first-run experience smooth
 
 ## P2: Cleanup
@@ -43,6 +47,7 @@
 ## P4: Later
 
 - [ ] **Import external files**: Attach files from outside working folder (copy in? read-only mount?)
+- [ ] **Clipboard + attachments**: Support images/files from clipboard with MIME-aware previews in chat
 - [ ] **Multi-folder tasks**: Mount multiple folders per task (read-only extras?)
 - [ ] **VM per task**: Full isolation option for paranoid mode
 - [ ] **Cross-platform**: Linux/Windows support
@@ -78,15 +83,15 @@
 
 ## Architecture Decisions
 
-**Task isolation model (v1):**
+**Task isolation model (transition):**
 
-- One VM shared across all tasks
-- Each task has one working folder (read-write)
-- On task switch: remount folder + switch pi session file
-- Pi only sees the mounted folder (cwd = mount point)
-- Downloads/created files land in working folder
-- External file import = TODO (copy in for now)
+- **Current (v1 temporary):** Shared VM, restart-heavy task switching, fallback hydration when task-state mount is missing
+- **Target (v2):** Shared persistent VM + in-VM task supervisor (`taskd`) + one pi process per task user
+- **Canonical session target:** `/sessions/<taskId>/session.json` (no reconstruction)
+- **Workspace target:** `/sessions/<taskId>/work` with sync-first host integration
+- **Isolation target:** task-level Unix user/process boundaries, no cross-task memory bleed
 
 ## See Also
 
+- `docs/runtime-v2-taskd-plan.md` - Full pivot plan for no-reboot task switching
 - `docs/ui-roadmap.md` - UI-specific roadmap with Cowork comparison

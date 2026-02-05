@@ -180,6 +180,7 @@ export NODE_PATH=/opt/pi/node_modules
 export PI_PACKAGE_DIR=/opt/pi
 RPC_PORT=19384
 WORKDIR=/mnt/workdir
+TASK_STATE_DIR=/mnt/taskstate
 
 mount -t proc proc /proc
 mount -t sysfs sysfs /sys
@@ -208,6 +209,14 @@ else
     echo "No working folder mounted"
 fi
 
+# Mount task state folder if available (9p virtio share)
+mkdir -p "$TASK_STATE_DIR"
+if mount -t 9p -o trans=virtio,version=9p2000.L taskstate "$TASK_STATE_DIR" 2>/dev/null; then
+    echo "Mounted task state at $TASK_STATE_DIR"
+else
+    echo "No task state mounted"
+fi
+
 SESSION_FILE=""
 for arg in $(cat /proc/cmdline); do
     case "$arg" in
@@ -218,8 +227,10 @@ for arg in $(cat /proc/cmdline); do
 done
 
 if [ -n "$SESSION_FILE" ]; then
-    SESSION_DIR=$(dirname "$SESSION_FILE")
-    mkdir -p "$SESSION_DIR"
+    SESSION_DIR="${SESSION_FILE%/*}"
+    if [ -n "$SESSION_DIR" ] && [ "$SESSION_DIR" != "$SESSION_FILE" ]; then
+        mkdir -p "$SESSION_DIR"
+    fi
     echo "Session file: $SESSION_FILE"
 fi
 
@@ -231,7 +242,7 @@ echo "READY"
 if [ -x /usr/bin/node ] && [ -f /opt/pi/dist/cli.js ]; then
     while true; do
         SESSION_ARGS=""
-        [ -n "$SESSION_FILE" ] && SESSION_ARGS="--session-file $SESSION_FILE"
+        [ -n "$SESSION_FILE" ] && SESSION_ARGS="--session $SESSION_FILE"
         nc -l -p $RPC_PORT -e /usr/bin/node /opt/pi/dist/cli.js --mode rpc $SESSION_ARGS 2>&1
         sleep 1
     done &

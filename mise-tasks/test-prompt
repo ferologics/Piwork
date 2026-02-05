@@ -32,7 +32,53 @@ for i in $(seq 1 $((TIMEOUT * 2))); do
     [[ -z "$AFTER_ERR" ]] && AFTER_ERR=0
 
     if [[ "$AFTER" -gt "$BEFORE" ]]; then
-        echo "✓ Response complete"
+        RESPONSE=$(python - "$LOG_FILE" <<'PY'
+import json
+import sys
+
+log_path = sys.argv[1]
+lines = open(log_path, encoding="utf-8", errors="ignore").read().splitlines()
+
+for line in reversed(lines):
+    if "received:" not in line:
+        continue
+    if '"type":"message_end"' not in line or '"role":"assistant"' not in line:
+        continue
+
+    raw = line.split("received: ", 1)[1]
+    try:
+        inner = json.loads(raw)
+        payload = json.loads(inner) if isinstance(inner, str) else inner
+    except Exception:
+        continue
+
+    message = payload.get("message") if isinstance(payload, dict) else None
+    if not isinstance(message, dict):
+        continue
+
+    content = message.get("content")
+    if not isinstance(content, list):
+        continue
+
+    text_parts = []
+    for part in content:
+        if isinstance(part, dict) and part.get("type") == "text":
+            text = part.get("text")
+            if isinstance(text, str):
+                text_parts.append(text)
+
+    if text_parts:
+        print("".join(text_parts).strip().replace("\n", "\\n"))
+        sys.exit(0)
+
+print("")
+PY
+)
+        if [[ -n "$RESPONSE" ]]; then
+            echo "✓ Response: $RESPONSE"
+        else
+            echo "✓ Response complete"
+        fi
         exit 0
     fi
 

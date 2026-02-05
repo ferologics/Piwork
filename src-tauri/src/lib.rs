@@ -121,22 +121,39 @@ fn vm_status(state: tauri::State<vm::VmState>) -> vm::VmStatusResponse {
     vm::status(&state)
 }
 
+fn is_valid_task_id(task_id: &str) -> bool {
+    !task_id.is_empty() && !task_id.contains('/') && !task_id.contains('\\') && !task_id.contains("..")
+}
+
 #[tauri::command]
 #[allow(clippy::needless_pass_by_value)]
 fn vm_start(
     app: tauri::AppHandle,
     state: tauri::State<vm::VmState>,
     working_folder: Option<String>,
-    session_file: Option<String>,
+    task_id: Option<String>,
 ) -> Result<vm::VmStatusResponse, String> {
     let runtime_dir = runtime_dir(&app)?;
     let folder_path = working_folder.as_ref().map(std::path::PathBuf::from);
+
+    let task_state_path = if let Some(task_id) = task_id.as_deref() {
+        if !is_valid_task_id(task_id) {
+            return Err("Invalid task id".to_string());
+        }
+
+        let path = tasks_dir(&app)?.join(task_id);
+        std::fs::create_dir_all(&path).map_err(|error| error.to_string())?;
+        Some(path)
+    } else {
+        None
+    };
+
     vm::start(
         &app,
         &state,
         &runtime_dir,
         folder_path.as_deref(),
-        session_file.as_deref(),
+        task_state_path.as_deref(),
     )
 }
 
@@ -171,6 +188,13 @@ fn task_store_upsert(app: tauri::AppHandle, task: task_store::TaskMetadata) -> R
 fn task_store_delete(app: tauri::AppHandle, task_id: String) -> Result<(), String> {
     let tasks_dir = tasks_dir(&app)?;
     task_store::delete_task(&tasks_dir, task_id)
+}
+
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
+fn task_store_delete_all(app: tauri::AppHandle) -> Result<(), String> {
+    let tasks_dir = tasks_dir(&app)?;
+    task_store::delete_all_tasks(&tasks_dir)
 }
 
 #[tauri::command]
@@ -236,9 +260,14 @@ fn auth_store_import_pi(
 }
 
 /// Test server for automated testing (dev mode only)
-/// Listens on port 19385 and accepts commands:
-/// - {"cmd":"prompt","message":"..."} - triggers UI sendPrompt flow
-/// - {"cmd":"rpc",...} - sends raw RPC to VM
+/// Listens on port `19385` and accepts commands:
+/// - `{"cmd":"prompt","message":"..."}` - triggers UI sendPrompt flow
+/// - `{"cmd":"set_folder","folder":"/path"}` - changes working folder
+/// - `{"cmd":"set_task","taskId":"..."}` - selects active task
+/// - `{"cmd":"create_task","title":"...","workingFolder":"/path"}` - creates task
+/// - `{"cmd":"delete_all_tasks"}` - wipes all tasks
+/// - `{"cmd":"dump_state"}` - logs UI state
+/// - `{"cmd":"rpc",...}` - sends raw RPC to VM
 #[cfg(debug_assertions)]
 fn start_test_server(app_handle: tauri::AppHandle) {
     std::thread::spawn(move || {
@@ -308,6 +337,12 @@ fn start_test_server(app_handle: tauri::AppHandle) {
                             let _ = app.emit("test_create_task", payload);
                             let _ = stream.write_all(b"OK\n");
                         }
+                        "delete_all_tasks" => {
+                            // Emit event to frontend to wipe all tasks
+                            eprintln!("[test-server] emitting test_delete_all_tasks");
+                            let _ = app.emit("test_delete_all_tasks", ());
+                            let _ = stream.write_all(b"OK\n");
+                        }
                         "dump_state" => {
                             // Emit event to frontend to log current UI state
                             eprintln!("[test-server] emitting test_dump_state");
@@ -350,6 +385,7 @@ pub fn run() {
             task_store_list,
             task_store_upsert,
             task_store_delete,
+            task_store_delete_all,
             task_store_save_conversation,
             task_store_load_conversation,
             auth_store_list,

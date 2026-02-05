@@ -7,7 +7,7 @@ Based on Cowork observation + our needs.
 These are broken or missing - fix first:
 
 - [ ] **Task resume** - select task, restore conversation + pi session isolation
-- [ ] **Session isolation** - per-task `--session-file` (no context bleed)
+- [ ] **Session isolation** - per-task `--session` (no context bleed)
 - [ ] **Working folder mount** - mount host folder into VM (blocked by 9p)
 - [ ] **Show created files** - right panel shows files agent creates
 

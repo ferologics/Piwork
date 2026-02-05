@@ -11,7 +11,7 @@ export type RpcEvent = Record<string, unknown> & {
 export type RpcListener = (event: RpcEvent) => void;
 
 export interface RpcClient {
-    connect(workingFolder?: string | null, sessionFile?: string | null): Promise<void>;
+    connect(workingFolder?: string | null, taskId?: string | null): Promise<void>;
     disconnect(): Promise<void>;
     stopVm(): Promise<void>;
     send(command: Record<string, unknown>): Promise<void>;

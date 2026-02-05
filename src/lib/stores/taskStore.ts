@@ -6,7 +6,7 @@ const tasks = writable<TaskMetadata[]>([]);
 const activeTaskId = writable<string | null>(null);
 const activeTask = derived([tasks, activeTaskId], ([list, id]) => list.find((task) => task.id === id) ?? null);
 
-const SESSION_DIR = "/tmp/piwork/sessions";
+const SESSION_FILE = "/mnt/taskstate/session.json";
 
 // Recent folders (persisted to localStorage)
 const RECENT_FOLDERS_KEY = "piwork_recent_folders";
@@ -39,18 +39,10 @@ function addRecentFolder(folder: string) {
     });
 }
 
-function sessionFileForTask(taskId: string) {
-    return `${SESSION_DIR}/${taskId}.json`;
-}
-
 function normalizeTask(task: TaskMetadata): TaskMetadata {
-    if (task.sessionFile) {
-        return task;
-    }
-
     return {
         ...task,
-        sessionFile: sessionFileForTask(task.id),
+        sessionFile: SESSION_FILE,
     };
 }
 
@@ -74,13 +66,19 @@ async function upsertTask(task: TaskMetadata) {
 }
 
 async function deleteTask(id: string) {
-    await invoke("task_store_delete", { task_id: id });
+    await invoke("task_store_delete", { taskId: id });
     let next: TaskMetadata[] = [];
     tasks.update((current) => {
         next = current.filter((item) => item.id !== id);
         return next;
     });
     ensureActiveTask(next);
+}
+
+async function deleteAllTasks() {
+    await invoke("task_store_delete_all");
+    tasks.set([]);
+    activeTaskId.set(null);
 }
 
 function createTask(title: string, workingFolder: string | null = null) {
@@ -92,7 +90,7 @@ function createTask(title: string, workingFolder: string | null = null) {
         status: "idle",
         createdAt: now,
         updatedAt: now,
-        sessionFile: sessionFileForTask(id),
+        sessionFile: SESSION_FILE,
         workingFolder,
         mounts: [],
         model: null,
@@ -143,11 +141,16 @@ function setActiveTask(id: string | null) {
 }
 
 async function saveConversation(taskId: string, conversationJson: string): Promise<void> {
-    await invoke("task_store_save_conversation", { taskId, conversationJson });
+    await invoke("task_store_save_conversation", {
+        taskId,
+        conversationJson,
+    });
 }
 
 async function loadConversation(taskId: string): Promise<string | null> {
-    return await invoke<string | null>("task_store_load_conversation", { taskId });
+    return await invoke<string | null>("task_store_load_conversation", {
+        taskId,
+    });
 }
 
 export const taskStore = {
@@ -158,6 +161,7 @@ export const taskStore = {
     load: loadTasks,
     upsert: upsertTask,
     delete: deleteTask,
+    deleteAll: deleteAllTasks,
     create: createTask,
     setActive: setActiveTask,
     saveConversation,

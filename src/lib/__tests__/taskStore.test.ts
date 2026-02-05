@@ -8,10 +8,10 @@ vi.mock("@tauri-apps/api/core", () => ({
     invoke: (...args: unknown[]) => invokeMock(...args),
 }));
 
-const SESSION_DIR = "/tmp/piwork/sessions";
+const SESSION_FILE = "/mnt/taskstate/session.json";
 
-function expectedSessionFile(id: string) {
-    return `${SESSION_DIR}/${id}.json`;
+function expectedSessionFile(_id: string) {
+    return SESSION_FILE;
 }
 
 function sampleTask(): TaskMetadata {
@@ -68,8 +68,44 @@ describe("taskStore", () => {
         invokeMock.mockResolvedValue(undefined);
         await taskStore.delete(task.id);
 
-        expect(invokeMock).toHaveBeenCalledWith("task_store_delete", { task_id: task.id });
+        expect(invokeMock).toHaveBeenCalledWith("task_store_delete", { taskId: task.id });
         expect(get(taskStore)).toEqual([]);
+    });
+
+    it("deletes all tasks", async () => {
+        const task = sampleTask();
+        invokeMock.mockResolvedValue([task]);
+        await taskStore.load();
+        taskStore.setActive(task.id);
+
+        invokeMock.mockResolvedValue(undefined);
+        await taskStore.deleteAll();
+
+        expect(invokeMock).toHaveBeenCalledWith("task_store_delete_all");
+        expect(get(taskStore)).toEqual([]);
+        expect(get(taskStore.activeTaskId)).toBe(null);
+    });
+
+    it("saves conversations with snake_case payload", async () => {
+        invokeMock.mockResolvedValue(undefined);
+
+        await taskStore.saveConversation("task-1", '{"messages":[]}');
+
+        expect(invokeMock).toHaveBeenCalledWith("task_store_save_conversation", {
+            taskId: "task-1",
+            conversationJson: '{"messages":[]}',
+        });
+    });
+
+    it("loads conversations with camelCase payload", async () => {
+        invokeMock.mockResolvedValue('{"messages":[]}');
+
+        const result = await taskStore.loadConversation("task-1");
+
+        expect(invokeMock).toHaveBeenCalledWith("task_store_load_conversation", {
+            taskId: "task-1",
+        });
+        expect(result).toBe('{"messages":[]}');
     });
 
     it("creates new task metadata", () => {
