@@ -17,8 +17,9 @@ Use **mise** for everything:
 ```bash
 mise run check          # format + lint + compile + test
 mise run tauri-dev      # run app interactively (for humans)
-mise run runtime-build  # build VM runtime pack
-mise run runtime-clean  # clean runtime artifacts
+mise run runtime-build       # build VM runtime pack
+mise run runtime-build-auth  # force rebuild with auth baked in
+mise run runtime-clean       # clean runtime artifacts
 ```
 
 ## AI Testing Harness
@@ -33,6 +34,7 @@ mise run test-set-folder /path   # set working folder, restart VM
 mise run test-set-task <id>      # set active task in UI
 mise run test-create-task "Title" [folder]  # create a task
 mise run test-dump-state         # log active task/session/message count
+mise run test-verify-resume      # verify task resume + session isolation
 mise run test-logs               # tail test logs
 mise run test-stop               # kill app + QEMU
 ```

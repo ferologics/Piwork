@@ -83,6 +83,7 @@ fn mark_stopped(app: &AppHandle) {
 
     if let Some(mut instance) = instance {
         instance.child.kill().ok();
+        let _ = instance.child.wait();
     }
 }
 
@@ -190,6 +191,7 @@ pub fn stop(state: &VmState) {
     let mut inner = state.inner.lock().unwrap();
     if let Some(mut instance) = inner.take() {
         instance.child.kill().ok();
+        let _ = instance.child.wait();
     }
 
     *state.status.lock().unwrap() = VmStatus::Stopped;
@@ -252,6 +254,8 @@ fn spawn_qemu(
 
     // Open log file for serial output
     let log_file = std::fs::File::create(log_path).map_err(|e| e.to_string())?;
+    let log_out = log_file.try_clone().map_err(|e| e.to_string())?;
+    let log_err = log_file.try_clone().map_err(|e| e.to_string())?;
 
     let mut command = Command::new(qemu_binary);
     command
@@ -297,8 +301,8 @@ fn spawn_qemu(
         // Serial console to file (we read this for READY)
         .arg("-serial")
         .arg(format!("file:{}", log_path.display()))
-        .stdout(Stdio::from(log_file.try_clone().map_err(|e| e.to_string())?))
-        .stderr(Stdio::null());
+        .stdout(Stdio::from(log_out))
+        .stderr(Stdio::from(log_err));
 
     command.spawn().map_err(|e| e.to_string())
 }
