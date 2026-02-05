@@ -296,6 +296,18 @@ fn start_test_server(app_handle: tauri::AppHandle) {
                             let _ = app.emit("test_set_task", task_id);
                             let _ = stream.write_all(b"OK\n");
                         }
+                        "create_task" => {
+                            // Emit event to frontend to create a new task
+                            let title = json.get("title").and_then(|v| v.as_str());
+                            let folder = json.get("workingFolder").and_then(|v| v.as_str());
+                            eprintln!("[test-server] emitting test_create_task: {title:?}");
+                            let payload = serde_json::json!({
+                                "title": title,
+                                "workingFolder": folder,
+                            });
+                            let _ = app.emit("test_create_task", payload);
+                            let _ = stream.write_all(b"OK\n");
+                        }
                         _ => {
                             // Direct RPC send (bypass UI)
                             let state: tauri::State<vm::VmState> = app.state();

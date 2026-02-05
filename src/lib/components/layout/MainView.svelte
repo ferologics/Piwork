@@ -677,6 +677,26 @@ async function disconnectRpc() {
     pendingUiSending = false;
 }
 
+async function waitForRpcReady(timeoutMs = 30000) {
+    if (rpcConnected) return;
+
+    const startedAt = Date.now();
+    await new Promise<void>((resolve, reject) => {
+        const timer = setInterval(() => {
+            if (rpcConnected) {
+                clearInterval(timer);
+                resolve();
+                return;
+            }
+
+            if (Date.now() - startedAt > timeoutMs) {
+                clearInterval(timer);
+                reject(new Error("RPC not ready"));
+            }
+        }, 100);
+    });
+}
+
 async function sendPrompt(message?: string) {
     if (!rpcClient) return;
     const content = (message ?? prompt).trim();
@@ -687,12 +707,17 @@ async function sendPrompt(message?: string) {
         const title = content.length > 50 ? content.substring(0, 50) + "…" : content;
         const task = taskStore.create(title, currentWorkingFolder);
         await taskStore.upsert(task);
+        await handleTaskSwitch(task);
         taskStore.setActive(task.id);
-        currentTaskId = task.id;
-        currentSessionFile = task.sessionFile ?? null;
-        currentWorkingFolder = task.workingFolder ?? null;
         devLog("MainView", `Auto-created task: ${task.id} with folder: ${currentWorkingFolder}`);
-        await restartVm("Restarting VM for new task session...");
+    }
+
+    await waitForRpcReady().catch((error) => {
+        devLog("MainView", `RPC not ready for prompt: ${error}`);
+    });
+
+    if (!rpcClient || !rpcConnected) {
+        return;
     }
 
     // Add user message to conversation
@@ -706,6 +731,7 @@ async function sendPrompt(message?: string) {
 let testPromptUnlisten: (() => void) | null = null;
 let testFolderUnlisten: (() => void) | null = null;
 let testTaskUnlisten: (() => void) | null = null;
+let testCreateTaskUnlisten: (() => void) | null = null;
 
 async function restartVm(reason: string) {
     if (!rpcClient) return;
@@ -832,6 +858,20 @@ onMount(() => {
         }).then((unlisten) => {
             testTaskUnlisten = unlisten;
         });
+
+        listen<{ title?: string | null; workingFolder?: string | null }>("test_create_task", (event) => {
+            const title = event.payload?.title ?? "New Task";
+            const folder = event.payload?.workingFolder ?? null;
+            devLog("TestHarness", `received test_create_task: ${title}`);
+
+            const task = taskStore.create(title, folder);
+            void taskStore.upsert(task).then(async () => {
+                await handleTaskSwitch(task);
+                taskStore.setActive(task.id);
+            });
+        }).then((unlisten) => {
+            testCreateTaskUnlisten = unlisten;
+        });
     }
 });
 
@@ -845,6 +885,7 @@ onDestroy(() => {
     testPromptUnlisten?.();
     testFolderUnlisten?.();
     testTaskUnlisten?.();
+    testCreateTaskUnlisten?.();
 });
 </script>
 

@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+#MISE description="Create a new task (test harness)"
+set -euo pipefail
+
+TITLE="${1:-New Task}"
+WORKING_FOLDER="${2:-}"
+
+if ! nc -z localhost 19385 2>/dev/null; then
+    echo "Test server not running. Run: mise run test-start"
+    exit 1
+fi
+
+if [[ -n "$WORKING_FOLDER" ]]; then
+    echo "{\"cmd\":\"create_task\",\"title\":\"$TITLE\",\"workingFolder\":\"$WORKING_FOLDER\"}" | nc -w 2 localhost 19385
+else
+    echo "{\"cmd\":\"create_task\",\"title\":\"$TITLE\"}" | nc -w 2 localhost 19385
+fi

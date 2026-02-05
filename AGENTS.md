@@ -31,6 +31,7 @@ mise run test-prompt "hello"     # send prompt, wait for response
 mise run test-screenshot name    # capture to tmp/dev/name.png
 mise run test-set-folder /path   # set working folder, restart VM
 mise run test-set-task <id>      # set active task in UI
+mise run test-create-task "Title" [folder]  # create a task
 mise run test-logs               # tail test logs
 mise run test-stop               # kill app + QEMU
 ```
