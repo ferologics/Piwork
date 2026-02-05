@@ -197,7 +197,7 @@ function updateAuthHint(message: string) {
     if (!needsAuth) return;
 
     rpcAuthHint =
-        "Auth required. Login flow is untested; rebuild the runtime with `mise run runtime-build-auth` (or PIWORK_COPY_AUTH=1 / PIWORK_AUTH_PATH=~/.pi/agent/auth.json), then restart the app.";
+        "Auth required. Login flow is untested; rebuild with `mise run runtime-build-auth` (or set ANTHROPIC_OAUTH_TOKEN / PIWORK_COPY_AUTH=1 / PIWORK_AUTH_PATH=~/.pi/agent/auth.json), then restart the app.";
 
     maybeCaptureLoginUrl(message);
 }

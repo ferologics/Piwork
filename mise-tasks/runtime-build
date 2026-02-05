@@ -141,6 +141,23 @@ rsync -a "$PI_DIR/" "$INITRAMFS_DIR/opt/pi/"
 
 # Copy auth if available
 AUTH_PATH="${PIWORK_AUTH_PATH:-}"
+
+# If ANTHROPIC_OAUTH_TOKEN is set, bake it into env for the VM
+AUTH_ENV_FILE=""
+if [[ -n "${ANTHROPIC_OAUTH_TOKEN:-}" || -n "${ANTHROPIC_API_KEY:-}" ]]; then
+    mkdir -p "$INITRAMFS_DIR/opt/pi-agent"
+    AUTH_ENV_FILE="$INITRAMFS_DIR/opt/pi-agent/env.sh"
+    : > "$AUTH_ENV_FILE"
+    if [[ -n "${ANTHROPIC_OAUTH_TOKEN:-}" ]]; then
+        printf 'export ANTHROPIC_OAUTH_TOKEN=%q\n' "$ANTHROPIC_OAUTH_TOKEN" >> "$AUTH_ENV_FILE"
+    fi
+    if [[ -n "${ANTHROPIC_API_KEY:-}" ]]; then
+        printf 'export ANTHROPIC_API_KEY=%q\n' "$ANTHROPIC_API_KEY" >> "$AUTH_ENV_FILE"
+    fi
+    chmod 600 "$AUTH_ENV_FILE" 2>/dev/null || true
+    echo "  Included ANTHROPIC_OAUTH_TOKEN in VM env"
+fi
+
 [[ -z "$AUTH_PATH" && -f "$HOME/.pi/agent/auth.json" ]] && AUTH_PATH="$HOME/.pi/agent/auth.json"
 if [[ -n "$AUTH_PATH" && -f "$AUTH_PATH" ]]; then
     mkdir -p "$INITRAMFS_DIR/opt/pi-agent"
@@ -202,6 +219,7 @@ if [ -n "$SESSION_FILE" ]; then
 fi
 
 [ -f /opt/pi-agent/auth.json ] && export PI_CODING_AGENT_DIR=/opt/pi-agent
+[ -f /opt/pi-agent/env.sh ] && . /opt/pi-agent/env.sh
 
 echo "READY"
 

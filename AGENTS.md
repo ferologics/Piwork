@@ -18,7 +18,7 @@ Use **mise** for everything:
 mise run check          # format + lint + compile + test
 mise run tauri-dev      # run app interactively (for humans)
 mise run runtime-build       # build VM runtime pack
-mise run runtime-build-auth  # force rebuild with auth baked in
+mise run runtime-build-auth  # force rebuild with auth baked in (uses ANTHROPIC_OAUTH_TOKEN if set)
 mise run runtime-clean       # clean runtime artifacts
 ```
 
