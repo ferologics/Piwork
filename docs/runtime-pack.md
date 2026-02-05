@@ -31,6 +31,7 @@ Provide a **consistent, isolated Linux environment** for desktop while keeping t
   - The dev pack prebakes **Node + pi** into the initramfs via `scripts/prepare-runtime-pi.sh`.
   - Optional dev auth: set `PIWORK_AUTH_PATH=~/.pi/agent/auth.json` (or `PIWORK_COPY_AUTH=1`) to bake auth into the initramfs.
   - When `PIWORK_COPY_AUTH=1`, the installer first checks the app auth store at `app_data/auth/<profile>/auth.json` (profile defaults to `default`, override with `PIWORK_AUTH_PROFILE`).
+  - You can also bake `ANTHROPIC_OAUTH_TOKEN` / `ANTHROPIC_API_KEY` into the VM env. To prefer env over auth.json, set `PIWORK_AUTH_MODE=env`.
   - Override Node version with `PIWORK_NODE_VERSION` if needed.
   - Note: if no RPC port is available, the initramfs prints `READY` to console (log via `app_data/vm/qemu.log`).
 - **Updates:** app checks for new pack versions and upgrades in‑place.

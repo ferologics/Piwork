@@ -141,6 +141,7 @@ rsync -a "$PI_DIR/" "$INITRAMFS_DIR/opt/pi/"
 
 # Copy auth if available
 AUTH_PATH="${PIWORK_AUTH_PATH:-}"
+AUTH_MODE="${PIWORK_AUTH_MODE:-auto}"
 
 # If ANTHROPIC_OAUTH_TOKEN is set, bake it into env for the VM
 AUTH_ENV_FILE=""
@@ -158,12 +159,16 @@ if [[ -n "${ANTHROPIC_OAUTH_TOKEN:-}" || -n "${ANTHROPIC_API_KEY:-}" ]]; then
     echo "  Included ANTHROPIC_OAUTH_TOKEN in VM env"
 fi
 
-[[ -z "$AUTH_PATH" && -f "$HOME/.pi/agent/auth.json" ]] && AUTH_PATH="$HOME/.pi/agent/auth.json"
-if [[ -n "$AUTH_PATH" && -f "$AUTH_PATH" ]]; then
-    mkdir -p "$INITRAMFS_DIR/opt/pi-agent"
-    cp -f "$AUTH_PATH" "$INITRAMFS_DIR/opt/pi-agent/auth.json"
-    chmod 600 "$INITRAMFS_DIR/opt/pi-agent/auth.json" 2>/dev/null || true
-    echo "  Included auth from $AUTH_PATH"
+if [[ "$AUTH_MODE" != "env" ]]; then
+    [[ -z "$AUTH_PATH" && -f "$HOME/.pi/agent/auth.json" ]] && AUTH_PATH="$HOME/.pi/agent/auth.json"
+    if [[ -n "$AUTH_PATH" && -f "$AUTH_PATH" ]]; then
+        mkdir -p "$INITRAMFS_DIR/opt/pi-agent"
+        cp -f "$AUTH_PATH" "$INITRAMFS_DIR/opt/pi-agent/auth.json"
+        chmod 600 "$INITRAMFS_DIR/opt/pi-agent/auth.json" 2>/dev/null || true
+        echo "  Included auth from $AUTH_PATH"
+    fi
+else
+    echo "  Skipping auth.json (PIWORK_AUTH_MODE=env)"
 fi
 
 # Write init script

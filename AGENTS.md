@@ -74,6 +74,11 @@ These let the AI test changes without human interaction:
 5. Bundles into initramfs with custom init script
 6. Installs to app data dir
 
+Auth options (dev):
+
+- `PIWORK_COPY_AUTH=1` / `PIWORK_AUTH_PATH=...` to bake `auth.json`
+- `ANTHROPIC_OAUTH_TOKEN` baked into VM env; set `PIWORK_AUTH_MODE=env` to skip auth.json
+
 **Requires**: 2GB RAM (initramfs unpacks to tmpfs)
 
 ## Key Decisions
