@@ -16,16 +16,27 @@ echo "Starting Piwork..."
 nohup mise run tauri-dev > "$LOG_FILE" 2>&1 &
 APP_PID=$!
 
-# Wait for ready signal (test server listening)
-echo "Waiting for ready..."
+# Wait for test server
 TIMEOUT=60
 ELAPSED=0
 while ! grep -q "\[test-server\] listening" "$LOG_FILE" 2>/dev/null; do
     sleep 0.5
     ELAPSED=$((ELAPSED + 1))
     if [[ $ELAPSED -ge $((TIMEOUT * 2)) ]]; then
-        echo "Timeout waiting for app to start"
+        echo "Timeout waiting for test server"
         tail -20 "$LOG_FILE"
+        exit 1
+    fi
+done
+
+# Wait for RPC ready
+ELAPSED=0
+while ! grep -q "\[RpcClient\] vm_event: ready" "$LOG_FILE" 2>/dev/null; do
+    sleep 0.5
+    ELAPSED=$((ELAPSED + 1))
+    if [[ $ELAPSED -ge $((TIMEOUT * 2)) ]]; then
+        echo "Timeout waiting for RPC ready"
+        tail -40 "$LOG_FILE"
         exit 1
     fi
 done

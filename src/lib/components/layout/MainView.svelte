@@ -732,6 +732,7 @@ let testPromptUnlisten: (() => void) | null = null;
 let testFolderUnlisten: (() => void) | null = null;
 let testTaskUnlisten: (() => void) | null = null;
 let testCreateTaskUnlisten: (() => void) | null = null;
+let testDumpStateUnlisten: (() => void) | null = null;
 
 async function restartVm(reason: string) {
     if (!rpcClient) return;
@@ -872,6 +873,19 @@ onMount(() => {
         }).then((unlisten) => {
             testCreateTaskUnlisten = unlisten;
         });
+
+        listen("test_dump_state", () => {
+            const messageCount = conversation.messages.length;
+            const hasStreaming = conversation.isAgentRunning;
+            devLog(
+                "TestHarness",
+                `state: task=${currentTaskId ?? "none"} session=${currentSessionFile ?? "none"} folder=${
+                    currentWorkingFolder ?? "none"
+                } messages=${messageCount} streaming=${hasStreaming}`,
+            );
+        }).then((unlisten) => {
+            testDumpStateUnlisten = unlisten;
+        });
     }
 });
 
@@ -886,6 +900,7 @@ onDestroy(() => {
     testFolderUnlisten?.();
     testTaskUnlisten?.();
     testCreateTaskUnlisten?.();
+    testDumpStateUnlisten?.();
 });
 </script>
 

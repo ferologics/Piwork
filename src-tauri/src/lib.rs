@@ -308,6 +308,12 @@ fn start_test_server(app_handle: tauri::AppHandle) {
                             let _ = app.emit("test_create_task", payload);
                             let _ = stream.write_all(b"OK\n");
                         }
+                        "dump_state" => {
+                            // Emit event to frontend to log current UI state
+                            eprintln!("[test-server] emitting test_dump_state");
+                            let _ = app.emit("test_dump_state", ());
+                            let _ = stream.write_all(b"OK\n");
+                        }
                         _ => {
                             // Direct RPC send (bypass UI)
                             let state: tauri::State<vm::VmState> = app.state();
