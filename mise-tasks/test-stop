@@ -4,3 +4,5 @@ set -euo pipefail
 
 pkill -9 piwork 2>/dev/null && echo "✓ Stopped piwork" || echo "piwork not running"
 pkill -9 qemu-system 2>/dev/null && echo "✓ Stopped qemu" || echo "qemu not running"
+pkill -f "vite dev" 2>/dev/null && echo "✓ Stopped vite" || echo "vite not running"
+pkill -f "tauri dev" 2>/dev/null && echo "✓ Stopped tauri dev" || echo "tauri dev not running"
