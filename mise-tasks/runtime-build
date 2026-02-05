@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #MISE description="Build VM runtime pack (kernel, initramfs with node+pi)"
-#MISE sources=["mise-tasks/runtime-build"]
+#MISE sources=["mise-tasks/runtime-build", "runtime/taskd.js"]
 #MISE outputs=["tmp/build/boot/initramfs-virt-fast"]
 set -euo pipefail
 
@@ -139,6 +139,11 @@ rsync -a "$NODE_DIR/" "$INITRAMFS_DIR/"
 mkdir -p "$INITRAMFS_DIR/opt/pi"
 rsync -a "$PI_DIR/" "$INITRAMFS_DIR/opt/pi/"
 
+# Copy taskd supervisor script
+mkdir -p "$INITRAMFS_DIR/opt/piwork"
+cp -f "$ROOT_DIR/runtime/taskd.js" "$INITRAMFS_DIR/opt/piwork/taskd.js"
+chmod +x "$INITRAMFS_DIR/opt/piwork/taskd.js"
+
 # Copy auth if available
 AUTH_PATH="${PIWORK_AUTH_PATH:-}"
 AUTH_MODE="${PIWORK_AUTH_MODE:-auto}"
@@ -181,6 +186,11 @@ export PI_PACKAGE_DIR=/opt/pi
 RPC_PORT=19384
 WORKDIR=/mnt/workdir
 TASK_STATE_DIR=/mnt/taskstate
+TASK_STATE_MOUNTED=0
+RUNTIME_MODE="v1"
+SESSION_FILE=""
+SESSIONS_ROOT=""
+INITIAL_TASK_ID=""
 
 mount -t proc proc /proc
 mount -t sysfs sysfs /sys
@@ -192,6 +202,23 @@ modprobe virtio_net 2>/dev/null || true
 modprobe 9pnet 2>/dev/null || true
 modprobe 9pnet_virtio 2>/dev/null || true
 modprobe 9p 2>/dev/null || true
+
+for arg in $(cat /proc/cmdline); do
+    case "$arg" in
+        piwork.runtime_mode=taskd)
+            RUNTIME_MODE="taskd"
+            ;;
+        piwork.session_file=*)
+            SESSION_FILE="${arg#piwork.session_file=}"
+            ;;
+        piwork.sessions_root=*)
+            SESSIONS_ROOT="${arg#piwork.sessions_root=}"
+            ;;
+        piwork.task_id=*)
+            INITIAL_TASK_ID="${arg#piwork.task_id=}"
+            ;;
+    esac
+done
 
 ip link set eth0 up
 udhcpc -i eth0 -q -n -t 3 -T 1
@@ -212,19 +239,19 @@ fi
 # Mount task state folder if available (9p virtio share)
 mkdir -p "$TASK_STATE_DIR"
 if mount -t 9p -o trans=virtio,version=9p2000.L taskstate "$TASK_STATE_DIR" 2>/dev/null; then
+    TASK_STATE_MOUNTED=1
     echo "Mounted task state at $TASK_STATE_DIR"
 else
     echo "No task state mounted"
 fi
 
-SESSION_FILE=""
-for arg in $(cat /proc/cmdline); do
-    case "$arg" in
-        piwork.session_file=*)
-            SESSION_FILE="${arg#piwork.session_file=}"
-            ;;
-    esac
-done
+if [ -z "$SESSIONS_ROOT" ]; then
+    if [ "$TASK_STATE_MOUNTED" = "1" ]; then
+        SESSIONS_ROOT="$TASK_STATE_DIR/sessions"
+    else
+        SESSIONS_ROOT="/sessions"
+    fi
+fi
 
 if [ -n "$SESSION_FILE" ]; then
     SESSION_DIR="${SESSION_FILE%/*}"
@@ -240,12 +267,26 @@ fi
 echo "READY"
 
 if [ -x /usr/bin/node ] && [ -f /opt/pi/dist/cli.js ]; then
-    while true; do
-        SESSION_ARGS=""
-        [ -n "$SESSION_FILE" ] && SESSION_ARGS="--session $SESSION_FILE"
-        nc -l -p $RPC_PORT -e /usr/bin/node /opt/pi/dist/cli.js --mode rpc $SESSION_ARGS 2>&1
-        sleep 1
-    done &
+    if [ "$RUNTIME_MODE" = "taskd" ] && [ -f /opt/piwork/taskd.js ]; then
+        mkdir -p "$SESSIONS_ROOT"
+        export PIWORK_RPC_PORT="$RPC_PORT"
+        export PIWORK_PI_CLI=/opt/pi/dist/cli.js
+        export PIWORK_TASKD_SESSIONS_ROOT="$SESSIONS_ROOT"
+        [ -n "$INITIAL_TASK_ID" ] && export PIWORK_INITIAL_TASK_ID="$INITIAL_TASK_ID"
+
+        echo "Runtime mode: taskd"
+        echo "Taskd sessions root: $SESSIONS_ROOT"
+
+        /usr/bin/node /opt/piwork/taskd.js 2>&1 &
+    else
+        echo "Runtime mode: pi rpc"
+        while true; do
+            SESSION_ARGS=""
+            [ -n "$SESSION_FILE" ] && SESSION_ARGS="--session $SESSION_FILE"
+            nc -l -p $RPC_PORT -e /usr/bin/node /opt/pi/dist/cli.js --mode rpc $SESSION_ARGS 2>&1
+            sleep 1
+        done &
+    fi
 fi
 
 exec /bin/sh -i

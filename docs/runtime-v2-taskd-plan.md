@@ -305,16 +305,20 @@ Completed in code:
   - v1/v2-taskd mode is selectable (currently v2 uses a compatibility adapter to v1 behavior).
   - `runtime_v2_sync` is guarded behind `runtime_v2_taskd`.
 - ✅ Harness observability update: `test-dump-state` now logs `mode`, `taskd`, and `sync`.
+- ✅ Phase 1 guest `taskd` core (no sync):
+  - Added `/opt/piwork/taskd.js` supervisor in runtime pack (Node process-per-task model).
+  - Implemented P0 task RPCs in guest: `create_or_open_task`, `switch_task`, `prompt`, `get_state`, `stop_task`.
+  - Added baseline task events (`task_switch_started`, `task_ready`, `task_error`, `task_stopped`, `agent_output`, `agent_end`).
+  - Added runtime boot mode switch via kernel cmdline (`piwork.runtime_mode=taskd`) behind `runtime_v2_taskd`.
 
 Still open:
 
-- ⏳ Phase 1 guest `taskd` implementation and true v2 routing.
 - ⏳ Phase 2 host integration against `taskd` ACK/ready semantics and removal of normal-path hydration fallback.
+- ⏳ Harness proof for warm-switch/cold-resume latency targets under true v2 host routing.
 - ⏳ Gate G1 workspace decision and follow-up path work.
 
 ## Immediate next actions
 
-1. Freeze P0 RPC contract (`docs/runtime-v2-taskd-rpc-spec.md`)
-2. Implement minimal `taskd` core behind `runtime_v2_taskd` (including `stop_task`)
-3. Wire host integration and prove warm-switch stability with harness evidence
-4. Run Gate G1 spike and choose Path M vs Path S before building sync apply
+1. Wire host integration and prove warm-switch stability with harness evidence
+2. Remove normal-path hydration fallback in v2 host path
+3. Run Gate G1 spike and choose Path M vs Path S before building sync apply

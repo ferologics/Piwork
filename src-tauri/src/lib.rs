@@ -175,12 +175,19 @@ fn vm_start(
 ) -> Result<vm::VmStatusResponse, String> {
     let runtime_dir = runtime_dir(&app)?;
     let folder_path = working_folder.as_ref().map(std::path::PathBuf::from);
+    let flags = current_runtime_flags();
 
-    let task_state_path = if let Some(task_id) = task_id.as_deref() {
+    if let Some(task_id) = task_id.as_deref() {
         if !is_valid_task_id(task_id) {
             return Err("Invalid task id".to_string());
         }
+    }
 
+    let task_state_path = if flags.runtime_v2_taskd {
+        let path = tasks_dir(&app)?;
+        std::fs::create_dir_all(&path).map_err(|error| error.to_string())?;
+        Some(path)
+    } else if let Some(task_id) = task_id.as_deref() {
         let path = tasks_dir(&app)?.join(task_id);
         std::fs::create_dir_all(&path).map_err(|error| error.to_string())?;
         Some(path)
@@ -194,6 +201,8 @@ fn vm_start(
         &runtime_dir,
         folder_path.as_deref(),
         task_state_path.as_deref(),
+        flags.runtime_v2_taskd,
+        task_id.as_deref(),
     )
 }
 

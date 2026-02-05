@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::fmt::Write as _;
 use std::io::{BufRead, BufReader, Write};
 use std::net::TcpStream;
 use std::path::{Path, PathBuf};
@@ -107,6 +108,8 @@ pub fn start(
     runtime_dir: &Path,
     working_folder: Option<&Path>,
     task_state_dir: Option<&Path>,
+    runtime_v2_taskd: bool,
+    initial_task_id: Option<&str>,
 ) -> Result<VmStatusResponse, String> {
     eprintln!("[rust:vm] start called");
     let mut inner = state.inner.lock().unwrap();
@@ -132,7 +135,15 @@ pub fn start(
     let log_path = vm_dir.join("qemu.log");
 
     eprintln!("[rust:vm] spawning qemu");
-    let child = spawn_qemu(&manifest, runtime_dir, &log_path, working_folder, task_state_dir)?;
+    let child = spawn_qemu(
+        &manifest,
+        runtime_dir,
+        &log_path,
+        working_folder,
+        task_state_dir,
+        runtime_v2_taskd,
+        initial_task_id,
+    )?;
     eprintln!("[rust:vm] qemu spawned");
 
     let rpc_writer: Arc<Mutex<Option<TcpStream>>> = Arc::new(Mutex::new(None));
@@ -243,6 +254,8 @@ fn spawn_qemu(
     log_path: &Path,
     working_folder: Option<&Path>,
     task_state_dir: Option<&Path>,
+    runtime_v2_taskd: bool,
+    initial_task_id: Option<&str>,
 ) -> Result<Child, String> {
     let qemu_binary = resolve_qemu_binary(manifest, runtime_dir)?;
 
@@ -259,8 +272,16 @@ fn spawn_qemu(
     let base_cmdline = manifest.cmdline.as_deref().unwrap_or("quiet console=ttyAMA0");
     let mut cmdline = base_cmdline.to_string();
 
-    if task_state_dir.is_some() {
+    if task_state_dir.is_some() && !runtime_v2_taskd {
         cmdline.push_str(" piwork.session_file=/mnt/taskstate/session.json");
+    }
+
+    if runtime_v2_taskd {
+        cmdline.push_str(" piwork.runtime_mode=taskd");
+    }
+
+    if let Some(task_id) = initial_task_id {
+        let _ = write!(&mut cmdline, " piwork.task_id={task_id}");
     }
 
     // Open log file for serial output
