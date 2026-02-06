@@ -1,4 +1,5 @@
 <script lang="ts">
+import { onDestroy } from "svelte";
 import { FolderOpen, ChevronDown, Plus } from "@lucide/svelte";
 import { open } from "@tauri-apps/plugin-dialog";
 import { taskStore } from "$lib/stores/taskStore";
@@ -7,16 +8,23 @@ interface Props {
     value: string | null;
     onchange: (folder: string | null) => void;
     disabled?: boolean;
+    locked?: boolean;
 }
 
-let { value, onchange, disabled = false }: Props = $props();
+let { value, onchange, disabled = false, locked = false }: Props = $props();
 
 let isOpen = $state(false);
 let recentFolders = $state<string[]>([]);
 
+const LOCKED_TITLE = "Working folder is locked for this task. Create a new task to use a different folder.";
+
 // Subscribe to recent folders
 const unsubscribe = taskStore.recentFolders.subscribe((folders) => {
     recentFolders = folders;
+});
+
+onDestroy(() => {
+    unsubscribe();
 });
 
 function formatFolderName(path: string): string {
@@ -30,7 +38,7 @@ function formatFolderName(path: string): string {
 }
 
 function toggle() {
-    if (disabled) return;
+    if (disabled || locked) return;
     isOpen = !isOpen;
 }
 
@@ -44,12 +52,11 @@ function selectFolder(folder: string) {
     close();
 }
 
-function clearFolder() {
-    onchange(null);
-    close();
-}
-
 async function chooseFolder() {
+    if (disabled || locked) {
+        return;
+    }
+
     close();
     try {
         const selected = await open({
@@ -87,11 +94,12 @@ $effect(() => {
         type="button"
         class="flex items-center gap-1.5 rounded-md px-2 py-1 text-sm hover:bg-accent disabled:opacity-50"
         onclick={toggle}
+        title={locked ? LOCKED_TITLE : undefined}
         {disabled}
     >
         <FolderOpen class="h-4 w-4 text-muted-foreground" />
         <span class="max-w-40 truncate text-muted-foreground">
-            {value ? formatFolderName(value) : "No folder"}
+            {value ? formatFolderName(value) : "Work in a folder"}
         </span>
         <ChevronDown class="h-3 w-3 text-muted-foreground" />
     </button>
@@ -127,19 +135,8 @@ $effect(() => {
                 onclick={chooseFolder}
             >
                 <Plus class="h-4 w-4 text-muted-foreground" />
-                <span>Choose a different folder</span>
+                <span>Choose a folder</span>
             </button>
-
-            {#if value}
-                <button
-                    type="button"
-                    class="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-muted-foreground hover:bg-accent"
-                    onclick={clearFolder}
-                >
-                    <span class="h-4 w-4"></span>
-                    <span>No folder (chat only)</span>
-                </button>
-            {/if}
         </div>
     {/if}
 </div>

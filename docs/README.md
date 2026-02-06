@@ -18,6 +18,7 @@
 - `auth-flow.md` — authentication behavior
 - `permissions-model.md` — folder access model
 - `task-artifact-contract.md` — working-folder immutability + outputs/uploads/scratchpad contract
+- `folder-artifact-implementation-plan.md` — implementation plan for one-time folder bind + scratchpad aggregation
 - `ui-roadmap.md` — UI direction + Cowork comparison (execution tracking is in `../TODO.md`)
 
 ## Supporting

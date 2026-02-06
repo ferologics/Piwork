@@ -1,14 +1,15 @@
 # Task Artifact Contract (MVP, pre-alpha)
 
-Status: planned (contract agreed, implementation pending)
+Status: in progress
 Owner: product/runtime
 Last updated: 2026-02-06
 
 ## Decisions (locked)
 
-1. **Working folder is immutable after task creation.**
+1. **Working folder is one-time bind per task.**
    - Task creation may set `workingFolder` (or leave it null).
-   - Existing tasks cannot change or clear `workingFolder`.
+   - First bind is allowed for tasks that still have `workingFolder = null`.
+   - Once set, existing tasks cannot change or clear `workingFolder`.
    - If user picked the wrong folder, create a new task.
 
 2. **Scratchpad is always visible and task-local.**
@@ -41,25 +42,27 @@ Last updated: 2026-02-06
 
 ## Runtime + host behavior contract
 
-- `workingFolder` is validated at task creation.
-- Any attempt to change `workingFolder` for an existing task is rejected.
+- `workingFolder` is validated whenever a bind is attempted.
+- First bind is allowed only when a task has no folder yet.
+- After first bind, any attempt to change/clear `workingFolder` is rejected.
 - Task/session continuity remains tied to task id and `session.json`.
-- No folder-change recycle flow for existing tasks.
 
 ## Implementation checklist
 
-- [ ] Enforce immutability in backend task upsert path (reject folder edits for existing task id).
-- [ ] Remove runtime folder-change apply path for active tasks.
-- [ ] Update test harness semantics (`test-set-folder`) to create-new-task workflow or explicit rejection assertion.
-- [ ] Add/standardize artifact paths under task storage:
-  - [ ] `outputs/`
-  - [ ] `uploads/`
-- [ ] Ensure preview/list APIs aggregate `outputs` + `uploads` for Scratchpad.
-- [ ] Enforce uploads read-only policy in task file operations.
-- [ ] Update Right panel labels/copy/empty states to match the IA contract.
+- [x] Enforce immutability in backend task upsert path (reject folder edits for existing task id).
+- [x] Restrict runtime folder-change apply path to first-bind only (`workingFolder = null -> path`).
+- [x] Update test harness semantics (`test-set-folder`) for one-time bind + rejection behavior.
+- [x] Add/standardize artifact paths under task storage:
+  - [x] `outputs/`
+  - [x] `uploads/`
+- [x] Ensure preview/list APIs aggregate `outputs` + `uploads` for Scratchpad.
+- [x] Enforce uploads read-only policy in task file operations (read-only source + best-effort permission lock).
+- [x] Update Right panel labels/copy/empty states to match the IA contract.
 - [ ] Add harness evidence for contract:
-  - [ ] folder-change rejection on existing task
-  - [ ] scratchpad aggregation (`outputs` + `uploads`)
+  - [x] folder-change rejection on existing task
+  - [x] scratchpad aggregation (`outputs` + `uploads`)
+  - [ ] opener action permission success (`Open in Finder` works in packaged UI)
+  - [ ] first-write working-folder reliability (`/mnt/workdir` write appears on host without retry)
   - [ ] uploads write-denied behavior
 
 ## Notes

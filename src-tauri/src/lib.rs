@@ -68,6 +68,23 @@ struct PreviewReadResponse {
     size: u64,
 }
 
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ArtifactFileEntry {
+    source: String,
+    path: String,
+    size: u64,
+    modified_at: u64,
+    read_only: bool,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ArtifactListResponse {
+    files: Vec<ArtifactFileEntry>,
+    truncated: bool,
+}
+
 #[tauri::command]
 fn dev_log(source: &str, message: &str) {
     eprintln!("[{source}] {message}");
@@ -234,7 +251,50 @@ fn resolve_task_preview_root(app: &tauri::AppHandle, task_id: &str) -> Result<Pa
         return Ok(PathBuf::from(validated.folder));
     }
 
-    Ok(tasks_path.join("sessions").join(task_id).join("work"))
+    task_store::ensure_task_artifact_dirs(&tasks_path, task_id)?;
+    Ok(task_store::task_outputs_dir(&tasks_path, task_id))
+}
+
+fn resolve_task_artifact_dirs(app: &tauri::AppHandle, task_id: &str) -> Result<(PathBuf, PathBuf), String> {
+    if !is_valid_task_id(task_id) {
+        return Err("Invalid task id".to_string());
+    }
+
+    let tasks_path = tasks_dir(app)?;
+    task_store::load_task(&tasks_path, task_id)?.ok_or_else(|| "Task not found".to_string())?;
+    task_store::ensure_task_artifact_dirs(&tasks_path, task_id)?;
+
+    Ok((
+        task_store::task_outputs_dir(&tasks_path, task_id),
+        task_store::task_uploads_dir(&tasks_path, task_id),
+    ))
+}
+
+#[derive(Clone, Copy)]
+enum ArtifactSource {
+    Outputs,
+    Uploads,
+}
+
+impl ArtifactSource {
+    fn parse(raw: &str) -> Result<Self, String> {
+        match raw {
+            "outputs" => Ok(Self::Outputs),
+            "uploads" => Ok(Self::Uploads),
+            _ => Err("source must be either 'outputs' or 'uploads'".to_string()),
+        }
+    }
+
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Outputs => "outputs",
+            Self::Uploads => "uploads",
+        }
+    }
+
+    fn read_only(self) -> bool {
+        matches!(self, Self::Uploads)
+    }
 }
 
 fn normalize_preview_relative_path(relative_path: &str) -> Result<PathBuf, String> {
@@ -275,6 +335,85 @@ fn normalize_preview_relative_path(relative_path: &str) -> Result<PathBuf, Strin
 
 fn path_within_root(root: &Path, candidate: &Path) -> bool {
     candidate.strip_prefix(root).is_ok()
+}
+
+fn collect_regular_files(root: &Path, max_files: usize, max_depth: usize) -> (Vec<PreviewFileEntry>, bool) {
+    if !root.is_dir() {
+        return (Vec::new(), false);
+    }
+
+    let mut files: Vec<PreviewFileEntry> = Vec::new();
+    let mut stack: Vec<(PathBuf, usize)> = vec![(root.to_path_buf(), 0)];
+    let mut truncated = false;
+
+    while let Some((dir, depth)) = stack.pop() {
+        let Ok(entries) = std::fs::read_dir(&dir) else {
+            continue;
+        };
+
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let Ok(metadata) = std::fs::symlink_metadata(&path) else {
+                continue;
+            };
+
+            if metadata.file_type().is_symlink() {
+                continue;
+            }
+
+            if metadata.is_dir() {
+                if depth < max_depth {
+                    stack.push((path, depth + 1));
+                }
+                continue;
+            }
+
+            if !metadata.is_file() {
+                continue;
+            }
+
+            let Ok(relative) = path.strip_prefix(root) else {
+                continue;
+            };
+
+            let relative_str = relative
+                .components()
+                .filter_map(|component| match component {
+                    std::path::Component::Normal(value) => Some(value.to_string_lossy().to_string()),
+                    _ => None,
+                })
+                .collect::<Vec<String>>()
+                .join("/");
+
+            if relative_str.is_empty() {
+                continue;
+            }
+
+            let modified_at = metadata
+                .modified()
+                .ok()
+                .and_then(|value| value.duration_since(UNIX_EPOCH).ok())
+                .map_or(0, |value| value.as_secs());
+
+            files.push(PreviewFileEntry {
+                path: relative_str,
+                size: metadata.len(),
+                modified_at,
+            });
+
+            if files.len() >= max_files {
+                truncated = true;
+                break;
+            }
+        }
+
+        if truncated {
+            break;
+        }
+    }
+
+    files.sort_by(|a, b| a.path.cmp(&b.path));
+    (files, truncated)
 }
 
 fn detect_mime_type(path: &Path) -> &'static str {
@@ -318,76 +457,7 @@ fn task_preview_list(app: tauri::AppHandle, task_id: String) -> Result<PreviewLi
     const MAX_DEPTH: usize = 6;
 
     let root = resolve_task_preview_root(&app, &task_id)?;
-    let mut files: Vec<PreviewFileEntry> = Vec::new();
-    let mut stack: Vec<(PathBuf, usize)> = vec![(root.clone(), 0)];
-    let mut truncated = false;
-
-    while let Some((dir, depth)) = stack.pop() {
-        let Ok(entries) = std::fs::read_dir(&dir) else {
-            continue;
-        };
-
-        for entry in entries.flatten() {
-            let path = entry.path();
-            let Ok(metadata) = std::fs::symlink_metadata(&path) else {
-                continue;
-            };
-
-            if metadata.file_type().is_symlink() {
-                continue;
-            }
-
-            if metadata.is_dir() {
-                if depth < MAX_DEPTH {
-                    stack.push((path, depth + 1));
-                }
-                continue;
-            }
-
-            if !metadata.is_file() {
-                continue;
-            }
-
-            let Ok(relative) = path.strip_prefix(&root) else {
-                continue;
-            };
-            let relative_str = relative
-                .components()
-                .filter_map(|component| match component {
-                    std::path::Component::Normal(value) => Some(value.to_string_lossy().to_string()),
-                    _ => None,
-                })
-                .collect::<Vec<String>>()
-                .join("/");
-
-            if relative_str.is_empty() {
-                continue;
-            }
-
-            let modified_at = metadata
-                .modified()
-                .ok()
-                .and_then(|value| value.duration_since(UNIX_EPOCH).ok())
-                .map_or(0, |value| value.as_secs());
-
-            files.push(PreviewFileEntry {
-                path: relative_str,
-                size: metadata.len(),
-                modified_at,
-            });
-
-            if files.len() >= MAX_FILES {
-                truncated = true;
-                break;
-            }
-        }
-
-        if truncated {
-            break;
-        }
-    }
-
-    files.sort_by(|a, b| a.path.cmp(&b.path));
+    let (files, truncated) = collect_regular_files(&root, MAX_FILES, MAX_DEPTH);
 
     Ok(PreviewListResponse {
         root: root.to_string_lossy().to_string(),
@@ -421,6 +491,119 @@ fn task_preview_read(
     let canonical = std::fs::canonicalize(&candidate).map_err(|_| "Failed to resolve file path".to_string())?;
     if !path_within_root(&root, &canonical) {
         return Err("File is outside task working folder".to_string());
+    }
+
+    let bytes = std::fs::read(&candidate).map_err(|error| error.to_string())?;
+    let size = bytes.len() as u64;
+    let truncated = bytes.len() > MAX_PREVIEW_BYTES;
+    let preview_slice = if truncated {
+        &bytes[..MAX_PREVIEW_BYTES]
+    } else {
+        bytes.as_slice()
+    };
+
+    let mime_type = detect_mime_type(&candidate).to_string();
+
+    let (encoding, content) = if mime_type.starts_with("image/") {
+        ("base64".to_string(), BASE64_STANDARD.encode(preview_slice))
+    } else if is_probably_text(preview_slice) {
+        (
+            "utf8".to_string(),
+            String::from_utf8(preview_slice.to_vec()).map_err(|_| "Invalid UTF-8 text".to_string())?,
+        )
+    } else {
+        ("base64".to_string(), BASE64_STANDARD.encode(preview_slice))
+    };
+
+    Ok(PreviewReadResponse {
+        path: relative
+            .components()
+            .filter_map(|component| match component {
+                std::path::Component::Normal(value) => Some(value.to_string_lossy().to_string()),
+                _ => None,
+            })
+            .collect::<Vec<String>>()
+            .join("/"),
+        mime_type,
+        encoding,
+        content,
+        truncated,
+        size,
+    })
+}
+
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
+fn task_artifact_list(app: tauri::AppHandle, task_id: String) -> Result<ArtifactListResponse, String> {
+    const MAX_FILES: usize = 300;
+    const MAX_DEPTH: usize = 6;
+
+    let (outputs_root, uploads_root) = resolve_task_artifact_dirs(&app, &task_id)?;
+    let mut files: Vec<ArtifactFileEntry> = Vec::new();
+    let mut truncated = false;
+
+    for (source, root) in [
+        (ArtifactSource::Outputs, outputs_root),
+        (ArtifactSource::Uploads, uploads_root),
+    ] {
+        let remaining = MAX_FILES.saturating_sub(files.len());
+        if remaining == 0 {
+            truncated = true;
+            break;
+        }
+
+        let (entries, source_truncated) = collect_regular_files(&root, remaining, MAX_DEPTH);
+        files.extend(entries.into_iter().map(|entry| ArtifactFileEntry {
+            source: source.as_str().to_string(),
+            path: entry.path,
+            size: entry.size,
+            modified_at: entry.modified_at,
+            read_only: source.read_only(),
+        }));
+
+        if source_truncated {
+            truncated = true;
+            break;
+        }
+    }
+
+    files.sort_by(|a, b| a.path.cmp(&b.path).then(a.source.cmp(&b.source)));
+
+    Ok(ArtifactListResponse { files, truncated })
+}
+
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
+fn task_artifact_read(
+    app: tauri::AppHandle,
+    task_id: String,
+    source: String,
+    relative_path: String,
+) -> Result<PreviewReadResponse, String> {
+    const MAX_PREVIEW_BYTES: usize = 256 * 1024;
+
+    let source = ArtifactSource::parse(source.trim())?;
+    let (outputs_root, uploads_root) = resolve_task_artifact_dirs(&app, &task_id)?;
+    let root = match source {
+        ArtifactSource::Outputs => outputs_root,
+        ArtifactSource::Uploads => uploads_root,
+    };
+
+    let relative = normalize_preview_relative_path(&relative_path)?;
+    let candidate = root.join(&relative);
+
+    let metadata = std::fs::symlink_metadata(&candidate).map_err(|_| "File not found".to_string())?;
+    if metadata.file_type().is_symlink() {
+        return Err("Symlink previews are not allowed".to_string());
+    }
+
+    if !metadata.is_file() {
+        return Err("Only regular files can be previewed".to_string());
+    }
+
+    let canonical = std::fs::canonicalize(&candidate).map_err(|_| "Failed to resolve file path".to_string())?;
+    if !path_within_root(&root, &canonical) {
+        return Err("File is outside task artifact root".to_string());
     }
 
     let bytes = std::fs::read(&candidate).map_err(|error| error.to_string())?;
@@ -694,7 +877,7 @@ fn sanitize_test_server_value(value: &serde_json::Value) -> serde_json::Value {
 /// Test server for automated testing (dev mode only)
 /// Listens on port `19385` and accepts commands:
 /// - `{"cmd":"prompt","message":"..."}` - triggers UI sendPrompt flow
-/// - `{"cmd":"set_folder","folder":"/path"}` - changes working folder
+/// - `{"cmd":"set_folder","folder":"/path"}` - sets working folder (one-time bind for active task)
 /// - `{"cmd":"set_task","taskId":"..."}` - selects active task
 /// - `{"cmd":"set_auth_profile","profile":"default"}` - switches auth profile and restarts runtime in UI
 /// - `{"cmd":"send_login"}` - triggers UI /login flow
@@ -707,6 +890,8 @@ fn sanitize_test_server_value(value: &serde_json::Value) -> serde_json::Value {
 /// - `{"cmd":"dump_state"}` - logs UI state
 /// - `{"cmd":"preview_list","taskId":"..."}` - returns preview file list JSON
 /// - `{"cmd":"preview_read","taskId":"...","relativePath":"..."}` - returns preview file content JSON
+/// - `{"cmd":"artifact_list","taskId":"..."}` - returns scratchpad artifact list JSON (`outputs` + `uploads`)
+/// - `{"cmd":"artifact_read","taskId":"...","source":"outputs|uploads","relativePath":"..."}` - returns artifact file content JSON
 /// - `{"cmd":"open_preview","taskId":"...","relativePath":"..."}` - opens preview pane in UI
 /// - `{"cmd":"rpc",...}` - sends raw RPC to VM
 #[cfg(debug_assertions)]
@@ -886,6 +1071,38 @@ fn start_test_server(app_handle: tauri::AppHandle) {
                                 }
                             }
                         }
+                        "artifact_list" => {
+                            let task_id = json.get("taskId").and_then(|v| v.as_str()).unwrap_or("");
+                            match task_artifact_list(app.clone(), task_id.to_string()) {
+                                Ok(result) => {
+                                    let payload = serde_json::to_string(&result).unwrap_or_else(|_| "{}".to_string());
+                                    let _ = stream.write_all(format!("{payload}\n").as_bytes());
+                                }
+                                Err(error) => {
+                                    let _ = stream.write_all(format!("ERR: {error}\n").as_bytes());
+                                }
+                            }
+                        }
+                        "artifact_read" => {
+                            let task_id = json.get("taskId").and_then(|v| v.as_str()).unwrap_or("");
+                            let source = json.get("source").and_then(|v| v.as_str()).unwrap_or("");
+                            let relative_path = json.get("relativePath").and_then(|v| v.as_str()).unwrap_or("");
+
+                            match task_artifact_read(
+                                app.clone(),
+                                task_id.to_string(),
+                                source.to_string(),
+                                relative_path.to_string(),
+                            ) {
+                                Ok(result) => {
+                                    let payload = serde_json::to_string(&result).unwrap_or_else(|_| "{}".to_string());
+                                    let _ = stream.write_all(format!("{payload}\n").as_bytes());
+                                }
+                                Err(error) => {
+                                    let _ = stream.write_all(format!("ERR: {error}\n").as_bytes());
+                                }
+                            }
+                        }
                         "open_preview" => {
                             let task_id = json.get("taskId").and_then(|v| v.as_str()).unwrap_or("");
                             let relative_path = json.get("relativePath").and_then(|v| v.as_str()).unwrap_or("");
@@ -940,6 +1157,8 @@ pub fn run() {
             task_store_load_conversation,
             task_preview_list,
             task_preview_read,
+            task_artifact_list,
+            task_artifact_read,
             auth_store_list,
             auth_store_set_api_key,
             auth_store_delete,

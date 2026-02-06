@@ -10,8 +10,25 @@ AUTH_STATE_DIR=/mnt/authstate
 TASK_STATE_MOUNTED=0
 AUTH_STATE_MOUNTED=0
 SESSIONS_ROOT=""
+TASKS_ROOT=""
 INITIAL_TASK_ID=""
 AUTH_PROFILE="default"
+
+wait_for_taskd_port() {
+    PORT_HEX=$(printf '%04X' "$RPC_PORT")
+    ATTEMPT=0
+
+    while [ "$ATTEMPT" -lt 50 ]; do
+        if grep -qi ":$PORT_HEX " /proc/net/tcp 2>/dev/null; then
+            return 0
+        fi
+
+        sleep 0.1
+        ATTEMPT=$((ATTEMPT + 1))
+    done
+
+    return 1
+}
 
 mount -t proc proc /proc
 mount -t sysfs sysfs /sys
@@ -91,6 +108,11 @@ if [ -z "$SESSIONS_ROOT" ]; then
     fi
 fi
 
+TASKS_ROOT="${SESSIONS_ROOT%/*}"
+if [ -z "$TASKS_ROOT" ]; then
+    TASKS_ROOT="/"
+fi
+
 if [ "$AUTH_STATE_MOUNTED" = "1" ]; then
     PROFILE_DIR="$AUTH_STATE_DIR/$AUTH_PROFILE"
     if [ -f "$PROFILE_DIR/auth.json" ]; then
@@ -109,19 +131,25 @@ fi
 
 [ -f /opt/pi-agent/env.sh ] && . /opt/pi-agent/env.sh
 
-echo "READY"
-
 if [ -x /usr/bin/node ] && [ -f /opt/pi/dist/cli.js ] && [ -f /opt/piwork/taskd.js ]; then
-    mkdir -p "$SESSIONS_ROOT"
+    mkdir -p "$SESSIONS_ROOT" "$TASKS_ROOT"
     export PIWORK_RPC_PORT="$RPC_PORT"
     export PIWORK_PI_CLI=/opt/pi/dist/cli.js
     export PIWORK_TASKD_SESSIONS_ROOT="$SESSIONS_ROOT"
+    export PIWORK_TASKD_TASKS_ROOT="$TASKS_ROOT"
     [ -n "$INITIAL_TASK_ID" ] && export PIWORK_INITIAL_TASK_ID="$INITIAL_TASK_ID"
 
     echo "Runtime: taskd"
     echo "Taskd sessions root: $SESSIONS_ROOT"
+    echo "Taskd tasks root: $TASKS_ROOT"
 
     /usr/bin/node /opt/piwork/taskd.js 2>&1 &
+
+    if wait_for_taskd_port; then
+        echo "READY"
+    else
+        echo "ERROR: taskd RPC port did not become ready"
+    fi
 else
     echo "ERROR: taskd runtime dependencies missing"
 fi

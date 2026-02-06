@@ -27,7 +27,8 @@ Guest (VM):
 Per task (guest):
 
 - session file: `/sessions/<taskId>/session.json` (canonical)
-- workspace dir: `/sessions/<taskId>/work`
+- scratchpad outputs dir: `/mnt/taskstate/<taskId>/outputs`
+- scratchpad uploads dir: `/mnt/taskstate/<taskId>/uploads`
 
 ## RPC transport (current)
 
@@ -54,9 +55,9 @@ Current MVP direction is Path I-lite:
 - host validates working folder against workspace root (`realpath` + scope checks)
 - host passes validated relative path to guest task creation
 - guest enforces relative-path constraints for task cwd selection
-- changing the active task folder applies immediately by recycling that task process (`stop_task` → `create_or_open_task` → `switch_task`) without VM restart
-- when workspace root is unavailable in-guest, taskd falls back to task scratch workspace (`/sessions/<taskId>/work`) instead of failing hard
-- task session continuity is preserved across folder changes via the same task `session.json`
+- `workingFolder` is one-time bind per task (`null -> path` allowed once, then locked)
+- first bind for an already-open task is applied by recycling that task process (`stop_task` → `create_or_open_task` → `switch_task`) without VM restart
+- when workspace root is unavailable in-guest, taskd falls back to task outputs scratchpad (`tasks/<taskId>/outputs`) instead of failing hard
 - runtime mount reliability is maintained by loading required 9p modules before mount attempts
 
 ## Task persistence

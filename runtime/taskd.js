@@ -12,6 +12,7 @@ const RPC_PORT = Number.parseInt(process.env.PIWORK_RPC_PORT || "19384", 10);
 const NODE_BIN = process.env.PIWORK_NODE_BIN || "/usr/bin/node";
 const PI_CLI = process.env.PIWORK_PI_CLI || "/opt/pi/dist/cli.js";
 const SESSIONS_ROOT = process.env.PIWORK_TASKD_SESSIONS_ROOT || "/sessions";
+const TASKS_ROOT = process.env.PIWORK_TASKD_TASKS_ROOT || path.dirname(SESSIONS_ROOT);
 const WORKSPACE_ROOT = process.env.PIWORK_WORKSPACE_ROOT || "";
 const INITIAL_TASK_ID = process.env.PIWORK_INITIAL_TASK_ID || "";
 const DEFAULT_PROVIDER = process.env.PIWORK_DEFAULT_PROVIDER || "anthropic";
@@ -379,7 +380,9 @@ function sendLegacyResponse(command, success, data, error, id) {
 function buildTask(taskId, options = {}) {
     const sessionDir = path.join(SESSIONS_ROOT, taskId);
     const sessionFile = path.join(sessionDir, "session.json");
-    const workDir = path.join(sessionDir, "work");
+    const taskDir = path.join(TASKS_ROOT, taskId);
+    const outputsDir = path.join(taskDir, "outputs");
+    const uploadsDir = path.join(taskDir, "uploads");
 
     return {
         taskId,
@@ -393,8 +396,11 @@ function buildTask(taskId, options = {}) {
         requestedWorkingFolderRelative:
             typeof options.workingFolderRelative === "string" ? options.workingFolderRelative : null,
         sessionFile,
-        workDir,
-        currentCwd: workDir,
+        taskDir,
+        outputsDir,
+        uploadsDir,
+        workDir: outputsDir,
+        currentCwd: outputsDir,
         child: null,
         pendingChildRequests: new Map(),
         stopping: false,
@@ -408,6 +414,9 @@ function serializeTask(task) {
         taskId: task.taskId,
         state: task.state,
         sessionFile: task.sessionFile,
+        taskDir: task.taskDir,
+        outputsDir: task.outputsDir,
+        uploadsDir: task.uploadsDir,
         workDir: task.workDir,
         currentCwd: task.currentCwd,
         workingFolderRelative: task.requestedWorkingFolderRelative,
@@ -560,7 +569,17 @@ async function spawnTaskProcess(task) {
         return;
     }
 
-    fs.mkdirSync(task.workDir, { recursive: true });
+    fs.mkdirSync(path.dirname(task.sessionFile), { recursive: true });
+    fs.mkdirSync(task.taskDir, { recursive: true });
+    fs.mkdirSync(task.outputsDir, { recursive: true });
+    fs.mkdirSync(task.uploadsDir, { recursive: true });
+
+    try {
+        fs.chmodSync(task.outputsDir, 0o755);
+        fs.chmodSync(task.uploadsDir, 0o555);
+    } catch {
+        // Best-effort permissions for 9p mounts.
+    }
 
     const taskCwd = resolveTaskCwd(task);
     const args = [PI_CLI, "--mode", "rpc", "--session", task.sessionFile];
@@ -1463,7 +1482,9 @@ function startServer() {
 
 async function main() {
     fs.mkdirSync(SESSIONS_ROOT, { recursive: true });
+    fs.mkdirSync(TASKS_ROOT, { recursive: true });
     log(`Sessions root: ${SESSIONS_ROOT}`);
+    log(`Tasks root: ${TASKS_ROOT}`);
 
     await bootstrapInitialTask();
     startServer();

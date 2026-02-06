@@ -1,30 +1,17 @@
 #!/usr/bin/env bash
-#MISE description="Set active working folder (test harness)"
+#MISE description="Set working folder for active task (one-time bind)"
 set -euo pipefail
 
 FOLDER="${1:-$HOME/dev/pui/tmp/test-workdir}"
-ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-LOG_FILE="$ROOT_DIR/tmp/dev/piwork.log"
 
-# Check test server is running
 if ! nc -z localhost 19385 2>/dev/null; then
     echo "Test server not running. Run: mise run test-start"
     exit 1
 fi
 
-echo "Setting folder: $FOLDER"
+echo "Requesting working folder: $FOLDER"
 echo "{\"cmd\":\"set_folder\",\"folder\":\"$FOLDER\"}" | nc -w 2 localhost 19385
 
-echo "Waiting for folder change..."
-sleep 1
-
-if grep -q "Runtime: taskd" "$HOME/Library/Application Support/com.pi.work/vm/qemu.log"; then
-    echo "✓ Folder change requested (runtime mode; no VM restart expected)"
-    exit 0
-fi
-
-if grep -q "Mounted working folder" "$HOME/Library/Application Support/com.pi.work/vm/qemu.log"; then
-    echo "✓ Working folder mounted"
-else
-    echo "⚠ Working folder mount not detected (check QEMU log)"
-fi
+echo "Done."
+echo "- If the active task has no folder yet, this sets the first (and only) bind."
+echo "- If the active task already has a folder, the UI rejects changes (create a new task)."

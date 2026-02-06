@@ -51,6 +51,7 @@ let openingLog = $state(false);
 // Task/runtime tracking
 let currentTaskId = $state<string | null>(null);
 let currentWorkingFolder = $state<string | null>(null);
+let activeTask = $state<TaskMetadata | null>(null);
 let currentSessionFile = $state<string | null>(null);
 let workspaceRoot = $state<string | null>(null);
 let authProfile = $state("default");
@@ -71,6 +72,8 @@ let previewSelection = $state<PreviewSelection>({
     taskId: null,
     relativePath: null,
     requestId: 0,
+    source: "preview",
+    artifactSource: null,
 });
 let previewLoading = $state(false);
 let previewError = $state<string | null>(null);
@@ -701,6 +704,15 @@ async function sendPrompt(message?: string): Promise<boolean> {
         return false;
     }
 
+    if (currentTaskId && activeTask && activeTask.title === "New Task" && conversation.messages.length === 0) {
+        const nextTitle = content.length > 50 ? `${content.substring(0, 50)}…` : content;
+        await taskStore.upsert({
+            ...activeTask,
+            title: nextTitle,
+            updatedAt: new Date().toISOString(),
+        });
+    }
+
     // Add user message to conversation
     messageAccumulator.addUserMessage(content);
     conversation = messageAccumulator.getState();
@@ -804,8 +816,17 @@ async function handleFolderChange(folder: string | null): Promise<void> {
         return;
     }
 
+    const requestedFolder = typeof folder === "string" ? folder.trim() : "";
+
     try {
-        await runtimeService.handleFolderChange(folder, {
+        if (!currentTaskId && requestedFolder) {
+            const task = taskStore.create("New Task");
+            await taskStore.upsert(task);
+            await handleTaskSwitch(task);
+            taskStore.setActive(task.id);
+        }
+
+        await runtimeService.handleFolderChange(requestedFolder || null, {
             persistWorkingFolderForActiveTask,
         });
     } catch (error) {
@@ -877,10 +898,17 @@ async function loadPreviewForSelection(selection: PreviewSelection): Promise<voi
     previewError = null;
 
     try {
-        const response = await invoke<PreviewReadResponse>("task_preview_read", {
-            taskId: selection.taskId,
-            relativePath: selection.relativePath,
-        });
+        const response =
+            selection.source === "artifact"
+                ? await invoke<PreviewReadResponse>("task_artifact_read", {
+                      taskId: selection.taskId,
+                      source: selection.artifactSource ?? "outputs",
+                      relativePath: selection.relativePath,
+                  })
+                : await invoke<PreviewReadResponse>("task_preview_read", {
+                      taskId: selection.taskId,
+                      relativePath: selection.relativePath,
+                  });
 
         if (requestId !== previewRequestId) {
             return;
@@ -920,6 +948,7 @@ onMount(() => {
 
             // Subscribe to active task changes
             unsubscribeActiveTask = taskStore.activeTask.subscribe((task) => {
+                activeTask = task;
                 void handleTaskSwitch(task);
             });
 
@@ -1236,7 +1265,8 @@ onDestroy(() => {
                         <FolderSelector
                             value={currentWorkingFolder}
                             onchange={handleFolderChange}
-                            disabled={!rpcConnected}
+                            disabled={!rpcConnected || Boolean(activeTask?.workingFolder)}
+                            locked={Boolean(activeTask?.workingFolder)}
                         />
                         <button class="rounded-md p-1.5 hover:bg-accent" aria-label="Attach file">
                             <Paperclip class="h-4 w-4 text-muted-foreground" />

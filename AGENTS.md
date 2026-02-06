@@ -65,7 +65,7 @@ mise run test-start / test-stop          # app lifecycle
 mise run test-prompt "hello"             # send prompt, wait for response
 mise run test-screenshot name            # capture to tmp/dev/name.png
 mise run test-dump-state                 # log task/session/message state
-mise run test-set-folder /path           # set working folder
+mise run test-set-folder /path           # one-time bind working folder for active task
 mise run test-set-task <id>              # switch active task
 mise run test-create-task "Title" [folder]
 mise run test-delete-tasks

@@ -7,22 +7,34 @@
 - [x] **Extract init script** — move the heredoc out of `mise-tasks/runtime-build` into `runtime/init.sh`
 - [x] **Fix context pollution** — infrastructure bash commands (grep mount check, mkdir, session writes) go through pi's RPC and pollute the agent's conversation. Add `system_bash` to taskd that bypasses pi sessions, or do checks in taskd before spawning pi.
 - [x] **Simplify auth/settings** — strip Settings modal to: show current auth status + "Import from pi" button. Kill multi-profile UI. For MVP: baked auth or `~/.pi/agent/auth.json` import.
-- [ ] **Lock working folder after task creation** — `workingFolder` is immutable for an existing task; if the wrong folder was selected, create a new task.
+- [x] **Lock working folder after first bind** — `workingFolder` supports one-time bind (`null -> path`), then becomes immutable for that task; use a new task for a different folder.
 - [x] **Define task artifact persistence contract** — documented in `docs/task-artifact-contract.md` (`outputs` writable, `uploads` read-only, Scratchpad aggregates both).
-- [ ] **Implement artifact contract in runtime/UI** — enforce immutable folder updates, remove folder-change apply flow, surface Scratchpad from `outputs` + `uploads`, and enforce uploads read-only.
+- [x] **Implement artifact contract in runtime/UI** — enforce one-time folder bind, surface Scratchpad from `outputs` + `uploads`, and apply uploads read-only policy.
 - [ ] **Untangle auth state from runtime artifacts** — keep auth storage purpose clear; avoid mixing credentials with unrelated pi/session artifacts.
 - [ ] **Fix sendLogin optimistic log** — logs `[info] Sent /login` even if not connected
+- [ ] **Fix opener permission path** — `Open in Finder` currently fails with `opener.open_path not allowed`.
+- [ ] **Fix right-panel error isolation** — Working-folder action errors currently render inside Scratchpad panel.
+- [ ] **Fix first `/mnt/workdir` write reliability** — first write to working folder can claim success but not appear until retry.
+- [ ] **Add harness regression for working-folder writes** — set folder → write file immediately → assert host path has file.
 - [ ] **Delete remaining slop** — review docs for stale references to v1, v2 flags, sync protocol, smoke suites
 - [ ] **Dev watch scope** — avoid restarting `tauri dev` for non-runtime docs/content edits (e.g. Markdown), keep hot reload scoped to relevant source/config files.
-- [ ] **Roadmap sync hygiene** — keep `docs/ui-roadmap.md` aligned with `TODO.md` (directional vs execution items, avoid stale/contradictory status).
+- [x] **Roadmap sync hygiene** — synced `docs/ui-roadmap.md` with current `TODO.md` execution state (2026-02-06).
 
 ## Next: Make it usable
 
+- [ ] **Model picker realism (no fake fallback)** — stop hardcoding fallback model lists in runtime/UI; only show models the runtime actually reports.
+- [ ] **Model availability empty/error state** — if no models are available, show a clear empty/error state and disable picker actions.
+- [ ] **Model scope toggle in Settings** — add `Preferred only` (default shortlist we define) vs `All available` filtering for model picker results.
+- [ ] **Persist model selection to task metadata** — write picker changes back to `taskStore.model` so switching/reopening tasks restores model intent.
+- [ ] **Finish auth profile cull for MVP** — remove remaining multi-profile runtime/test plumbing and standardize on the default profile path.
 - [ ] **Markdown rendering** — render agent responses (bold, lists, code blocks). Biggest UX gap.
 - [ ] **Tool call display** — collapsible "Created a file ›", "Ran command ›" in message stream
-- [ ] **Right panel IA pass** — replace “Downloads” with “Working folder” card semantics (dynamic title = folder basename when set), clear empty states, and open-in-Finder affordance.
-- [ ] **Scratchpad continuity** — keep Scratchpad visible for every task and aggregate artifacts from both `outputs` and `uploads`.
-- [ ] **Artifact explorer parity** — make file listing/preview behavior consistent across working-folder and no-folder tasks, including uploads read-only behavior.
+- [x] **Right panel IA pass** — replace “Downloads” with “Working folder” card semantics (dynamic title = folder basename when set), clear empty states, and open-in-Finder affordance.
+- [ ] **Move Working-folder open action to header** — use icon-only action in card header (left of chevron), remove body button.
+- [x] **Scratchpad continuity** — keep Scratchpad visible for every task and aggregate artifacts from both `outputs` and `uploads`.
+- [x] **Artifact explorer parity** — make file listing/preview behavior consistent across working-folder and no-folder tasks, including uploads read-only behavior.
+- [ ] **Auto-refresh artifact panels** — refresh Scratchpad/Working-folder file views on new tool/file activity (not manual refresh only).
+- [ ] **Working-folder file visibility** — show files written to working folder in UI (current card mostly shows path metadata).
 - [ ] **Context panel usefulness** — surface active connectors/tools and task-referenced files, not just static copy.
 
 ## Later: Production

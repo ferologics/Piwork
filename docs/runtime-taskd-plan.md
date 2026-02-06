@@ -55,7 +55,8 @@ This plan keeps one clear baseline:
 Per task in guest:
 
 - `/sessions/<taskId>/session.json` (canonical semantic state)
-- `/sessions/<taskId>/work/` (task workspace)
+- `/mnt/taskstate/<taskId>/outputs/` (task-local writable artifacts)
+- `/mnt/taskstate/<taskId>/uploads/` (task-local read-only artifacts)
 
 Per task on host:
 

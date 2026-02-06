@@ -8,9 +8,10 @@ Based on Cowork observation + our needs.
 
 ## Sync with TODO (current execution track)
 
-- **Right panel IA** (Working folder + Scratchpad split, collapsible cards, empty states, quick open-in-Finder) → `TODO.md` / Next
-- **Scratchpad continuity** (files remain visible after setting/changing working folder) → `TODO.md` / Next
-- **Artifact explorer parity** (same preview/list behavior for working-folder + no-folder tasks) → `TODO.md` / Next
+- **Right panel IA** (Working folder card semantics + open-in-Finder) → done in `TODO.md` / Next
+- **Scratchpad continuity** (`outputs` + `uploads` aggregation per task) → done in `TODO.md` / Next
+- **Artifact explorer parity** (consistent listing/preview behavior across task modes) → done in `TODO.md` / Next
+- **Model picker realism + availability UX + scope controls** → `TODO.md` / Next
 - **Context usefulness** (real connectors + referenced files, not static placeholder copy) → `TODO.md` / Next
 - **Progress model improvements** (Cowork-style step/milestone summaries) are explicitly **non-P0** → `TODO.md` / Later: Polish
 - **Multi-task runtime switching semantics** (switch without losing running state) → `TODO.md` / Later: Production
@@ -22,7 +23,7 @@ Baseline status snapshot:
 - [x] **Task resume** - select task, restore conversation + task session
 - [x] **Session isolation** - per-task process/session model (taskd)
 - [x] **Working folder mount** - host folder mounted into VM via 9p
-- [ ] **Show created files clearly** - baseline exists, but right-panel IA/parity polish is still pending (tracked in `TODO.md`)
+- [x] **Show created files clearly** - right panel now exposes Working folder + Scratchpad with preview flow
 
 ## P1: Core UX Polish
 
@@ -30,7 +31,7 @@ Make it feel like a real app:
 
 - [ ] **Task title** - editable at top of conversation
 - [ ] **Collapsible actions** - "Created a file >", "Searched the web >"
-- [ ] **Artifact cards** - file preview with "Open in..." button
+- [x] **Artifact cards (baseline)** - scratchpad file preview + working-folder open-in-Finder landed; richer canvas views later
 - [ ] **Progress indicators** - checkmarks in right panel
 - [ ] **Profile chip** - bottom left, show user + plan/status
 - [ ] **Auth/settings** - decide MVP scope (currently untested)

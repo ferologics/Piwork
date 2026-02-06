@@ -100,7 +100,7 @@ Payload:
     "provider": "anthropic",
     "model": "claude-opus-4-6",
     "thinkingLevel": "high",
-    "workingFolder": "/sessions/task_abc123/work"
+    "workingFolder": "/mnt/workdir/project-a"
 }
 ```
 
@@ -166,7 +166,10 @@ Result shape:
             "taskId": "task_abc123",
             "state": "active",
             "sessionFile": "/sessions/task_abc123/session.json",
-            "workDir": "/sessions/task_abc123/work"
+            "taskDir": "/mnt/taskstate/task_abc123",
+            "outputsDir": "/mnt/taskstate/task_abc123/outputs",
+            "uploadsDir": "/mnt/taskstate/task_abc123/uploads",
+            "workDir": "/mnt/taskstate/task_abc123/outputs"
         }
     ]
 }
@@ -181,7 +184,7 @@ Payload:
 ```json
 {
     "command": "pwd",
-    "cwd": "/sessions/task_abc123/work"
+    "cwd": "/mnt/taskstate/task_abc123/outputs"
 }
 ```
 
@@ -191,10 +194,10 @@ Result:
 
 ```json
 {
-    "output": "/sessions/task_abc123/work\n",
+    "output": "/mnt/taskstate/task_abc123/outputs\n",
     "exitCode": 0,
     "timedOut": false,
-    "cwd": "/sessions/task_abc123/work"
+    "cwd": "/mnt/taskstate/task_abc123/outputs"
 }
 ```
 

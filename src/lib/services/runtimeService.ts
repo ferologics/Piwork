@@ -114,6 +114,7 @@ export class RuntimeService {
     private pendingTaskSwitch: PendingTaskSwitch | null = null;
     private lastTaskReadyAt = new Map<string, number>();
     private workspaceRootInitialized = false;
+    private vmWorkspaceRoot: string | null = null;
 
     constructor(callbacks: RuntimeServiceCallbacks = {}) {
         this.callbacks = callbacks;
@@ -212,6 +213,7 @@ export class RuntimeService {
             this.patch({ rpcConnected: false, rpcError: message });
             this.clearPendingRpcResponses(message || "Failed to connect RPC");
             this.rpcClient = null;
+            this.vmWorkspaceRoot = null;
             this.callbacks.onError?.(message);
             await client.disconnect().catch(() => undefined);
         } finally {
@@ -228,6 +230,7 @@ export class RuntimeService {
         await this.rpcClient.disconnect();
         this.clearPendingRpcResponses("RPC disconnected");
         this.rpcClient = null;
+        this.vmWorkspaceRoot = null;
         this.patch({
             rpcConnected: false,
             rpcError: null,
@@ -260,6 +263,7 @@ export class RuntimeService {
         }
 
         await client.connect(folderForConnect, this.snapshot.currentTaskId, authProfile);
+        this.vmWorkspaceRoot = folderForConnect ?? null;
     }
 
     private getAuthProfileForVmStart(): string {
@@ -288,6 +292,29 @@ export class RuntimeService {
         } catch (error) {
             devLog("RuntimeService", `Failed to resolve workspace root: ${error}`);
         }
+    }
+
+    private async restartVmWithWorkspaceRoot(): Promise<void> {
+        const client = this.rpcClient;
+        if (!client) {
+            throw new Error("RPC client unavailable");
+        }
+
+        devLog(
+            "RuntimeService",
+            `Restarting VM to apply workspace root mount: ${this.snapshot.workspaceRoot ?? "(none)"}`,
+        );
+
+        this.clearPendingRpcResponses("VM restarting");
+        this.patch({
+            rpcConnected: false,
+            rpcError: null,
+        });
+
+        await client.stopVm();
+        this.vmWorkspaceRoot = null;
+        await this.connectRuntime(client);
+        await this.waitForRpcReady();
     }
 
     private async validateWorkingFolder(folder: string): Promise<WorkingFolderValidation> {
@@ -349,6 +376,12 @@ export class RuntimeService {
             }
 
             await this.waitForRpcReady();
+
+            const requiredWorkspaceRoot = this.snapshot.workspaceRoot;
+            if (newTask.workingFolder && requiredWorkspaceRoot && this.vmWorkspaceRoot !== requiredWorkspaceRoot) {
+                await this.restartVmWithWorkspaceRoot();
+            }
+
             await this.ensureTaskdTaskReady(newTask);
             await this.switchTaskdTask(newTaskId);
             this.callbacks.onStateRefreshRequested?.();
@@ -363,43 +396,62 @@ export class RuntimeService {
     }
 
     private async handleFolderChangeRuntime(folder: string | null, deps: FolderChangeDeps) {
+        const taskId = this.snapshot.currentTaskId;
         const previousFolder = this.snapshot.currentWorkingFolder;
-        let nextFolder: string | null = folder;
-        let nextRelativePath: string | null = null;
+        const hasBoundFolder = Boolean(taskId && previousFolder);
 
-        if (nextFolder) {
-            const validated = await this.validateWorkingFolder(nextFolder);
-            nextFolder = validated.folder;
-            nextRelativePath = validated.relativePath;
+        if (hasBoundFolder) {
+            const requestedFolder = typeof folder === "string" ? folder.trim() : "";
+            if (!requestedFolder || requestedFolder !== previousFolder) {
+                throw new Error("Working folder is locked for this task. Create a new task to use a different folder.");
+            }
+            return;
         }
 
-        const taskId = this.snapshot.currentTaskId;
-        const folderChanged = nextFolder !== previousFolder;
+        const requestedFolder = typeof folder === "string" ? folder.trim() : "";
+        if (!requestedFolder) {
+            if (!taskId) {
+                this.patch({ currentWorkingFolder: null });
+            }
+            return;
+        }
+
+        const validated = await this.validateWorkingFolder(requestedFolder);
+        const nextFolder = validated.folder;
+        const nextRelativePath = validated.relativePath;
+
+        if (!taskId) {
+            this.patch({ currentWorkingFolder: nextFolder });
+            devLog("RuntimeService", `Draft working folder set: ${nextFolder}`);
+            return;
+        }
+
+        if (previousFolder === nextFolder) {
+            return;
+        }
 
         this.patch({ currentWorkingFolder: nextFolder });
         await deps.persistWorkingFolderForActiveTask(nextFolder);
 
-        if (!folderChanged || !taskId) {
-            devLog("RuntimeService", `Working folder updated in metadata only: ${nextFolder ?? "(scratch)"}`);
-            return;
-        }
-
         if (!this.snapshot.rpcConnected) {
             devLog(
                 "RuntimeService",
-                "Working folder changed while runtime disconnected; apply deferred until task resume",
+                "Initial working folder set while runtime disconnected; apply deferred until task resume",
             );
             return;
         }
 
-        devLog(
-            "RuntimeService",
-            `Applying working folder change for active task ${taskId}: ${nextFolder ?? "(scratch)"}`,
-        );
+        devLog("RuntimeService", `Applying initial working folder for active task ${taskId}: ${nextFolder}`);
         this.patch({ taskSwitching: true, rpcError: null });
 
         try {
             await this.waitForRpcReady();
+
+            const requiredWorkspaceRoot = this.snapshot.workspaceRoot;
+            if (requiredWorkspaceRoot && this.vmWorkspaceRoot !== requiredWorkspaceRoot) {
+                await this.restartVmWithWorkspaceRoot();
+            }
+
             await this.stopTaskdTaskIfPresent(taskId);
             await this.sendTaskdCommand("create_or_open_task", {
                 taskId,

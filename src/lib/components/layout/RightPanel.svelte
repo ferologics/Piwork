@@ -1,36 +1,38 @@
 <script lang="ts">
 import { invoke } from "@tauri-apps/api/core";
 import { onDestroy, onMount } from "svelte";
-import { Activity, FolderOpen, Link, ChevronDown, RefreshCw, FileText, Image } from "@lucide/svelte";
+import { openPath } from "@tauri-apps/plugin-opener";
+import { Activity, FolderOpen, Link, ChevronDown, RefreshCw, FileText, Image, ExternalLink } from "@lucide/svelte";
 import { taskStore } from "$lib/stores/taskStore";
 import { previewStore } from "$lib/stores/previewStore";
 import type { TaskMetadata } from "$lib/types/task";
 
-type CardId = "progress" | "downloads" | "context";
+type CardId = "progress" | "workingFolder" | "scratchpad" | "context";
 
-interface PreviewFileEntry {
+interface ArtifactFileEntry {
+    source: "outputs" | "uploads";
     path: string;
     size: number;
     modifiedAt: number;
+    readOnly: boolean;
 }
 
-interface PreviewListResponse {
-    root: string;
-    files: PreviewFileEntry[];
+interface ArtifactListResponse {
+    files: ArtifactFileEntry[];
     truncated: boolean;
 }
 
 let expanded = $state<Record<CardId, boolean>>({
     progress: true,
-    downloads: true,
+    workingFolder: true,
+    scratchpad: true,
     context: false,
 });
 
 let activeTask: TaskMetadata | null = $state(null);
 let unsubscribeActive: (() => void) | null = null;
 
-let filesRoot = $state<string | null>(null);
-let files = $state<PreviewFileEntry[]>([]);
+let files = $state<ArtifactFileEntry[]>([]);
 let filesTruncated = $state(false);
 let filesLoading = $state(false);
 let filesError = $state<string | null>(null);
@@ -39,7 +41,8 @@ let filesRequestId = 0;
 
 const cards: { id: CardId; label: string; icon: typeof Activity }[] = [
     { id: "progress", label: "Progress", icon: Activity },
-    { id: "downloads", label: "Downloads", icon: FolderOpen },
+    { id: "workingFolder", label: "Working folder", icon: FolderOpen },
+    { id: "scratchpad", label: "Scratchpad", icon: FolderOpen },
     { id: "context", label: "Context", icon: Link },
 ];
 
@@ -57,8 +60,25 @@ function formatBytes(bytes: number): string {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+function folderBasename(path: string): string {
+    const trimmed = path.replace(/\/+$/, "");
+    const parts = trimmed.split("/");
+    return parts[parts.length - 1] || path;
+}
+
+function cardTitle(card: CardId): string {
+    if (card !== "workingFolder") {
+        return cards.find((entry) => entry.id === card)?.label ?? "";
+    }
+
+    if (activeTask?.workingFolder) {
+        return folderBasename(activeTask.workingFolder);
+    }
+
+    return "Working folder";
+}
+
 function clearFilesState() {
-    filesRoot = null;
     files = [];
     filesTruncated = false;
     filesError = null;
@@ -76,7 +96,7 @@ async function loadFiles(): Promise<void> {
     filesError = null;
 
     try {
-        const result = await invoke<PreviewListResponse>("task_preview_list", {
+        const result = await invoke<ArtifactListResponse>("task_artifact_list", {
             taskId: activeTask.id,
         });
 
@@ -84,7 +104,6 @@ async function loadFiles(): Promise<void> {
             return;
         }
 
-        filesRoot = result.root;
         files = result.files;
         filesTruncated = result.truncated;
     } catch (error) {
@@ -94,7 +113,6 @@ async function loadFiles(): Promise<void> {
 
         filesError = error instanceof Error ? error.message : String(error);
         files = [];
-        filesRoot = null;
         filesTruncated = false;
     } finally {
         if (requestId === filesRequestId) {
@@ -103,19 +121,33 @@ async function loadFiles(): Promise<void> {
     }
 }
 
-function openPreview(path: string) {
+function openPreview(file: ArtifactFileEntry) {
     if (!activeTask?.id) {
         return;
     }
 
-    previewStore.open(activeTask.id, path);
+    previewStore.open(activeTask.id, file.path, {
+        source: "artifact",
+        artifactSource: file.source,
+    });
+}
+
+async function openWorkingFolderInFinder() {
+    const folder = activeTask?.workingFolder;
+    if (!folder) {
+        return;
+    }
+
+    await openPath(folder).catch((error) => {
+        filesError = error instanceof Error ? error.message : String(error);
+    });
 }
 
 onMount(() => {
     unsubscribeActive = taskStore.activeTask.subscribe((value) => {
         activeTask = value;
 
-        const nextKey = `${value?.id ?? ""}:${value?.workingFolder ?? ""}`;
+        const nextKey = `${value?.id ?? ""}`;
         if (nextKey === lastFilesKey) {
             return;
         }
@@ -139,7 +171,7 @@ onDestroy(() => {
                     onclick={() => toggle(card.id)}
                 >
                     <card.icon class="h-4 w-4 text-muted-foreground" />
-                    <span class="flex-1">{card.label}</span>
+                    <span class="flex-1">{cardTitle(card.id)}</span>
                     <ChevronDown class="h-4 w-4 text-muted-foreground transition-transform {expanded[card.id] ? 'rotate-180' : ''}" />
                 </button>
 
@@ -152,23 +184,34 @@ onDestroy(() => {
                             {:else}
                                 <p>No active task</p>
                             {/if}
-                        {:else if card.id === "downloads"}
+                        {:else if card.id === "workingFolder"}
+                            {#if !activeTask}
+                                <p>No active task</p>
+                            {:else}
+                                <div class="space-y-2">
+                                    {#if activeTask.workingFolder}
+                                        <div class="rounded-md bg-muted px-2 py-1 text-xs text-foreground break-all">
+                                            {activeTask.workingFolder}
+                                        </div>
+                                        <button
+                                            class="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[11px] hover:bg-accent"
+                                            onclick={openWorkingFolderInFinder}
+                                        >
+                                            <ExternalLink class="h-3 w-3" />
+                                            Open in Finder
+                                        </button>
+                                    {:else}
+                                        <div class="rounded-md border border-dashed border-border px-2 py-2 text-xs text-muted-foreground">
+                                            No working folder set for this task.
+                                        </div>
+                                    {/if}
+                                </div>
+                            {/if}
+                        {:else if card.id === "scratchpad"}
                             {#if !activeTask}
                                 <p>No active task</p>
                             {:else}
                                 <div class="space-y-3">
-                                    <div class="space-y-1">
-                                        <div class="text-[11px] uppercase tracking-wide text-muted-foreground">
-                                            {activeTask.workingFolder ? "Task Folder" : "Task Scratch Folder"}
-                                        </div>
-                                        <div class="rounded-md bg-muted px-2 py-1 text-xs text-foreground break-all">
-                                            {activeTask.workingFolder ?? "No working folder selected. Using task scratch workspace."}
-                                        </div>
-                                        {#if filesRoot}
-                                            <div class="text-[10px] text-muted-foreground break-all">root: {filesRoot}</div>
-                                        {/if}
-                                    </div>
-
                                     <div class="flex items-center justify-between">
                                         <div class="text-[11px] uppercase tracking-wide text-muted-foreground">
                                             Files {files.length > 0 ? `(${files.length})` : ""}
@@ -199,12 +242,12 @@ onDestroy(() => {
                                         {#if filesLoading && files.length === 0}
                                             <div class="px-2 py-2 text-xs text-muted-foreground">Loading files…</div>
                                         {:else if files.length === 0}
-                                            <div class="px-2 py-2 text-xs text-muted-foreground">No files to preview.</div>
+                                            <div class="px-2 py-2 text-xs text-muted-foreground">No scratchpad files yet.</div>
                                         {:else}
                                             {#each files as file}
                                                 <button
                                                     class="flex w-full items-center gap-2 border-b border-border px-2 py-1.5 text-left text-xs hover:bg-accent last:border-b-0"
-                                                    onclick={() => openPreview(file.path)}
+                                                    onclick={() => openPreview(file)}
                                                 >
                                                     {#if file.path.endsWith('.png') || file.path.endsWith('.jpg') || file.path.endsWith('.jpeg') || file.path.endsWith('.gif') || file.path.endsWith('.webp') || file.path.endsWith('.svg')}
                                                         <Image class="h-3.5 w-3.5 shrink-0 text-muted-foreground" />

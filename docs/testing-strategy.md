@@ -14,7 +14,7 @@ Primitives in `mise-tasks/test-*`. Compose ad-hoc — don't write monolithic E2E
 
 Core: `test-start`, `test-stop`, `test-prompt`, `test-screenshot`, `test-dump-state`
 Tasks: `test-create-task`, `test-delete-tasks`, `test-set-task`
-Folders: `test-set-folder`
+Folders: `test-set-folder` (one-time bind; existing bound task rejects changes)
 Auth: `test-auth-list`, `test-auth-set-key`, `test-auth-delete`, `test-auth-import-pi`, `test-set-auth-profile`, `test-send-login`
 Preview: `test-open-preview`
 Preflight: `test-check-permissions` (screenshot permission)
