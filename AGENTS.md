@@ -57,7 +57,7 @@ Prerequisite: grant Screen Recording permission to the terminal app running `mis
 ### AI testing workflow (important)
 
 - Prefer **ad-hoc primitive tasks** (`test-create-task`, `test-set-task`, `test-set-auth-profile`, `test-auth-list`, `test-auth-set-key`, `test-prompt`, `test-open-preview`, `test-dump-state`, `test-screenshot`) over monolithic end-to-end scripts.
-- Reusable suite scripts live in `scripts/harness/` (current: `path-i-lite-negative.sh`, `auth-profile-mount-smoke.sh`, `auth-profile-switch-smoke.sh`).
+- Reusable suite scripts live in `scripts/harness/` (current: `path-i-lite-negative.sh`, `auth-profile-mount-smoke.sh`, `auth-profile-switch-smoke.sh`, `auth-store-primitives-smoke.sh`).
 - For any UI/state claim, capture all three before concluding:
   1. `test-dump-state` (state snapshot)
   2. `test-screenshot <name>` (visual proof)
@@ -66,6 +66,7 @@ Prerequisite: grant Screen Recording permission to the terminal app running `mis
 - For resume checks, validate semantics (e.g. task-local memory question with unique seed text), not only message counts.
 - Do not add new `mise` tasks for one-off debugging flows; only add reusable primitives.
 - Always run `mise run test-stop` after automated testing to avoid stale ports/processes.
+- Test-server command logs redact sensitive JSON fields (`key`, `token`, `password`, `secret`).
 
 ## VM Runtime
 

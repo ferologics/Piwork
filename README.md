@@ -59,6 +59,7 @@ Repeatable harness checks:
 ./scripts/harness/path-i-lite-negative.sh
 ./scripts/harness/auth-profile-mount-smoke.sh
 ./scripts/harness/auth-profile-switch-smoke.sh
+./scripts/harness/auth-store-primitives-smoke.sh
 ```
 
 ### Cleanup

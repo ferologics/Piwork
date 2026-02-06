@@ -48,7 +48,11 @@ Auth mount/profile smoke checks:
 - `./scripts/harness/auth-profile-mount-smoke.sh` (`docs/auth-profile-mount-smoke.md`)
 - `./scripts/harness/auth-profile-switch-smoke.sh` (`docs/auth-profile-switch-smoke.md`)
 
-All suite scripts run a screenshot-permission preflight (`mise run test-check-permissions`) before executing checks.
+Auth-store primitive smoke check:
+
+- `./scripts/harness/auth-store-primitives-smoke.sh` (`docs/auth-store-primitives-smoke.md`)
+
+All screenshot-using suite scripts run a screenshot-permission preflight (`mise run test-check-permissions`) before executing checks.
 
 ## Evidence rule for runtime behavior claims
 

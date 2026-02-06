@@ -707,6 +707,35 @@ fn auth_store_import_pi(
     auth_store::summary(&auth_path)
 }
 
+#[cfg(debug_assertions)]
+fn sanitize_test_server_value(value: &serde_json::Value) -> serde_json::Value {
+    match value {
+        serde_json::Value::Object(map) => {
+            let mut sanitized = serde_json::Map::new();
+
+            for (key, inner) in map {
+                let lower = key.to_ascii_lowercase();
+                let is_sensitive = lower.contains("key")
+                    || lower.contains("token")
+                    || lower.contains("password")
+                    || lower.contains("secret");
+
+                if is_sensitive {
+                    sanitized.insert(key.clone(), serde_json::Value::String("<redacted>".to_string()));
+                } else {
+                    sanitized.insert(key.clone(), sanitize_test_server_value(inner));
+                }
+            }
+
+            serde_json::Value::Object(sanitized)
+        }
+        serde_json::Value::Array(values) => {
+            serde_json::Value::Array(values.iter().map(sanitize_test_server_value).collect())
+        }
+        _ => value.clone(),
+    }
+}
+
 /// Test server for automated testing (dev mode only)
 /// Listens on port `19385` and accepts commands:
 /// - `{"cmd":"prompt","message":"..."}` - triggers UI sendPrompt flow
@@ -748,14 +777,15 @@ fn start_test_server(app_handle: tauri::AppHandle) {
                         continue;
                     }
 
-                    eprintln!("[test-server] received: {line}");
-
                     // Parse command
                     let parsed: Result<serde_json::Value, _> = serde_json::from_str(&line);
                     let Ok(json) = parsed else {
                         let _ = stream.write_all(b"ERR: invalid JSON\n");
                         continue;
                     };
+
+                    let sanitized = sanitize_test_server_value(&json);
+                    eprintln!("[test-server] received: {sanitized}");
 
                     let cmd = json.get("cmd").and_then(|v| v.as_str()).unwrap_or("rpc");
 
