@@ -20,6 +20,28 @@ interface TaskSummary {
     workingFolder: string | null;
 }
 
+interface ArtifactFileEntry {
+    source: "outputs" | "uploads" | string;
+    path: string;
+    size: number;
+    modifiedAt: number;
+    readOnly: boolean;
+}
+
+interface ArtifactListResponse {
+    files: ArtifactFileEntry[];
+    truncated: boolean;
+}
+
+interface PreviewReadResponse {
+    path: string;
+    mimeType: string;
+    encoding: string;
+    content: string;
+    truncated: boolean;
+    size: number;
+}
+
 function isOkResponse(response: string): boolean {
     return response === "OK";
 }
@@ -56,6 +78,7 @@ export interface StateSnapshot {
     };
     models: {
         count: number;
+        ids: string[];
         loading: boolean;
         error: string | null;
         selectedModelId: string;
@@ -314,11 +337,56 @@ export class IntegrationHarness {
         }
     }
 
+    async sendRpc(request: Record<string, unknown>): Promise<void> {
+        const response = await this.sendCommand(request);
+        if (!isOkResponse(response)) {
+            throw new Error(`rpc failed: ${response}`);
+        }
+    }
+
     async setFolder(folder: string): Promise<void> {
         const response = await this.sendCommand({ cmd: "set_folder", folder });
         if (!isOkResponse(response)) {
             throw new Error(`set_folder failed: ${response}`);
         }
+    }
+
+    async artifactList(taskId: string): Promise<ArtifactListResponse> {
+        return await this.sendJson<ArtifactListResponse>({ cmd: "artifact_list", taskId });
+    }
+
+    async artifactRead(
+        taskId: string,
+        source: "outputs" | "uploads",
+        relativePath: string,
+    ): Promise<PreviewReadResponse> {
+        return await this.sendJson<PreviewReadResponse>({
+            cmd: "artifact_read",
+            taskId,
+            source,
+            relativePath,
+        });
+    }
+
+    async waitForArtifact(
+        taskId: string,
+        source: "outputs" | "uploads",
+        relativePath: string,
+        timeoutMs = 90_000,
+    ): Promise<ArtifactFileEntry> {
+        return await waitFor(
+            async () => {
+                try {
+                    const artifacts = await this.artifactList(taskId);
+                    return artifacts.files.find((file) => file.source === source && file.path === relativePath) ?? null;
+                } catch {
+                    return null;
+                }
+            },
+            timeoutMs,
+            250,
+            `artifact ${source}:${relativePath}`,
+        );
     }
 
     async listTasks(): Promise<TaskSummary[]> {

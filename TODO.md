@@ -8,7 +8,7 @@
   - [x] Add a machine-readable `state_snapshot` contract for deterministic assertions (no log-grep testing).
   - [x] Add first gated Vitest regression: reopen cwd correctness (`/mnt/workdir...`) on folder-bound task reopen.
   - [x] Add remaining gated Vitest regressions: folder-bind continuity (no UI reset), working-folder panel refresh on folder change, and runtime-mismatch badge rules.
-  - [ ] Add one sequential live journey canary (messages + models + workdir + artifacts + reopen), while keeping focused canaries for isolated invariants.
+  - [x] Add one sequential live journey canary (messages + models + workdir + artifacts + reopen), while keeping focused canaries for isolated invariants.
   - [x] Add CI enforcement for both gates (`check` on PRs, `check-full` required before merge).
   - [x] Remove low-signal/noise tests and stale assertions (smoke test, legacy session-file assumptions, noisy debug logs).
   - [x] Add `mise run test-regressions` task (currently runs live-app regression tests).

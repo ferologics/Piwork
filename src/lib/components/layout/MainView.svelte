@@ -873,6 +873,7 @@ function buildTestStateSnapshot() {
         },
         models: {
             count: availableModels.length,
+            ids: availableModels.map((model) => model.id),
             loading: modelsLoading,
             error: modelsError,
             selectedModelId,

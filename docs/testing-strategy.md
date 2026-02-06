@@ -63,6 +63,7 @@ The regression gate should make these guarantees explicit:
 
 Implemented live canaries (integration):
 
+- `journey-sequential.integration.test.ts`
 - `reopen-cwd.integration.test.ts`
 - `folder-bind-continuity.integration.test.ts`
 - `working-folder-panel-refresh.integration.test.ts`
