@@ -2,104 +2,50 @@
 
 ## Goal
 
-Let users authenticate once and reuse provider credentials across tasks. Support both **subscription OAuth** (pi `/login`) and **API keys**.
+Let users authenticate once and reuse provider credentials across tasks.
 
 ## Principles
 
 - Store credentials on the **host**, not inside the VM image by default.
-- Mount host auth state into the VM on boot and select a profile for `PI_CODING_AGENT_DIR`.
-- Support **multiple profiles** (personal / work).
+- Mount host auth state into the VM on boot.
+- For MVP, use a single auth location: `app_data/auth/default/auth.json`.
 
 ## Storage
 
-- Host stores `auth.json` per profile (`app_data/auth/<profile>/auth.json`).
-- VM mounts host auth root at `/mnt/authstate` and prefers the selected profile directory (`/mnt/authstate/<profile>`).
+- Host auth file: `app_data/auth/default/auth.json`
+- VM mount root: `/mnt/authstate`
+- Runtime mount path used by pi: `/mnt/authstate/default`
 - Runtime can still bake credentials into the VM image at build time (`/opt/pi-agent/auth.json`) as fallback.
 - `auth.json` format matches pi’s standard file.
 - **No auth files are committed** (secrets remain local).
 
-## Onboarding Flow (v1)
+## Current implementation (MVP)
 
-**Phase 1 (dev bootstrap):**
+- Settings modal supports:
+  - auth status for default profile
+  - `Import from pi` (`~/.pi/agent/auth.json` → app auth store)
+  - opening the auth file path
+- Runtime always reads mounted default auth first, then baked auth fallback.
+- Test harness auth primitives:
+  - `test-auth-list`
+  - `test-auth-set-key <provider> <key>`
+  - `test-auth-delete <provider>`
+  - `test-auth-import-pi`
+  - `test-send-login`
 
-1. **Use host pi credentials directly**: `~/.pi/agent/auth.json`
-2. Mount into VM at task start
-3. No UI flow yet
+## `/login` flow
 
-**Current implementation (MVP):**
+- UI can send `/login` through the active runtime session.
+- Login URLs detected in stream/extension messages are surfaced with Open/Copy actions.
+- Open question remains: reliability through VM NAT for all providers.
 
-- Settings modal lets you save API keys to `app_data/auth/<profile>/auth.json` via Tauri commands.
-- Profiles are stored in localStorage (`piwork:auth-profile`, `piwork:auth-profiles`).
-- Runtime reads mounted host auth profile on VM boot (restart runtime after auth/profile updates).
-- Recommended bootstrap fallback is `mise run runtime-build-auth` (optionally `PIWORK_AUTH_PATH=/path/to/auth.json`).
-- In-app auth/profile UI remains explicitly experimental.
-- Harness primitives: `test-auth-list`, `test-auth-set-key`, `test-auth-delete`, `test-auth-import-pi`, `test-set-auth-profile`, `test-send-login`.
+## Success criteria
 
-**Phase 2 (full login UI):**
-
-1. **Choose provider** (Claude, OpenAI, Gemini, etc.)
-2. Pick **Login method**:
-   - **Subscription login** (OAuth via pi `/login`)
-   - **API key** (manual entry)
-3. Save credentials to host profile
-4. Show active provider in UI (profile chip + model selector)
-
-## Auth UI Plan (v1)
-
-### Entry Points
-
-- Auth banner in the main view when RPC returns auth errors.
-- Settings screen (later) for provider/profile management.
-
-### OAuth (/login) Flow
-
-1. User clicks **Log in**.
-2. Host sends `/login` via RPC.
-3. UI renders `extension_ui_request` dialogs (select/confirm/input).
-4. Detect login URLs in RPC/extension messages; show **Open** + **Copy** actions (auto-open optional).
-5. On completion, refresh `runtime_get_state` + `pi_get_available_models` and show active provider/model.
-
-### API Key Flow
-
-1. User selects provider + pastes key.
-2. Host writes to the profile `auth.json`.
-3. Validate with `pi_get_available_models`.
-
-### Success Criteria
-
-- `runtime_get_state` returns an active model.
+- `runtime_get_state` reports an active model when auth is valid.
 - `pi_get_available_models` returns at least one model.
-- UI shows active provider/model.
+- UI picker reflects runtime-reported provider/model.
 
-### Failure Handling
+## Open questions
 
-- Display auth banner with the error message.
-- Primary fix path: import/set auth in Settings and restart runtime.
-- Fallback dev shortcut: rebuild runtime with `mise run runtime-build-auth` (optionally set `PIWORK_AUTH_PATH=...`).
-
-## Subscription Login (OAuth)
-
-Use pi’s built‑in `/login` flow to avoid custom OAuth plumbing.
-
-**Option A (preferred):** run a **login helper** process that invokes pi `/login` and streams prompts to the UI. When complete, copy the resulting `auth.json` into the host profile.
-
-**Option B:** expose a **device‑code** flow (if supported), so the UI can show a URL + code while pi waits.
-
-## API Key Flow
-
-- User pastes key into UI.
-- Host writes entry to `auth.json`.
-- Optional: validate key by listing models.
-
-## Profiles
-
-- Default profile created at first login.
-- User can add/switch profiles in Settings.
-- Profile names are normalized to safe local identifiers; invalid values fall back to `default`.
-- Each profile has its own `auth.json` and model defaults.
-
-## Open Questions
-
-- Best way to run pi `/login` in a UI app (helper process vs in‑VM)?
-- Do we allow multiple providers per profile or enforce one “active” provider?
-- Do we support token refresh on host, or let pi handle refresh inside the VM?
+- Should post-MVP bring back named profiles, or keep default-only permanently?
+- Best UX for provider-specific auth troubleshooting when `/login` is unavailable.

@@ -22,7 +22,6 @@ import {
     type RuntimeGetStateResult,
     type RuntimeTaskState,
 } from "$lib/services/runtimeService";
-import { normalizeAuthProfile } from "$lib/services/authProfile";
 import { previewStore, type PreviewSelection } from "$lib/stores/previewStore";
 
 let { previewOpen = false }: { previewOpen?: boolean } = $props();
@@ -71,7 +70,6 @@ let currentWorkingFolder = $state<string | null>(null);
 let activeTask = $state<TaskMetadata | null>(null);
 let currentSessionFile = $state<string | null>(null);
 let workspaceRoot = $state<string | null>(null);
-let authProfile = $state("default");
 let taskSwitching = $state(false);
 let unsubscribeActiveTask: (() => void) | null = null;
 
@@ -300,7 +298,6 @@ function applyRuntimeSnapshot(snapshot: RuntimeServiceSnapshot) {
     currentWorkingFolder = snapshot.currentWorkingFolder;
     currentSessionFile = snapshot.currentSessionFile;
     workspaceRoot = snapshot.workspaceRoot;
-    authProfile = snapshot.authProfile;
     taskSwitching = snapshot.taskSwitching;
 
     if (snapshot.rpcConnected) {
@@ -545,9 +542,23 @@ async function handleModelChange() {
         const updated = await runtimeService.piSetModel(selected.provider, selected.id);
         const option = resolveModelOption(updated);
 
+        let persistedProvider = selected.provider;
+        let persistedModelId = selected.id;
+
         if (option) {
             ensureModelOption(option);
             selectedModelId = option.id;
+            persistedProvider = option.provider ?? persistedProvider;
+            persistedModelId = option.id;
+        }
+
+        if (activeTask && currentTaskId === activeTask.id) {
+            await taskStore.upsert({
+                ...activeTask,
+                provider: persistedProvider,
+                model: persistedModelId,
+                updatedAt: new Date().toISOString(),
+            });
         }
 
         modelsError = null;
@@ -811,7 +822,6 @@ let testDeleteAllTasksUnlisten: (() => void) | null = null;
 let testDumpStateUnlisten: (() => void) | null = null;
 let testStateSnapshotUnlisten: (() => void) | null = null;
 let testOpenPreviewUnlisten: (() => void) | null = null;
-let testSetAuthProfileUnlisten: (() => void) | null = null;
 let testSendLoginUnlisten: (() => void) | null = null;
 
 function buildTestStateSnapshot() {
@@ -858,7 +868,6 @@ function buildTestStateSnapshot() {
             rpcError,
             hasConnectedOnce,
             taskSwitching,
-            authProfile,
         },
         conversation: {
             messageCount: conversation.messages.length,
@@ -1001,35 +1010,6 @@ async function handleFolderChange(folder: string | null): Promise<void> {
     }
 }
 
-async function applyAuthProfileForTest(profileValue: string | null | undefined): Promise<void> {
-    const profile = normalizeAuthProfile(profileValue);
-
-    try {
-        localStorage.setItem("piwork:auth-profile", profile);
-    } catch {
-        // Ignore storage errors in test flows.
-    }
-
-    authProfile = profile;
-    devLog("TestHarness", `applying auth profile: ${profile}`);
-
-    const previousTaskId = currentTaskId;
-
-    if (previousTaskId) {
-        taskStore.setActive(null);
-    }
-
-    await disconnectRpc();
-    await invoke("vm_stop").catch((error) => {
-        devLog("MainView", `vm_stop failed during auth profile apply: ${error}`);
-    });
-    await connectRpc();
-
-    if (previousTaskId) {
-        taskStore.setActive(previousTaskId);
-    }
-}
-
 function formatBytes(bytes: number): string {
     if (bytes < 1024) {
         return `${bytes} B`;
@@ -1166,13 +1146,6 @@ onMount(() => {
             testTaskUnlisten = unlisten;
         });
 
-        listen<string | null>("test_set_auth_profile", (event) => {
-            devLog("TestHarness", `received test_set_auth_profile: ${event.payload}`);
-            void applyAuthProfileForTest(event.payload);
-        }).then((unlisten) => {
-            testSetAuthProfileUnlisten = unlisten;
-        });
-
         listen("test_send_login", () => {
             devLog("TestHarness", "received test_send_login");
             void sendLogin();
@@ -1207,7 +1180,7 @@ onMount(() => {
                 "TestHarness",
                 `state: task=${currentTaskId ?? "none"} session=${currentSessionFile ?? "none"} folder=${
                     currentWorkingFolder ?? "none"
-                } root=${workspaceRoot ?? "none"} auth=${authProfile} messages=${messageCount} streaming=${hasStreaming} switching=${taskSwitching}`,
+                } root=${workspaceRoot ?? "none"} messages=${messageCount} streaming=${hasStreaming} switching=${taskSwitching}`,
             );
         }).then((unlisten) => {
             testDumpStateUnlisten = unlisten;
@@ -1257,7 +1230,6 @@ onDestroy(() => {
     testInjectMessageUnlisten?.();
     testFolderUnlisten?.();
     testTaskUnlisten?.();
-    testSetAuthProfileUnlisten?.();
     testSendLoginUnlisten?.();
     testCreateTaskUnlisten?.();
     testDeleteAllTasksUnlisten?.();

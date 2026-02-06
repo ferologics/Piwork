@@ -12,7 +12,6 @@ AUTH_STATE_MOUNTED=0
 SESSIONS_ROOT=""
 TASKS_ROOT=""
 INITIAL_TASK_ID=""
-AUTH_PROFILE="default"
 
 wait_for_taskd_port() {
     PORT_HEX=$(printf '%04X' "$RPC_PORT")
@@ -58,9 +57,6 @@ for arg in $(cat /proc/cmdline); do
             ;;
         piwork.task_id=*)
             INITIAL_TASK_ID="${arg#piwork.task_id=}"
-            ;;
-        piwork.auth_profile=*)
-            AUTH_PROFILE="${arg#piwork.auth_profile=}"
             ;;
     esac
 done
@@ -113,15 +109,9 @@ if [ -z "$TASKS_ROOT" ]; then
     TASKS_ROOT="/"
 fi
 
-if [ "$AUTH_STATE_MOUNTED" = "1" ]; then
-    PROFILE_DIR="$AUTH_STATE_DIR/$AUTH_PROFILE"
-    if [ -f "$PROFILE_DIR/auth.json" ]; then
-        export PI_CODING_AGENT_DIR="$PROFILE_DIR"
-        echo "Using mounted auth profile: $AUTH_PROFILE"
-    elif [ -f "$AUTH_STATE_DIR/default/auth.json" ]; then
-        export PI_CODING_AGENT_DIR="$AUTH_STATE_DIR/default"
-        echo "Using mounted auth profile: default"
-    fi
+if [ "$AUTH_STATE_MOUNTED" = "1" ] && [ -f "$AUTH_STATE_DIR/default/auth.json" ]; then
+    export PI_CODING_AGENT_DIR="$AUTH_STATE_DIR/default"
+    echo "Using mounted auth profile: default"
 fi
 
 if [ -z "${PI_CODING_AGENT_DIR:-}" ] && [ -f /opt/pi-agent/auth.json ]; then

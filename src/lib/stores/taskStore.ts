@@ -41,6 +41,7 @@ function normalizeTask(task: TaskMetadata): TaskMetadata {
     return {
         ...task,
         sessionFile: task.sessionFile ?? null,
+        provider: task.provider ?? null,
     };
 }
 
@@ -91,6 +92,7 @@ function createTask(title: string, workingFolder: string | null = null) {
         sessionFile: null,
         workingFolder,
         mounts: [],
+        provider: null,
         model: null,
         thinkingLevel: null,
         connectorsEnabled: [],

@@ -1,7 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { TauriRpcClient } from "$lib/rpc";
 import { devLog } from "$lib/utils/devLog";
-import { normalizeAuthProfile } from "$lib/services/authProfile";
 import type { RpcEvent } from "$lib/rpc";
 import type { TaskMetadata } from "$lib/types/task";
 
@@ -9,7 +8,6 @@ const POLL_INTERVAL_MS = 100;
 const TASK_SWITCH_TIMEOUT_MS = 5000;
 const RPC_READY_TIMEOUT_MS = 6000;
 const RPC_COMMAND_TIMEOUT_MS = 5000;
-const AUTH_PROFILE_STORAGE_KEY = "piwork:auth-profile";
 
 export interface RuntimeServiceSnapshot {
     rpcConnected: boolean;
@@ -19,7 +17,6 @@ export interface RuntimeServiceSnapshot {
     currentWorkingFolder: string | null;
     currentSessionFile: string | null;
     workspaceRoot: string | null;
-    authProfile: string;
     taskSwitching: boolean;
 }
 
@@ -209,7 +206,6 @@ export class RuntimeService {
             currentWorkingFolder: null,
             currentSessionFile: null,
             workspaceRoot: null,
-            authProfile: "default",
             taskSwitching: false,
         };
     }
@@ -394,24 +390,8 @@ export class RuntimeService {
         await this.ensureWorkspaceRootInitialized();
         const folderForConnect = this.snapshot.workspaceRoot ?? this.snapshot.currentWorkingFolder;
 
-        const authProfile = this.getAuthProfileForVmStart();
-        if (authProfile !== this.snapshot.authProfile) {
-            this.patch({ authProfile });
-        }
-
-        await client.connect(folderForConnect, this.snapshot.currentTaskId, authProfile);
+        await client.connect(folderForConnect, this.snapshot.currentTaskId);
         this.vmWorkspaceRoot = folderForConnect ?? null;
-    }
-
-    private getAuthProfileForVmStart(): string {
-        try {
-            const stored = localStorage.getItem(AUTH_PROFILE_STORAGE_KEY);
-            return normalizeAuthProfile(stored);
-        } catch {
-            // Ignore storage access issues and fall back to default profile.
-        }
-
-        return "default";
     }
 
     private async ensureWorkspaceRootInitialized() {
@@ -849,7 +829,8 @@ export class RuntimeService {
 
     private async buildCreateOrOpenTaskPayload(task: TaskMetadata): Promise<Record<string, unknown>> {
         const model = typeof task.model === "string" ? task.model : null;
-        const provider = inferProviderFromModel(model);
+        const explicitProvider = typeof task.provider === "string" ? task.provider.trim() : "";
+        const provider = explicitProvider || inferProviderFromModel(model);
         const thinkingLevel = typeof task.thinkingLevel === "string" ? task.thinkingLevel : null;
         const configuredWorkingFolder = typeof task.workingFolder === "string" ? task.workingFolder : null;
 

@@ -58,17 +58,17 @@ mise run runtime-clean      # clean runtime artifacts
 
 ### 9p mounts (host → VM)
 
-| Mount     | Guest path       | Purpose                |
-| --------- | ---------------- | ---------------------- |
-| workdir   | `/mnt/workdir`   | User's working folder  |
-| taskstate | `/mnt/taskstate` | Per-task session files |
-| authstate | `/mnt/authstate` | Host auth profiles     |
+| Mount     | Guest path       | Purpose                             |
+| --------- | ---------------- | ----------------------------------- |
+| workdir   | `/mnt/workdir`   | User's working folder               |
+| taskstate | `/mnt/taskstate` | Per-task session files              |
+| authstate | `/mnt/authstate` | Host auth state (`default` profile) |
 
 ### Auth (current state)
 
-Working: bake credentials at build time, or write to `app_data/auth/<profile>/auth.json` (mounted into VM).
+Working: bake credentials at build time, or write to `app_data/auth/default/auth.json` (mounted into VM).
 Aspirational: OAuth `/login` flow through VM — unclear if it works through NAT.
-Settings UI: exists but is overbuilt (multi-profile) and mostly unused for MVP.
+Settings UI is now MVP-scoped (import from pi + status on default profile).
 
 ## AI Testing Harness
 
@@ -85,7 +85,6 @@ mise run test-set-task <id>              # switch active task
 mise run test-create-task "Title" [folder]
 mise run test-delete-tasks
 mise run test-auth-list / test-auth-set-key / test-auth-delete / test-auth-import-pi
-mise run test-set-auth-profile <name>    # switch auth profile + restart
 mise run test-send-login                 # trigger /login UI flow
 mise run test-open-preview <task> <path> # open file preview
 mise run test-check-permissions          # verify screenshot capture works

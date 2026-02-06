@@ -19,7 +19,6 @@ mod vm;
 const RUNTIME_MANIFEST: &str = "manifest.json";
 const RUNTIME_ENV_VAR: &str = "PIWORK_RUNTIME_DIR";
 const WORKSPACE_ROOT_ENV_VAR: &str = "PIWORK_WORKSPACE_ROOT";
-const AUTH_PROFILE_DEFAULT: &str = "default";
 
 #[derive(Debug, serde::Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -724,27 +723,9 @@ fn tasks_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     Ok(base_dir.join("tasks"))
 }
 
-fn normalize_auth_profile_name(profile: Option<&str>) -> Result<String, String> {
-    let candidate = profile
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .unwrap_or(AUTH_PROFILE_DEFAULT);
-
-    let is_safe = candidate
-        .chars()
-        .all(|ch| ch.is_ascii_alphanumeric() || ch == '.' || ch == '_' || ch == '-');
-
-    if !is_safe || candidate.contains("..") {
-        return Err("Invalid auth profile".to_string());
-    }
-
-    Ok(candidate.to_string())
-}
-
-fn auth_file(app: &tauri::AppHandle, profile: Option<&str>) -> Result<PathBuf, String> {
+fn auth_file(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     let base_dir = app.path().app_data_dir().map_err(|error| error.to_string())?;
-    let profile = normalize_auth_profile_name(profile)?;
-    Ok(base_dir.join("auth").join(profile).join("auth.json"))
+    Ok(base_dir.join("auth").join("default").join("auth.json"))
 }
 
 fn pi_auth_file(app: &tauri::AppHandle) -> Result<PathBuf, String> {
@@ -769,7 +750,6 @@ fn vm_start(
     state: tauri::State<vm::VmState>,
     working_folder: Option<String>,
     task_id: Option<String>,
-    auth_profile: Option<String>,
 ) -> Result<vm::VmStatusResponse, String> {
     let runtime_dir = runtime_dir(&app)?;
     let folder_path = if let Some(workspace_root) = resolve_workspace_root_from_env()? {
@@ -784,14 +764,12 @@ fn vm_start(
         }
     }
 
-    let selected_auth_profile = normalize_auth_profile_name(auth_profile.as_deref())?;
-
     let auth_state_path = app
         .path()
         .app_data_dir()
         .map_err(|error| error.to_string())?
         .join("auth");
-    std::fs::create_dir_all(auth_state_path.join(&selected_auth_profile)).map_err(|error| error.to_string())?;
+    std::fs::create_dir_all(auth_state_path.join("default")).map_err(|error| error.to_string())?;
 
     let task_state_path = tasks_dir(&app)?;
     std::fs::create_dir_all(&task_state_path).map_err(|error| error.to_string())?;
@@ -804,7 +782,6 @@ fn vm_start(
         Some(task_state_path.as_path()),
         Some(auth_state_path.as_path()),
         task_id.as_deref(),
-        Some(selected_auth_profile.as_str()),
     )
 }
 
@@ -868,8 +845,8 @@ fn task_store_load_conversation(app: tauri::AppHandle, task_id: String) -> Resul
 
 #[tauri::command]
 #[allow(clippy::needless_pass_by_value)]
-fn auth_store_list(app: tauri::AppHandle, profile: Option<String>) -> Result<auth_store::AuthStoreSummary, String> {
-    let auth_path = auth_file(&app, profile.as_deref())?;
+fn auth_store_list(app: tauri::AppHandle) -> Result<auth_store::AuthStoreSummary, String> {
+    let auth_path = auth_file(&app)?;
     auth_store::summary(&auth_path)
 }
 
@@ -879,32 +856,24 @@ fn auth_store_set_api_key(
     app: tauri::AppHandle,
     provider: String,
     key: String,
-    profile: Option<String>,
 ) -> Result<auth_store::AuthStoreSummary, String> {
-    let auth_path = auth_file(&app, profile.as_deref())?;
+    let auth_path = auth_file(&app)?;
     auth_store::set_api_key(&auth_path, &provider, &key)?;
     auth_store::summary(&auth_path)
 }
 
 #[tauri::command]
 #[allow(clippy::needless_pass_by_value)]
-fn auth_store_delete(
-    app: tauri::AppHandle,
-    provider: String,
-    profile: Option<String>,
-) -> Result<auth_store::AuthStoreSummary, String> {
-    let auth_path = auth_file(&app, profile.as_deref())?;
+fn auth_store_delete(app: tauri::AppHandle, provider: String) -> Result<auth_store::AuthStoreSummary, String> {
+    let auth_path = auth_file(&app)?;
     auth_store::delete_provider(&auth_path, &provider)?;
     auth_store::summary(&auth_path)
 }
 
 #[tauri::command]
 #[allow(clippy::needless_pass_by_value)]
-fn auth_store_import_pi(
-    app: tauri::AppHandle,
-    profile: Option<String>,
-) -> Result<auth_store::AuthStoreSummary, String> {
-    let auth_path = auth_file(&app, profile.as_deref())?;
+fn auth_store_import_pi(app: tauri::AppHandle) -> Result<auth_store::AuthStoreSummary, String> {
+    let auth_path = auth_file(&app)?;
     let source_path = pi_auth_file(&app)?;
     auth_store::import_from_path(&auth_path, &source_path)?;
     auth_store::summary(&auth_path)
@@ -978,12 +947,11 @@ fn sanitize_test_server_value(value: &serde_json::Value) -> serde_json::Value {
 /// - `{"cmd":"inject_message","message":"..."}` - injects a user message into UI conversation (no provider call)
 /// - `{"cmd":"set_folder","folder":"/path"}` - sets working folder (one-time bind for active task)
 /// - `{"cmd":"set_task","taskId":"..."}` - selects active task
-/// - `{"cmd":"set_auth_profile","profile":"default"}` - switches auth profile and restarts runtime in UI
 /// - `{"cmd":"send_login"}` - triggers UI /login flow
-/// - `{"cmd":"auth_list","profile":"default"}` - returns auth store summary JSON
-/// - `{"cmd":"auth_set_api_key","provider":"anthropic","key":"...","profile":"default"}` - writes API key to auth store
-/// - `{"cmd":"auth_delete","provider":"anthropic","profile":"default"}` - deletes provider from auth store
-/// - `{"cmd":"auth_import_pi","profile":"default"}` - imports ~/.pi/agent/auth.json into auth store
+/// - `{"cmd":"auth_list"}` - returns auth store summary JSON
+/// - `{"cmd":"auth_set_api_key","provider":"anthropic","key":"..."}` - writes API key to auth store
+/// - `{"cmd":"auth_delete","provider":"anthropic"}` - deletes provider from auth store
+/// - `{"cmd":"auth_import_pi"}` - imports ~/.pi/agent/auth.json into auth store
 /// - `{"cmd":"create_task","title":"...","workingFolder":"/path"}` - creates task
 /// - `{"cmd":"task_list"}` - returns task metadata JSON array
 /// - `{"cmd":"delete_task","taskId":"..."}` - deletes one task
@@ -1062,38 +1030,26 @@ fn start_test_server(app_handle: tauri::AppHandle) {
                             let _ = app.emit("test_set_task", task_id);
                             let _ = stream.write_all(b"OK\n");
                         }
-                        "set_auth_profile" => {
-                            // Emit event to frontend to switch auth profile + restart runtime
-                            let profile = json.get("profile").and_then(|v| v.as_str());
-                            eprintln!("[test-server] emitting test_set_auth_profile: {profile:?}");
-                            let _ = app.emit("test_set_auth_profile", profile);
-                            let _ = stream.write_all(b"OK\n");
-                        }
                         "send_login" => {
                             // Emit event to frontend to trigger /login flow in UI
                             eprintln!("[test-server] emitting test_send_login");
                             let _ = app.emit("test_send_login", ());
                             let _ = stream.write_all(b"OK\n");
                         }
-                        "auth_list" => {
-                            let profile = json.get("profile").and_then(|v| v.as_str()).map(str::to_string);
-
-                            match auth_store_list(app.clone(), profile) {
-                                Ok(summary) => {
-                                    let payload = serde_json::to_string(&summary).unwrap_or_else(|_| "{}".to_string());
-                                    let _ = stream.write_all(format!("{payload}\n").as_bytes());
-                                }
-                                Err(error) => {
-                                    let _ = stream.write_all(format!("ERR: {error}\n").as_bytes());
-                                }
+                        "auth_list" => match auth_store_list(app.clone()) {
+                            Ok(summary) => {
+                                let payload = serde_json::to_string(&summary).unwrap_or_else(|_| "{}".to_string());
+                                let _ = stream.write_all(format!("{payload}\n").as_bytes());
                             }
-                        }
+                            Err(error) => {
+                                let _ = stream.write_all(format!("ERR: {error}\n").as_bytes());
+                            }
+                        },
                         "auth_set_api_key" => {
                             let provider = json.get("provider").and_then(|v| v.as_str()).unwrap_or("");
                             let key = json.get("key").and_then(|v| v.as_str()).unwrap_or("");
-                            let profile = json.get("profile").and_then(|v| v.as_str()).map(str::to_string);
 
-                            match auth_store_set_api_key(app.clone(), provider.to_string(), key.to_string(), profile) {
+                            match auth_store_set_api_key(app.clone(), provider.to_string(), key.to_string()) {
                                 Ok(summary) => {
                                     let payload = serde_json::to_string(&summary).unwrap_or_else(|_| "{}".to_string());
                                     let _ = stream.write_all(format!("{payload}\n").as_bytes());
@@ -1105,9 +1061,8 @@ fn start_test_server(app_handle: tauri::AppHandle) {
                         }
                         "auth_delete" => {
                             let provider = json.get("provider").and_then(|v| v.as_str()).unwrap_or("");
-                            let profile = json.get("profile").and_then(|v| v.as_str()).map(str::to_string);
 
-                            match auth_store_delete(app.clone(), provider.to_string(), profile) {
+                            match auth_store_delete(app.clone(), provider.to_string()) {
                                 Ok(summary) => {
                                     let payload = serde_json::to_string(&summary).unwrap_or_else(|_| "{}".to_string());
                                     let _ = stream.write_all(format!("{payload}\n").as_bytes());
@@ -1117,19 +1072,15 @@ fn start_test_server(app_handle: tauri::AppHandle) {
                                 }
                             }
                         }
-                        "auth_import_pi" => {
-                            let profile = json.get("profile").and_then(|v| v.as_str()).map(str::to_string);
-
-                            match auth_store_import_pi(app.clone(), profile) {
-                                Ok(summary) => {
-                                    let payload = serde_json::to_string(&summary).unwrap_or_else(|_| "{}".to_string());
-                                    let _ = stream.write_all(format!("{payload}\n").as_bytes());
-                                }
-                                Err(error) => {
-                                    let _ = stream.write_all(format!("ERR: {error}\n").as_bytes());
-                                }
+                        "auth_import_pi" => match auth_store_import_pi(app.clone()) {
+                            Ok(summary) => {
+                                let payload = serde_json::to_string(&summary).unwrap_or_else(|_| "{}".to_string());
+                                let _ = stream.write_all(format!("{payload}\n").as_bytes());
                             }
-                        }
+                            Err(error) => {
+                                let _ = stream.write_all(format!("ERR: {error}\n").as_bytes());
+                            }
+                        },
                         "create_task" => {
                             // Emit event to frontend to create a new task
                             let title = json.get("title").and_then(|v| v.as_str());
@@ -1348,7 +1299,7 @@ pub fn run() {
 
 #[cfg(all(test, debug_assertions))]
 mod tests {
-    use super::{normalize_auth_profile_name, sanitize_test_server_value};
+    use super::sanitize_test_server_value;
 
     #[test]
     fn sanitize_redacts_sensitive_fields_recursively() {
@@ -1385,21 +1336,5 @@ mod tests {
         let sanitized = sanitize_test_server_value(&payload);
 
         assert_eq!(sanitized, payload);
-    }
-
-    #[test]
-    fn normalize_auth_profile_defaults_and_accepts_safe_values() {
-        assert_eq!(normalize_auth_profile_name(None).unwrap(), "default");
-        assert_eq!(normalize_auth_profile_name(Some("")).unwrap(), "default");
-        assert_eq!(normalize_auth_profile_name(Some(" work ")).unwrap(), "work");
-        assert_eq!(normalize_auth_profile_name(Some("work-1_2.3")).unwrap(), "work-1_2.3");
-    }
-
-    #[test]
-    fn normalize_auth_profile_rejects_unsafe_values() {
-        assert!(normalize_auth_profile_name(Some("../secret")).is_err());
-        assert!(normalize_auth_profile_name(Some("work/profile")).is_err());
-        assert!(normalize_auth_profile_name(Some("work\\profile")).is_err());
-        assert!(normalize_auth_profile_name(Some("with space")).is_err());
     }
 }

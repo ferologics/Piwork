@@ -19,7 +19,6 @@ interface AuthStoreSummary {
     entries: AuthStoreEntry[];
 }
 
-const DEFAULT_PROFILE = "default";
 const RUNTIME_BUILD_AUTH_COMMAND = "PIWORK_COPY_AUTH=1 mise run runtime-build-auth";
 
 let entries = $state<AuthStoreEntry[]>([]);
@@ -59,9 +58,7 @@ async function loadAuthStatus() {
     error = null;
 
     try {
-        const summary = await invoke<AuthStoreSummary>("auth_store_list", {
-            profile: DEFAULT_PROFILE,
-        });
+        const summary = await invoke<AuthStoreSummary>("auth_store_list");
         entries = summary.entries;
         storePath = summary.path;
     } catch (err) {
@@ -78,9 +75,7 @@ async function importPiAuth() {
     error = null;
 
     try {
-        const summary = await invoke<AuthStoreSummary>("auth_store_import_pi", {
-            profile: DEFAULT_PROFILE,
-        });
+        const summary = await invoke<AuthStoreSummary>("auth_store_import_pi");
         entries = summary.entries;
         storePath = summary.path;
         setNotice("Imported ~/.pi/agent/auth.json");

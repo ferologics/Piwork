@@ -50,12 +50,11 @@ File-based harness tasks live in `mise-tasks/`:
 mise run test-start
 mise run test-create-task "Title" /path/to/folder
 mise run test-set-task <task-id>
-mise run test-set-auth-profile <profile>  # waits until profile is applied (invalid names normalize to default)
 mise run test-send-login                 # trigger /login via UI path
-mise run test-auth-list [profile]
-mise run test-auth-set-key <provider> <key> [profile]
-mise run test-auth-delete <provider> [profile]
-mise run test-auth-import-pi [profile]
+mise run test-auth-list
+mise run test-auth-set-key <provider> <key>
+mise run test-auth-delete <provider>
+mise run test-auth-import-pi
 mise run test-open-preview <task-id> <relative-path>
 mise run test-dump-state
 mise run test-screenshot name

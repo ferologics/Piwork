@@ -12,6 +12,7 @@ export interface TaskMetadata {
     sessionFile?: string | null;
     workingFolder?: string | null;
     mounts?: TaskMount[]; // deprecated, use workingFolder
+    provider?: string | null;
     model?: string | null;
     thinkingLevel?: string | null;
     connectorsEnabled?: string[];

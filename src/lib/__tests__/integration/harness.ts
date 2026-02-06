@@ -83,7 +83,6 @@ export interface StateSnapshot {
         rpcError: string | null;
         hasConnectedOnce: boolean;
         taskSwitching: boolean;
-        authProfile: string;
     };
     conversation: {
         messageCount: number;

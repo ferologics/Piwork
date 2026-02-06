@@ -8,13 +8,8 @@ export class TauriRpcClient implements RpcClient {
     private listeners = new Set<RpcListener>();
     private connecting = false;
 
-    async connect(workingFolder?: string | null, taskId?: string | null, authProfile?: string | null) {
-        devLog(
-            "RpcClient",
-            `connect start, workingFolder: ${workingFolder ?? "none"}, taskId: ${taskId ?? "none"}, authProfile: ${
-                authProfile ?? "default"
-            }`,
-        );
+    async connect(workingFolder?: string | null, taskId?: string | null) {
+        devLog("RpcClient", `connect start, workingFolder: ${workingFolder ?? "none"}, taskId: ${taskId ?? "none"}`);
         if (this.unlisten || this.connecting) {
             devLog("RpcClient", "already connected or connecting");
             return;
@@ -37,7 +32,6 @@ export class TauriRpcClient implements RpcClient {
             const result = await invoke<{ status: string }>("vm_start", {
                 workingFolder: workingFolder ?? null,
                 taskId: taskId ?? null,
-                authProfile: authProfile ?? null,
             });
             devLog("RpcClient", `vm_start returned: ${JSON.stringify(result)}`);
 

@@ -223,11 +223,11 @@ Completed in code:
 - ✅ context-pollution fix: infra shell commands now have explicit `system_bash` lane in taskd
 - ✅ Path I-lite scope checks and mount reliability fixes landed
 - ✅ resume-semantics and scope-negative harness evidence captured
-- ✅ auth profile mount + selection path landed with baked-auth fallback
+- ✅ auth mount path is default-only (`/mnt/authstate/default`) with baked-auth fallback
 
 Still open:
 
-- ⏳ settings/auth MVP simplification
+- ⏳ auth storage/runtime artifact separation cleanup
 - ⏳ sendLogin optimistic log cleanup
 - ⏳ docs slop cleanup beyond core runtime docs
 - ⏳ Gate G2 research lane (non-blocking)

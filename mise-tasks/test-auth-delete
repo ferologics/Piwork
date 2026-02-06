@@ -1,12 +1,11 @@
 #!/usr/bin/env bash
-#MISE description="Delete provider from auth store for a profile (test harness)"
+#MISE description="Delete provider from auth store (default profile, test harness)"
 set -euo pipefail
 
 PROVIDER="${1:-}"
-PROFILE="${2:-default}"
 
 if [[ -z "$PROVIDER" ]]; then
-    echo "Usage: mise run test-auth-delete <provider> [profile]"
+    echo "Usage: mise run test-auth-delete <provider>"
     exit 1
 fi
 
@@ -15,14 +14,13 @@ if ! nc -z localhost 19385 2>/dev/null; then
     exit 1
 fi
 
-RESULT=$(python - "$PROVIDER" "$PROFILE" <<'PY' | nc -w 2 localhost 19385
+RESULT=$(python - "$PROVIDER" <<'PY' | nc -w 2 localhost 19385
 import json
 import sys
 
 payload = {
     "cmd": "auth_delete",
     "provider": sys.argv[1],
-    "profile": sys.argv[2],
 }
 print(json.dumps(payload))
 PY

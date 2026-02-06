@@ -113,7 +113,6 @@ pub fn start(
     task_state_dir: Option<&Path>,
     auth_state_dir: Option<&Path>,
     initial_task_id: Option<&str>,
-    auth_profile: Option<&str>,
 ) -> Result<VmStatusResponse, String> {
     eprintln!("[rust:vm] start called");
     let mut inner = state.inner.lock().unwrap();
@@ -147,7 +146,6 @@ pub fn start(
         task_state_dir,
         auth_state_dir,
         initial_task_id,
-        auth_profile,
     )?;
     eprintln!("[rust:vm] qemu spawned");
 
@@ -270,7 +268,6 @@ fn spawn_qemu(
     task_state_dir: Option<&Path>,
     auth_state_dir: Option<&Path>,
     initial_task_id: Option<&str>,
-    auth_profile: Option<&str>,
 ) -> Result<Child, String> {
     let qemu_binary = resolve_qemu_binary(manifest, runtime_dir)?;
 
@@ -289,10 +286,6 @@ fn spawn_qemu(
 
     if let Some(task_id) = initial_task_id {
         let _ = write!(&mut cmdline, " piwork.task_id={task_id}");
-    }
-
-    if let Some(profile) = auth_profile {
-        let _ = write!(&mut cmdline, " piwork.auth_profile={profile}");
     }
 
     // Open log file for serial output

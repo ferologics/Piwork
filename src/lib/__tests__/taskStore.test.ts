@@ -17,6 +17,7 @@ function sampleTask(overrides: Partial<TaskMetadata> = {}): TaskMetadata {
         updatedAt: "2026-02-04T00:00:00.000Z",
         sessionFile: "/sessions/task-1/session.json",
         mounts: [],
+        provider: null,
         model: null,
         thinkingLevel: null,
         connectorsEnabled: [],

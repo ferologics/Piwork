@@ -36,8 +36,8 @@ Pack includes (current dev path):
 3. Init script mounts:
    - `/mnt/workdir` (workspace mount)
    - `/mnt/taskstate` (task state mount)
-   - `/mnt/authstate` (host auth profiles)
-4. Init selects auth profile (`PI_CODING_AGENT_DIR`) from mounted auth state when available, with baked auth as fallback.
+   - `/mnt/authstate` (host auth state)
+4. Init uses mounted default auth (`/mnt/authstate/default`) for `PI_CODING_AGENT_DIR` when available, with baked auth as fallback.
 5. Init starts `taskd`.
 6. Host waits for `READY`, then connects RPC on TCP `19384`.
 

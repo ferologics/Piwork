@@ -43,8 +43,8 @@
 - [x] **Model picker realism (no fake fallback)** — removed hardcoded fallback model lists in runtime/UI; model picker now uses runtime-reported models only.
 - [x] **Model availability empty/error state** — picker now shows explicit loading/empty/error states and disables selection when unavailable.
 - [ ] **Model scope toggle in Settings** — add `Preferred only` (default shortlist we define) vs `All available` filtering for model picker results.
-- [ ] **Persist model selection to task metadata** — write picker changes back to `taskStore.model` so switching/reopening tasks restores model intent.
-- [ ] **Finish auth profile cull for MVP** — remove remaining multi-profile runtime/test plumbing and standardize on the default profile path.
+- [x] **Persist model selection to task metadata** — picker updates now persist `{ provider, model }` on task metadata so switching/reopening tasks restores model intent.
+- [x] **Finish auth profile cull for MVP** — removed profile switching plumbing; runtime/test/auth paths are standardized on the default profile.
 - [ ] **Markdown rendering** — render agent responses (bold, lists, code blocks). Biggest UX gap.
 - [ ] **Tool call display** — collapsible "Created a file ›", "Ran command ›" in message stream
 - [x] **Right panel IA pass** — replace “Downloads” with “Working folder” card semantics (dynamic title = folder basename when set), clear empty states, and open-in-Finder affordance.
@@ -84,6 +84,6 @@
 
 ## Testing
 
-- Harness primitives: `test-start`, `test-prompt`, `test-screenshot`, `test-set-folder`, `test-set-task`, `test-create-task`, `test-delete-tasks`, `test-dump-state`, `test-stop`, `test-open-preview`, `test-auth-*`, `test-send-login`, `test-set-auth-profile`, `test-check-permissions`
+- Harness primitives: `test-start`, `test-prompt`, `test-screenshot`, `test-set-folder`, `test-set-task`, `test-create-task`, `test-delete-tasks`, `test-dump-state`, `test-stop`, `test-open-preview`, `test-auth-*`, `test-send-login`, `test-check-permissions`
 - Scope enforcement: `scripts/harness/path-i-lite-negative.sh`
 - Rule: primitives only, no monolithic E2E scripts
