@@ -991,3 +991,45 @@ pub fn run() {
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
+
+#[cfg(all(test, debug_assertions))]
+mod tests {
+    use super::sanitize_test_server_value;
+
+    #[test]
+    fn sanitize_redacts_sensitive_fields_recursively() {
+        let payload = serde_json::json!({
+            "cmd": "auth_set_api_key",
+            "provider": "anthropic",
+            "key": "secret-value",
+            "nested": {
+                "apiToken": "abc123",
+                "list": [
+                    { "password": "hunter2" },
+                    { "safe": "value" }
+                ]
+            }
+        });
+
+        let sanitized = sanitize_test_server_value(&payload);
+
+        assert_eq!(sanitized["provider"], "anthropic");
+        assert_eq!(sanitized["key"], "<redacted>");
+        assert_eq!(sanitized["nested"]["apiToken"], "<redacted>");
+        assert_eq!(sanitized["nested"]["list"][0]["password"], "<redacted>");
+        assert_eq!(sanitized["nested"]["list"][1]["safe"], "value");
+    }
+
+    #[test]
+    fn sanitize_keeps_non_sensitive_structure() {
+        let payload = serde_json::json!({
+            "cmd": "preview_read",
+            "taskId": "task-1",
+            "relativePath": "src/main.ts"
+        });
+
+        let sanitized = sanitize_test_server_value(&payload);
+
+        assert_eq!(sanitized, payload);
+    }
+}
