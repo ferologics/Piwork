@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+#MISE description="Check screenshot permission for harness runs"
+set -euo pipefail
+
+ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+OUTPUT="$ROOT_DIR/tmp/dev/permission-check.png"
+
+if ! command -v ffmpeg >/dev/null 2>&1; then
+    echo "ffmpeg is required for permission verification (brew install ffmpeg)"
+    exit 1
+fi
+
+extract_yavg() {
+    local image_path="$1"
+
+    ffmpeg -v info -i "$image_path" -vf "signalstats,metadata=print" -f null - 2>&1 \
+        | awk -F= '/lavfi.signalstats.YAVG=/{value=$2} END{print value}'
+}
+
+echo "Capturing permission probe screenshot..."
+if ! screencapture -x "$OUTPUT"; then
+    echo "Failed to run screencapture"
+    exit 1
+fi
+
+YAVG=$(extract_yavg "$OUTPUT")
+if [[ -z "$YAVG" ]]; then
+    echo "Unable to analyze screenshot brightness"
+    exit 1
+fi
+
+if awk -v y="$YAVG" 'BEGIN { exit !(y <= 16.2) }'; then
+    echo "✗ Screenshot appears blank/black (YAVG=$YAVG)"
+    echo "Grant Screen Recording permission to your terminal app:"
+    echo "  System Settings → Privacy & Security → Screen Recording"
+    echo "  open 'x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture'"
+    exit 1
+fi
+
+echo "✓ Screenshot permission looks OK (YAVG=$YAVG)"
+echo "Saved probe: $OUTPUT"

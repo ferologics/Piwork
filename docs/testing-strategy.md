@@ -26,10 +26,11 @@ Primitive tasks (in `mise-tasks/`):
 - `test-delete-tasks`
 - `test-dump-state`
 - `test-screenshot`
+- `test-check-permissions`
 - `test-open-preview`
 - `test-stop`
 
-Note: screenshot checks require Screen Recording permission for the terminal/app process running the harness. Blank/black captures are treated as failures.
+Note: screenshot checks require Screen Recording permission for the terminal/app process running the harness. Blank/black captures are treated as failures. Run `mise run test-check-permissions` as a quick preflight.
 
 Use these primitives for focused checks instead of large brittle end-to-end scripts.
 

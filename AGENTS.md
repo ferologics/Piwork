@@ -30,6 +30,7 @@ File-based tasks in `mise-tasks/` for automated AI development:
 mise run test-start              # start app, wait for ready
 mise run test-prompt "hello"     # send prompt, wait for response
 mise run test-screenshot name    # capture to tmp/dev/name.png
+mise run test-check-permissions   # verify screenshot permission/visibility
 mise run test-open-preview <task-id> <relative-path>  # open main-pane preview for a file
 mise run test-set-folder /path   # set working folder
 mise run test-set-task <id>      # set active task in UI
@@ -47,7 +48,7 @@ These let the AI test changes without human interaction:
 3. `test-screenshot` captures window without stealing focus (and fails if capture is blank/black)
 4. Test server only runs in debug builds (`#[cfg(debug_assertions)]`)
 
-Prerequisite: grant Screen Recording permission to the terminal app running `mise`/Piwork, otherwise screenshot checks will fail.
+Prerequisite: grant Screen Recording permission to the terminal app running `mise`/Piwork, otherwise screenshot checks will fail (`mise run test-check-permissions`).
 
 ### AI testing workflow (important)
 

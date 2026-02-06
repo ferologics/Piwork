@@ -31,6 +31,13 @@ is_black_capture() {
     awk -v y="$yavg" 'BEGIN { exit !(y <= 16.2) }'
 }
 
+print_permission_hint() {
+    echo "Likely missing Screen Recording permission for the harness process."
+    echo "Grant access in: System Settings → Privacy & Security → Screen Recording"
+    echo "Then restart your terminal and rerun the test."
+    echo "Shortcut: open 'x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture'"
+}
+
 # Build windowlist helper if needed
 if [[ ! -x "$WINDOWLIST" ]]; then
     swiftc -O "$ROOT_DIR/scripts/windowlist.swift" -o "$WINDOWLIST" 2>/dev/null
@@ -48,6 +55,7 @@ fi
 if screencapture -o -x -l"$WINDOW_ID" "$OUTPUT"; then
     if is_black_capture "$OUTPUT"; then
         echo "Captured image appears blank/black"
+        print_permission_hint
         exit 1
     fi
 
@@ -62,7 +70,8 @@ if ! screencapture -x "$OUTPUT"; then
 fi
 
 if is_black_capture "$OUTPUT"; then
-    echo "Captured image appears blank/black (likely screen recording permission issue)"
+    echo "Captured image appears blank/black"
+    print_permission_hint
     exit 1
 fi
 

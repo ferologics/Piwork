@@ -45,6 +45,7 @@ mise run test-set-task <task-id>
 mise run test-open-preview <task-id> <relative-path>
 mise run test-dump-state
 mise run test-screenshot name
+mise run test-check-permissions
 mise run test-stop
 ```
 
