@@ -22,16 +22,19 @@ mise run tauri-dev
 ```
 
 ```bash
-mise run check
+mise run check        # fast local gate
+mise run check-full   # includes live runtime regressions
 ```
 
 ```bash
 mise run test
+mise run test-vite
+mise run test-rust
+mise run test-regressions
 ```
 
 ```bash
-mise run test-vite
-mise run test-rust
+mise run install-git-hooks   # pre-commit/check + pre-push/check-full
 ```
 
 ## AI Harness (debug/dev)

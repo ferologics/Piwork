@@ -8,7 +8,8 @@
 - Rust unit tests for backend stores/validation.
 - Regression tests must assert against a machine-readable `state_snapshot` payload (not terminal log text).
 - Use `mise run test-regressions` for runtime contract regressions (live app process).
-- These are the **primary merge gate** and should run under `mise run check`.
+- Daily local gate: `mise run check` (fast).
+- Required high-confidence gate: `mise run check-full` (fast gate + live regressions), typically on pre-push/CI.
 
 ### 2) Harness primitives (integration support)
 
@@ -29,6 +30,12 @@ Screenshot checks require Screen Recording permission. Blank/black captures fail
 See `docs/path-i-lite-negative-suite.md`.
 
 This suite is currently supplemental smoke coverage. Equivalent contract checks should be migrated into automated test code over time.
+
+## Suggested git hook policy
+
+- Install hooks: `mise run install-git-hooks`
+- pre-commit: `mise run check` (fast feedback)
+- pre-push: `mise run check-full` (slow, high confidence)
 
 ## Evidence rule
 

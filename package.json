@@ -6,15 +6,18 @@
     "scripts": {
         "build": "mise run build",
         "check": "mise run check",
+        "check:full": "mise run check-full",
         "compile": "mise run compile",
         "dev": "mise run dev",
         "format": "mise run format",
+        "hooks:install": "mise run install-git-hooks",
         "lint": "mise run lint",
         "preview": "mise run preview",
         "setup": "mise run setup",
         "tauri:build": "mise run tauri-build",
         "tauri:dev": "mise run tauri-dev",
-        "test": "mise run test"
+        "test": "mise run test",
+        "test:regressions": "mise run test-regressions"
     },
     "license": "MIT",
     "dependencies": {

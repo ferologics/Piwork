@@ -3,8 +3,12 @@ description = "Build the frontend"
 run = "pnpm exec vite build"
 
 [tasks.check]
-description = "Format, lint, typecheck, test"
+description = "Fast local gate (format + lint + compile + fast tests)"
 run = "mise run format && mise run lint && mise run compile && mise run test"
+
+[tasks.check-full]
+description = "Full gate (check + live runtime regressions)"
+run = "mise run check && mise run test-regressions"
 
 [tasks.clean]
 description = "Remove build artifacts"
@@ -29,6 +33,10 @@ run = "pnpm exec biome format --write src src-tauri/tauri.conf.json src-tauri/ca
 [tasks.icons]
 description = "Regenerate app icons from assets/logo.svg"
 run = "pnpm exec tauri icon assets/logo.svg --output src-tauri/icons"
+
+[tasks.install-git-hooks]
+description = "Install repo git hooks (pre-commit + pre-push)"
+run = "./scripts/git-hooks/install.sh"
 
 [tasks.lint]
 description = "Lint code (oxlint + clippy)"
@@ -60,7 +68,7 @@ depends = ["runtime-build"]
 run = "pnpm exec tauri dev"
 
 [tasks.test]
-description = "Run all tests"
+description = "Run fast tests"
 run = "mise run test-vite && mise run test-rust"
 
 [tasks.test-regressions]
@@ -72,5 +80,5 @@ description = "Run Rust tests"
 run = "cargo test --manifest-path src-tauri/Cargo.toml"
 
 [tasks.test-vite]
-description = "Run frontend tests"
-run = "pnpm exec vitest run"
+description = "Run fast frontend tests (exclude live integration suite)"
+run = "pnpm exec vitest run --exclude src/lib/__tests__/integration/**/*.integration.test.ts"

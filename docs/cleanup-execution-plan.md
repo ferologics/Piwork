@@ -14,7 +14,8 @@ Non-goals (explicitly out of scope for this plan): sandbox hardening beyond curr
 
 ## Global rules for every PR
 
-- Must pass: `mise run check`
+- Must pass locally: `mise run check` (fast)
+- Must pass before merge (pre-push/CI): `mise run check-full`
 - Evidence for behavior claims:
   - `mise run test-dump-state`
   - `mise run test-screenshot <name>`
@@ -27,7 +28,7 @@ Non-goals (explicitly out of scope for this plan): sandbox hardening beyond curr
 
 ### Goal
 
-Stop regressions from slipping through by moving core behavior checks into automated test code (Vitest + Rust), and make those checks part of normal `check` flow.
+Stop regressions from slipping through by moving core behavior checks into automated test code (Vitest + Rust), while keeping everyday local checks fast.
 
 ### Scope / changes
 
@@ -39,17 +40,19 @@ Stop regressions from slipping through by moving core behavior checks into autom
    - runtime mismatch badge only when truly mismatched (not transient boot/legacy)
    - tests run against a live app process and assert on structured `state_snapshot` payloads (not log grep)
 3. Keep shell harness only as optional smoke/probe while parity is reached; do not treat ad-hoc shell runs as primary quality gate.
-4. Add a single regression task (`mise run test-regressions`) and include it in `mise run check` once stable.
+4. Add a single regression task (`mise run test-regressions`) and wire a separate full gate (`mise run check-full = check + regressions`).
 
 ### Done when
 
 - Reproductions for recent regressions fail before fix and pass after fix in automated tests.
-- `mise run check` blocks merges when liftoff path contracts break.
+- `mise run check` stays fast for daily use.
+- `mise run check-full` blocks merges when liftoff path contracts break.
 
 ### Validation
 
 - `mise run check`
 - `mise run test-regressions`
+- `mise run check-full`
 
 ---
 

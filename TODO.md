@@ -4,11 +4,12 @@
 
 ## Now: Foundation cleanup
 
-- [ ] **Testing sanity gate (P0)** — define and ship a real automated regression suite for the liftoff path (Vitest + Rust), make it part of `mise run check`, and stop relying on ad-hoc/manual shell-harness runs for core correctness.
+- [ ] **Testing sanity gate (P0)** — define and ship a real automated regression suite for the liftoff path (Vitest + Rust), keep daily checks fast (`mise run check`) while enforcing live regressions in `mise run check-full`, and stop relying on ad-hoc/manual shell-harness runs for core correctness.
   - [x] Add a machine-readable `state_snapshot` contract for deterministic assertions (no log-grep testing).
   - [x] Add first gated Vitest regression: reopen cwd correctness (`/mnt/workdir...`) on folder-bound task reopen.
   - [ ] Add remaining gated Vitest regressions: folder-bind continuity (no UI reset), working-folder panel refresh on folder change, and runtime-mismatch badge rules.
   - [x] Add `mise run test-regressions` task (currently runs live-app regression tests).
+  - [x] Split gates: `mise run check` (fast) and `mise run check-full` (includes regressions).
 - [x] **Kill v1 runtime** — remove `PIWORK_RUNTIME_V2_TASKD` flag, v1 code paths in runtimeService (`handleTaskSwitchV1`, `handleFolderChangeV1`, `ensureTaskSessionReady`), v1 `nc -l` loop in init script, `RuntimeMode` type. taskd is the only runtime.
 - [x] **Rename v2_taskd → runtime** — drop "v2" prefix everywhere (types, logs, flags, docs)
 - [x] **Extract init script** — move the heredoc out of `mise-tasks/runtime-build` into `runtime/init.sh`
