@@ -13,6 +13,7 @@ mod vm;
 const RUNTIME_MANIFEST: &str = "manifest.json";
 const RUNTIME_ENV_VAR: &str = "PIWORK_RUNTIME_DIR";
 const WORKSPACE_ROOT_ENV_VAR: &str = "PIWORK_WORKSPACE_ROOT";
+const AUTH_PROFILE_DEFAULT: &str = "default";
 
 #[derive(Debug, serde::Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -510,9 +511,26 @@ fn tasks_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     Ok(base_dir.join("tasks"))
 }
 
-fn auth_file(app: &tauri::AppHandle, profile: Option<String>) -> Result<PathBuf, String> {
+fn normalize_auth_profile_name(profile: Option<&str>) -> Result<String, String> {
+    let candidate = profile
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or(AUTH_PROFILE_DEFAULT);
+
+    let is_safe = candidate
+        .chars()
+        .all(|ch| ch.is_ascii_alphanumeric() || ch == '.' || ch == '_' || ch == '-');
+
+    if !is_safe || candidate.contains("..") {
+        return Err("Invalid auth profile".to_string());
+    }
+
+    Ok(candidate.to_string())
+}
+
+fn auth_file(app: &tauri::AppHandle, profile: Option<&str>) -> Result<PathBuf, String> {
     let base_dir = app.path().app_data_dir().map_err(|error| error.to_string())?;
-    let profile = profile.unwrap_or_else(|| "default".to_string());
+    let profile = normalize_auth_profile_name(profile)?;
     Ok(base_dir.join("auth").join(profile).join("auth.json"))
 }
 
@@ -529,10 +547,6 @@ fn vm_status(state: tauri::State<vm::VmState>) -> vm::VmStatusResponse {
 
 fn is_valid_task_id(task_id: &str) -> bool {
     !task_id.is_empty() && !task_id.contains('/') && !task_id.contains('\\') && !task_id.contains("..")
-}
-
-fn is_valid_auth_profile(profile: &str) -> bool {
-    !profile.is_empty() && !profile.contains('/') && !profile.contains('\\') && !profile.contains("..")
 }
 
 #[tauri::command]
@@ -563,22 +577,14 @@ fn vm_start(
         }
     }
 
-    let selected_auth_profile = auth_profile
-        .as_deref()
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .unwrap_or("default");
-
-    if !is_valid_auth_profile(selected_auth_profile) {
-        return Err("Invalid auth profile".to_string());
-    }
+    let selected_auth_profile = normalize_auth_profile_name(auth_profile.as_deref())?;
 
     let auth_state_path = app
         .path()
         .app_data_dir()
         .map_err(|error| error.to_string())?
         .join("auth");
-    std::fs::create_dir_all(auth_state_path.join(selected_auth_profile)).map_err(|error| error.to_string())?;
+    std::fs::create_dir_all(auth_state_path.join(&selected_auth_profile)).map_err(|error| error.to_string())?;
 
     let task_state_path = if flags.runtime_v2_taskd {
         let path = tasks_dir(&app)?;
@@ -601,7 +607,7 @@ fn vm_start(
         Some(auth_state_path.as_path()),
         flags.runtime_v2_taskd,
         task_id.as_deref(),
-        Some(selected_auth_profile),
+        Some(selected_auth_profile.as_str()),
     )
 }
 
@@ -666,7 +672,7 @@ fn task_store_load_conversation(app: tauri::AppHandle, task_id: String) -> Resul
 #[tauri::command]
 #[allow(clippy::needless_pass_by_value)]
 fn auth_store_list(app: tauri::AppHandle, profile: Option<String>) -> Result<auth_store::AuthStoreSummary, String> {
-    let auth_path = auth_file(&app, profile)?;
+    let auth_path = auth_file(&app, profile.as_deref())?;
     auth_store::summary(&auth_path)
 }
 
@@ -678,7 +684,7 @@ fn auth_store_set_api_key(
     key: String,
     profile: Option<String>,
 ) -> Result<auth_store::AuthStoreSummary, String> {
-    let auth_path = auth_file(&app, profile)?;
+    let auth_path = auth_file(&app, profile.as_deref())?;
     auth_store::set_api_key(&auth_path, &provider, &key)?;
     auth_store::summary(&auth_path)
 }
@@ -690,7 +696,7 @@ fn auth_store_delete(
     provider: String,
     profile: Option<String>,
 ) -> Result<auth_store::AuthStoreSummary, String> {
-    let auth_path = auth_file(&app, profile)?;
+    let auth_path = auth_file(&app, profile.as_deref())?;
     auth_store::delete_provider(&auth_path, &provider)?;
     auth_store::summary(&auth_path)
 }
@@ -701,7 +707,7 @@ fn auth_store_import_pi(
     app: tauri::AppHandle,
     profile: Option<String>,
 ) -> Result<auth_store::AuthStoreSummary, String> {
-    let auth_path = auth_file(&app, profile)?;
+    let auth_path = auth_file(&app, profile.as_deref())?;
     let source_path = pi_auth_file(&app)?;
     auth_store::import_from_path(&auth_path, &source_path)?;
     auth_store::summary(&auth_path)
@@ -994,7 +1000,7 @@ pub fn run() {
 
 #[cfg(all(test, debug_assertions))]
 mod tests {
-    use super::sanitize_test_server_value;
+    use super::{normalize_auth_profile_name, sanitize_test_server_value};
 
     #[test]
     fn sanitize_redacts_sensitive_fields_recursively() {
@@ -1031,5 +1037,21 @@ mod tests {
         let sanitized = sanitize_test_server_value(&payload);
 
         assert_eq!(sanitized, payload);
+    }
+
+    #[test]
+    fn normalize_auth_profile_defaults_and_accepts_safe_values() {
+        assert_eq!(normalize_auth_profile_name(None).unwrap(), "default");
+        assert_eq!(normalize_auth_profile_name(Some("")).unwrap(), "default");
+        assert_eq!(normalize_auth_profile_name(Some(" work ")).unwrap(), "work");
+        assert_eq!(normalize_auth_profile_name(Some("work-1_2.3")).unwrap(), "work-1_2.3");
+    }
+
+    #[test]
+    fn normalize_auth_profile_rejects_unsafe_values() {
+        assert!(normalize_auth_profile_name(Some("../secret")).is_err());
+        assert!(normalize_auth_profile_name(Some("work/profile")).is_err());
+        assert!(normalize_auth_profile_name(Some("work\\profile")).is_err());
+        assert!(normalize_auth_profile_name(Some("with space")).is_err());
     }
 }

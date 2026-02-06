@@ -2,9 +2,35 @@
 #MISE description="Set active auth profile in UI, restart runtime, wait until applied"
 set -euo pipefail
 
-PROFILE="${1:-default}"
+RAW_PROFILE="${1:-default}"
 ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 LOG_FILE="$ROOT_DIR/tmp/dev/piwork.log"
+
+normalize_profile() {
+    local value="$1"
+    local trimmed
+
+    trimmed=$(printf "%s" "$value" | awk '{$1=$1;print}')
+
+    if [[ -z "$trimmed" ]]; then
+        echo "default"
+        return
+    fi
+
+    if [[ "$trimmed" == *".."* ]]; then
+        echo "default"
+        return
+    fi
+
+    if [[ ! "$trimmed" =~ ^[A-Za-z0-9._-]+$ ]]; then
+        echo "default"
+        return
+    fi
+
+    echo "$trimmed"
+}
+
+PROFILE=$(normalize_profile "$RAW_PROFILE")
 
 if ! nc -z localhost 19385 2>/dev/null; then
     echo "Test server not running. Run: mise run test-start"
@@ -14,6 +40,10 @@ fi
 BEFORE_LINES=0
 if [[ -f "$LOG_FILE" ]]; then
     BEFORE_LINES=$(wc -l < "$LOG_FILE" | tr -d ' ')
+fi
+
+if [[ "$PROFILE" != "$RAW_PROFILE" ]]; then
+    echo "Normalized auth profile '$RAW_PROFILE' -> '$PROFILE'"
 fi
 
 RESULT=$(python - "$PROFILE" <<'PY' | nc -w 2 localhost 19385
