@@ -1,7 +1,9 @@
+use base64::{engine::general_purpose::STANDARD as BASE64_STANDARD, Engine as _};
 use std::io::{BufRead, BufReader, Write};
 use std::net::TcpListener;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::time::UNIX_EPOCH;
 use tauri::{Emitter, Manager};
 
 mod auth_store;
@@ -44,6 +46,33 @@ struct WorkingFolderValidation {
     folder: String,
     workspace_root: String,
     relative_path: String,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PreviewFileEntry {
+    path: String,
+    size: u64,
+    modified_at: u64,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PreviewListResponse {
+    root: String,
+    files: Vec<PreviewFileEntry>,
+    truncated: bool,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PreviewReadResponse {
+    path: String,
+    mime_type: String,
+    encoding: String,
+    content: String,
+    truncated: bool,
+    size: u64,
 }
 
 #[tauri::command]
@@ -228,6 +257,242 @@ fn runtime_validate_working_folder(
         folder: canonical_folder.to_string_lossy().to_string(),
         workspace_root: canonical_root.to_string_lossy().to_string(),
         relative_path,
+    })
+}
+
+fn resolve_task_working_folder(app: &tauri::AppHandle, task_id: &str) -> Result<PathBuf, String> {
+    let tasks_path = tasks_dir(app)?;
+    let task = task_store::load_task(&tasks_path, task_id)?.ok_or_else(|| "Task not found".to_string())?;
+    let working_folder = task
+        .working_folder
+        .ok_or_else(|| "Task has no working folder configured".to_string())?;
+
+    let validated = runtime_validate_working_folder(working_folder, None)?;
+    Ok(PathBuf::from(validated.folder))
+}
+
+fn normalize_preview_relative_path(relative_path: &str) -> Result<PathBuf, String> {
+    let trimmed = relative_path.trim();
+    if trimmed.is_empty() {
+        return Err("relativePath is required".to_string());
+    }
+
+    if trimmed.contains('\0') || trimmed.contains('\\') {
+        return Err("Invalid relativePath".to_string());
+    }
+
+    let path = Path::new(trimmed);
+    if path.is_absolute() {
+        return Err("relativePath must be relative".to_string());
+    }
+
+    let mut normalized = PathBuf::new();
+    for component in path.components() {
+        match component {
+            std::path::Component::Normal(segment) => normalized.push(segment),
+            std::path::Component::CurDir => {}
+            std::path::Component::ParentDir => {
+                return Err("relativePath must not traverse parent directories".to_string())
+            }
+            std::path::Component::RootDir | std::path::Component::Prefix(_) => {
+                return Err("Invalid relativePath".to_string())
+            }
+        }
+    }
+
+    if normalized.as_os_str().is_empty() {
+        return Err("relativePath is required".to_string());
+    }
+
+    Ok(normalized)
+}
+
+fn path_within_root(root: &Path, candidate: &Path) -> bool {
+    candidate.strip_prefix(root).is_ok()
+}
+
+fn detect_mime_type(path: &Path) -> &'static str {
+    match path
+        .extension()
+        .and_then(|value| value.to_str())
+        .map(str::to_ascii_lowercase)
+    {
+        Some(ext)
+            if [
+                "md", "txt", "rs", "ts", "tsx", "js", "jsx", "toml", "yaml", "yml", "css", "svelte", "sh",
+            ]
+            .contains(&ext.as_str()) =>
+        {
+            "text/plain"
+        }
+        Some(ext) if ext == "json" => "application/json",
+        Some(ext) if ext == "csv" => "text/csv",
+        Some(ext) if ext == "html" || ext == "htm" => "text/html",
+        Some(ext) if ext == "png" => "image/png",
+        Some(ext) if ext == "jpg" || ext == "jpeg" => "image/jpeg",
+        Some(ext) if ext == "gif" => "image/gif",
+        Some(ext) if ext == "webp" => "image/webp",
+        Some(ext) if ext == "svg" => "image/svg+xml",
+        _ => "application/octet-stream",
+    }
+}
+
+fn is_probably_text(bytes: &[u8]) -> bool {
+    if bytes.contains(&0) {
+        return false;
+    }
+
+    std::str::from_utf8(bytes).is_ok()
+}
+
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
+fn task_preview_list(app: tauri::AppHandle, task_id: String) -> Result<PreviewListResponse, String> {
+    const MAX_FILES: usize = 300;
+    const MAX_DEPTH: usize = 6;
+
+    let root = resolve_task_working_folder(&app, &task_id)?;
+    let mut files: Vec<PreviewFileEntry> = Vec::new();
+    let mut stack: Vec<(PathBuf, usize)> = vec![(root.clone(), 0)];
+    let mut truncated = false;
+
+    while let Some((dir, depth)) = stack.pop() {
+        let Ok(entries) = std::fs::read_dir(&dir) else {
+            continue;
+        };
+
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let Ok(metadata) = std::fs::symlink_metadata(&path) else {
+                continue;
+            };
+
+            if metadata.file_type().is_symlink() {
+                continue;
+            }
+
+            if metadata.is_dir() {
+                if depth < MAX_DEPTH {
+                    stack.push((path, depth + 1));
+                }
+                continue;
+            }
+
+            if !metadata.is_file() {
+                continue;
+            }
+
+            let Ok(relative) = path.strip_prefix(&root) else {
+                continue;
+            };
+            let relative_str = relative
+                .components()
+                .filter_map(|component| match component {
+                    std::path::Component::Normal(value) => Some(value.to_string_lossy().to_string()),
+                    _ => None,
+                })
+                .collect::<Vec<String>>()
+                .join("/");
+
+            if relative_str.is_empty() {
+                continue;
+            }
+
+            let modified_at = metadata
+                .modified()
+                .ok()
+                .and_then(|value| value.duration_since(UNIX_EPOCH).ok())
+                .map_or(0, |value| value.as_secs());
+
+            files.push(PreviewFileEntry {
+                path: relative_str,
+                size: metadata.len(),
+                modified_at,
+            });
+
+            if files.len() >= MAX_FILES {
+                truncated = true;
+                break;
+            }
+        }
+
+        if truncated {
+            break;
+        }
+    }
+
+    files.sort_by(|a, b| a.path.cmp(&b.path));
+
+    Ok(PreviewListResponse {
+        root: root.to_string_lossy().to_string(),
+        files,
+        truncated,
+    })
+}
+
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
+fn task_preview_read(
+    app: tauri::AppHandle,
+    task_id: String,
+    relative_path: String,
+) -> Result<PreviewReadResponse, String> {
+    const MAX_PREVIEW_BYTES: usize = 256 * 1024;
+
+    let root = resolve_task_working_folder(&app, &task_id)?;
+    let relative = normalize_preview_relative_path(&relative_path)?;
+    let candidate = root.join(&relative);
+
+    let metadata = std::fs::symlink_metadata(&candidate).map_err(|_| "File not found".to_string())?;
+    if metadata.file_type().is_symlink() {
+        return Err("Symlink previews are not allowed".to_string());
+    }
+
+    if !metadata.is_file() {
+        return Err("Only regular files can be previewed".to_string());
+    }
+
+    let canonical = std::fs::canonicalize(&candidate).map_err(|_| "Failed to resolve file path".to_string())?;
+    if !path_within_root(&root, &canonical) {
+        return Err("File is outside task working folder".to_string());
+    }
+
+    let bytes = std::fs::read(&candidate).map_err(|error| error.to_string())?;
+    let size = bytes.len() as u64;
+    let truncated = bytes.len() > MAX_PREVIEW_BYTES;
+    let preview_slice = if truncated {
+        &bytes[..MAX_PREVIEW_BYTES]
+    } else {
+        bytes.as_slice()
+    };
+
+    let mime_type = detect_mime_type(&candidate).to_string();
+
+    let (encoding, content) = if mime_type.starts_with("image/") {
+        ("base64".to_string(), BASE64_STANDARD.encode(preview_slice))
+    } else if is_probably_text(preview_slice) {
+        (
+            "utf8".to_string(),
+            String::from_utf8(preview_slice.to_vec()).map_err(|_| "Invalid UTF-8 text".to_string())?,
+        )
+    } else {
+        ("base64".to_string(), BASE64_STANDARD.encode(preview_slice))
+    };
+
+    Ok(PreviewReadResponse {
+        path: relative
+            .components()
+            .filter_map(|component| match component {
+                std::path::Component::Normal(value) => Some(value.to_string_lossy().to_string()),
+                _ => None,
+            })
+            .collect::<Vec<String>>()
+            .join("/"),
+        mime_type,
+        encoding,
+        content,
+        truncated,
+        size,
     })
 }
 
@@ -426,8 +691,12 @@ fn auth_store_import_pi(
 /// - `{"cmd":"create_task","title":"...","workingFolder":"/path"}` - creates task
 /// - `{"cmd":"delete_all_tasks"}` - wipes all tasks
 /// - `{"cmd":"dump_state"}` - logs UI state
+/// - `{"cmd":"preview_list","taskId":"..."}` - returns preview file list JSON
+/// - `{"cmd":"preview_read","taskId":"...","relativePath":"..."}` - returns preview file content JSON
+/// - `{"cmd":"open_preview","taskId":"...","relativePath":"..."}` - opens preview pane in UI
 /// - `{"cmd":"rpc",...}` - sends raw RPC to VM
 #[cfg(debug_assertions)]
+#[allow(clippy::too_many_lines)]
 fn start_test_server(app_handle: tauri::AppHandle) {
     std::thread::spawn(move || {
         let listener = match TcpListener::bind("127.0.0.1:19385") {
@@ -508,6 +777,43 @@ fn start_test_server(app_handle: tauri::AppHandle) {
                             let _ = app.emit("test_dump_state", ());
                             let _ = stream.write_all(b"OK\n");
                         }
+                        "preview_list" => {
+                            let task_id = json.get("taskId").and_then(|v| v.as_str()).unwrap_or("");
+                            match task_preview_list(app.clone(), task_id.to_string()) {
+                                Ok(result) => {
+                                    let payload = serde_json::to_string(&result).unwrap_or_else(|_| "{}".to_string());
+                                    let _ = stream.write_all(format!("{payload}\n").as_bytes());
+                                }
+                                Err(error) => {
+                                    let _ = stream.write_all(format!("ERR: {error}\n").as_bytes());
+                                }
+                            }
+                        }
+                        "preview_read" => {
+                            let task_id = json.get("taskId").and_then(|v| v.as_str()).unwrap_or("");
+                            let relative_path = json.get("relativePath").and_then(|v| v.as_str()).unwrap_or("");
+
+                            match task_preview_read(app.clone(), task_id.to_string(), relative_path.to_string()) {
+                                Ok(result) => {
+                                    let payload = serde_json::to_string(&result).unwrap_or_else(|_| "{}".to_string());
+                                    let _ = stream.write_all(format!("{payload}\n").as_bytes());
+                                }
+                                Err(error) => {
+                                    let _ = stream.write_all(format!("ERR: {error}\n").as_bytes());
+                                }
+                            }
+                        }
+                        "open_preview" => {
+                            let task_id = json.get("taskId").and_then(|v| v.as_str()).unwrap_or("");
+                            let relative_path = json.get("relativePath").and_then(|v| v.as_str()).unwrap_or("");
+
+                            let payload = serde_json::json!({
+                                "taskId": task_id,
+                                "relativePath": relative_path,
+                            });
+                            let _ = app.emit("test_open_preview", payload);
+                            let _ = stream.write_all(b"OK\n");
+                        }
                         _ => {
                             // Direct RPC send (bypass UI)
                             let state: tauri::State<vm::VmState> = app.state();
@@ -550,6 +856,8 @@ pub fn run() {
             task_store_delete_all,
             task_store_save_conversation,
             task_store_load_conversation,
+            task_preview_list,
+            task_preview_read,
             auth_store_list,
             auth_store_set_api_key,
             auth_store_delete,

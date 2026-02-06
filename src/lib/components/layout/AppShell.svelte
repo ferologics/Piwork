@@ -4,6 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { devLog } from "$lib/utils/devLog";
 import SetupRequired from "$lib/components/SetupRequired.svelte";
 import { taskStore } from "$lib/stores/taskStore";
+import { previewStore } from "$lib/stores/previewStore";
 import TopBar from "./TopBar.svelte";
 import SettingsModal from "./SettingsModal.svelte";
 import LeftRail from "./LeftRail.svelte";
@@ -22,9 +23,11 @@ interface RuntimeStatus {
 let showLeftRail = $state(true);
 let showRightPanel = $state(false);
 let showSettings = $state(false);
+let previewOpen = $state(false);
 let runtimeStatus = $state<RuntimeStatus | null>(null);
 let runtimeError = $state<string | null>(null);
 let checkingRuntime = $state(true);
+let unsubscribePreview: (() => void) | null = null;
 
 async function loadRuntimeStatus() {
     devLog("AppShell", "loadRuntimeStatus");
@@ -58,10 +61,15 @@ onMount(() => {
         devLog("AppShell", `taskStore.load error: ${error}`);
     });
 
+    unsubscribePreview = previewStore.subscribe((value) => {
+        previewOpen = value.isOpen;
+    });
+
     window.addEventListener("keydown", handleKeydown);
 });
 
 onDestroy(() => {
+    unsubscribePreview?.();
     window.removeEventListener("keydown", handleKeydown);
 });
 </script>
@@ -84,11 +92,11 @@ onDestroy(() => {
     <div class="flex h-screen flex-col overflow-hidden">
         <TopBar bind:showLeftRail bind:showRightPanel onOpenSettings={() => (showSettings = true)} />
         <div class="flex flex-1 overflow-hidden">
-            {#if showLeftRail}
+            {#if showLeftRail && !previewOpen}
                 <LeftRail />
             {/if}
-            <MainView />
-            {#if showRightPanel}
+            <MainView previewOpen={previewOpen} />
+            {#if showRightPanel && !previewOpen}
                 <RightPanel />
             {/if}
         </div>

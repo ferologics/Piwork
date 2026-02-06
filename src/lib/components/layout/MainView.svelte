@@ -4,7 +4,7 @@ import { get } from "svelte/store";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { openPath, openUrl } from "@tauri-apps/plugin-opener";
-import { Send, Paperclip, FolderOpen, Loader2 } from "@lucide/svelte";
+import { Send, Paperclip, FolderOpen, Loader2, X } from "@lucide/svelte";
 import { devLog } from "$lib/utils/devLog";
 import { MessageAccumulator } from "$lib/rpc";
 import type { RpcPayload, ConversationState } from "$lib/rpc";
@@ -15,6 +15,9 @@ import QuickStartTiles from "$lib/components/QuickStartTiles.svelte";
 import ExtensionUiDialog from "$lib/components/ExtensionUiDialog.svelte";
 import type { ExtensionUiRequest } from "$lib/components/ExtensionUiDialog.svelte";
 import { RuntimeService, type RuntimeMode, type RuntimeServiceSnapshot } from "$lib/services/runtimeService";
+import { previewStore, type PreviewSelection } from "$lib/stores/previewStore";
+
+let { previewOpen = false }: { previewOpen?: boolean } = $props();
 
 let prompt = $state("");
 let textareaEl: HTMLTextAreaElement | undefined = $state();
@@ -54,6 +57,27 @@ let runtimeMode = $state<RuntimeMode>("v1");
 let runtimeV2Taskd = $state(false);
 let runtimeV2Sync = $state(false);
 let unsubscribeActiveTask: (() => void) | null = null;
+
+interface PreviewReadResponse {
+    path: string;
+    mimeType: string;
+    encoding: "utf8" | "base64";
+    content: string;
+    truncated: boolean;
+    size: number;
+}
+
+let previewSelection = $state<PreviewSelection>({
+    isOpen: false,
+    taskId: null,
+    relativePath: null,
+    requestId: 0,
+});
+let previewLoading = $state(false);
+let previewError = $state<string | null>(null);
+let previewContent = $state<PreviewReadResponse | null>(null);
+let unsubscribePreview: (() => void) | null = null;
+let previewRequestId = 0;
 
 interface ModelOption {
     id: string;
@@ -698,6 +722,7 @@ let testTaskUnlisten: (() => void) | null = null;
 let testCreateTaskUnlisten: (() => void) | null = null;
 let testDeleteAllTasksUnlisten: (() => void) | null = null;
 let testDumpStateUnlisten: (() => void) | null = null;
+let testOpenPreviewUnlisten: (() => void) | null = null;
 
 async function saveConversationForTask(taskId: string | null): Promise<void> {
     if (!taskId || messageAccumulator.getState().messages.length === 0) {
@@ -789,6 +814,65 @@ async function handleFolderChange(folder: string | null): Promise<void> {
     }
 }
 
+function formatBytes(bytes: number): string {
+    if (bytes < 1024) {
+        return `${bytes} B`;
+    }
+
+    if (bytes < 1024 * 1024) {
+        return `${(bytes / 1024).toFixed(1)} KB`;
+    }
+
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function closePreview() {
+    previewStore.close();
+}
+
+async function loadPreviewForSelection(selection: PreviewSelection): Promise<void> {
+    previewSelection = selection;
+    const requestId = ++previewRequestId;
+
+    if (!selection.isOpen || !selection.taskId || !selection.relativePath) {
+        previewError = null;
+        previewContent = null;
+        previewLoading = false;
+        return;
+    }
+
+    if (selection.taskId !== currentTaskId) {
+        taskStore.setActive(selection.taskId);
+    }
+
+    previewLoading = true;
+    previewError = null;
+
+    try {
+        const response = await invoke<PreviewReadResponse>("task_preview_read", {
+            taskId: selection.taskId,
+            relativePath: selection.relativePath,
+        });
+
+        if (requestId !== previewRequestId) {
+            return;
+        }
+
+        previewContent = response;
+    } catch (error) {
+        if (requestId !== previewRequestId) {
+            return;
+        }
+
+        previewError = error instanceof Error ? error.message : String(error);
+        previewContent = null;
+    } finally {
+        if (requestId === previewRequestId) {
+            previewLoading = false;
+        }
+    }
+}
+
 onMount(() => {
     try {
         const stored = localStorage.getItem(LOGIN_AUTO_OPEN_KEY);
@@ -809,6 +893,10 @@ onMount(() => {
             // Subscribe to active task changes
             unsubscribeActiveTask = taskStore.activeTask.subscribe((task) => {
                 void handleTaskSwitch(task);
+            });
+
+            unsubscribePreview = previewStore.subscribe((selection) => {
+                void loadPreviewForSelection(selection);
             });
         } catch (error) {
             devLog("MainView", `Failed to initialize runtime service: ${error}`);
@@ -873,6 +961,18 @@ onMount(() => {
         }).then((unlisten) => {
             testDumpStateUnlisten = unlisten;
         });
+
+        listen<{ taskId?: string | null; relativePath?: string | null }>("test_open_preview", (event) => {
+            const taskId = event.payload?.taskId ?? null;
+            const relativePath = event.payload?.relativePath ?? null;
+            devLog("TestHarness", `received test_open_preview: task=${taskId} path=${relativePath}`);
+
+            if (taskId && relativePath) {
+                previewStore.open(taskId, relativePath);
+            }
+        }).then((unlisten) => {
+            testOpenPreviewUnlisten = unlisten;
+        });
     }
 });
 
@@ -882,6 +982,7 @@ onDestroy(() => {
         void taskStore.saveConversation(currentTaskId, messageAccumulator.serialize());
     }
     unsubscribeActiveTask?.();
+    unsubscribePreview?.();
     unsubscribeRuntimeService?.();
     void disconnectRpc();
     testPromptUnlisten?.();
@@ -890,10 +991,12 @@ onDestroy(() => {
     testCreateTaskUnlisten?.();
     testDeleteAllTasksUnlisten?.();
     testDumpStateUnlisten?.();
+    testOpenPreviewUnlisten?.();
 });
 </script>
 
-<main class="flex flex-1 flex-col bg-background">
+<main class="flex min-h-0 flex-1 bg-background">
+    <div class="flex min-h-0 flex-1 flex-col {previewOpen && previewSelection.isOpen ? 'border-r border-border' : ''}">
     <!-- Chat transcript area -->
     <div class="flex-1 overflow-y-auto p-4 mr-2">
         <div class="mx-auto max-w-3xl space-y-4">
@@ -1118,4 +1221,62 @@ onDestroy(() => {
             </div>
         </div>
     </div>
+
+    </div>
+
+    {#if previewOpen && previewSelection.isOpen}
+        <aside class="flex min-h-0 w-1/2 flex-col bg-background">
+            <div class="flex items-center justify-between border-b border-border px-3 py-2">
+                <div class="min-w-0">
+                    <div class="truncate text-sm font-medium text-foreground">
+                        {previewSelection.relativePath ?? "Preview"}
+                    </div>
+                    {#if previewContent}
+                        <div class="text-[11px] text-muted-foreground">
+                            {previewContent.mimeType} · {formatBytes(previewContent.size)}
+                        </div>
+                    {/if}
+                </div>
+                <button
+                    class="rounded-md p-1.5 text-muted-foreground hover:bg-accent"
+                    onclick={closePreview}
+                    aria-label="Close preview"
+                >
+                    <X class="h-4 w-4" />
+                </button>
+            </div>
+
+            <div class="min-h-0 flex-1 overflow-auto p-3">
+                {#if previewLoading}
+                    <div class="text-sm text-muted-foreground">Loading preview…</div>
+                {:else if previewError}
+                    <div class="rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-400">
+                        {previewError}
+                    </div>
+                {:else if previewContent}
+                    {#if previewContent.encoding === "utf8"}
+                        <pre class="whitespace-pre-wrap rounded-md border border-border bg-muted p-3 text-xs text-foreground">{previewContent.content}</pre>
+                    {:else if previewContent.mimeType.startsWith("image/")}
+                        <img
+                            src={`data:${previewContent.mimeType};base64,${previewContent.content}`}
+                            alt={previewContent.path}
+                            class="max-h-[80vh] w-full rounded-md border border-border object-contain bg-muted"
+                        />
+                    {:else}
+                        <div class="rounded-md border border-border bg-muted px-3 py-2 text-sm text-muted-foreground">
+                            Binary preview is not supported yet for this file type.
+                        </div>
+                    {/if}
+
+                    {#if previewContent.truncated}
+                        <div class="mt-2 text-[11px] text-amber-300">
+                            Preview content truncated for responsiveness.
+                        </div>
+                    {/if}
+                {:else}
+                    <div class="text-sm text-muted-foreground">No preview selected.</div>
+                {/if}
+            </div>
+        </aside>
+    {/if}
 </main>

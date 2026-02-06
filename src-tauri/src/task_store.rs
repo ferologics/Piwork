@@ -24,6 +24,19 @@ pub struct TaskMetadata {
     pub connectors_enabled: Option<Vec<String>>,
 }
 
+pub fn load_task(tasks_dir: &Path, task_id: &str) -> Result<Option<TaskMetadata>, String> {
+    std::fs::create_dir_all(tasks_dir).map_err(|error| error.to_string())?;
+
+    let task_path = tasks_dir.join(task_id).join("task.json");
+    if !task_path.exists() {
+        return Ok(None);
+    }
+
+    let content = std::fs::read_to_string(&task_path).map_err(|error| error.to_string())?;
+    let task: TaskMetadata = serde_json::from_str(&content).map_err(|error| error.to_string())?;
+    Ok(Some(task))
+}
+
 pub fn list_tasks(tasks_dir: &Path) -> Result<Vec<TaskMetadata>, String> {
     std::fs::create_dir_all(tasks_dir).map_err(|error| error.to_string())?;
 
@@ -36,14 +49,13 @@ pub fn list_tasks(tasks_dir: &Path) -> Result<Vec<TaskMetadata>, String> {
             continue;
         }
 
-        let task_path = path.join("task.json");
-        if !task_path.exists() {
+        let Some(task_id) = path.file_name().and_then(|value| value.to_str()) else {
             continue;
-        }
+        };
 
-        let content = std::fs::read_to_string(&task_path).map_err(|error| error.to_string())?;
-        let task: TaskMetadata = serde_json::from_str(&content).map_err(|error| error.to_string())?;
-        tasks.push(task);
+        if let Some(task) = load_task(tasks_dir, task_id)? {
+            tasks.push(task);
+        }
     }
 
     tasks.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
