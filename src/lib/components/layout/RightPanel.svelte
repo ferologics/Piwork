@@ -1,7 +1,6 @@
 <script lang="ts">
 import { invoke } from "@tauri-apps/api/core";
 import { onDestroy, onMount } from "svelte";
-import { openPath } from "@tauri-apps/plugin-opener";
 import { Activity, FolderOpen, Link, ChevronDown, RefreshCw, FileText, Image, ExternalLink } from "@lucide/svelte";
 import { taskStore } from "$lib/stores/taskStore";
 import { previewStore } from "$lib/stores/previewStore";
@@ -23,6 +22,18 @@ interface ArtifactListResponse {
     truncated: boolean;
 }
 
+interface WorkingFileEntry {
+    path: string;
+    size: number;
+    modifiedAt: number;
+}
+
+interface PreviewListResponse {
+    root: string;
+    files: WorkingFileEntry[];
+    truncated: boolean;
+}
+
 let expanded = $state<Record<CardId, boolean>>({
     progress: true,
     workingFolder: true,
@@ -38,11 +49,20 @@ let files = $state<ArtifactFileEntry[]>([]);
 let filesTruncated = $state(false);
 let filesLoading = $state(false);
 let scratchpadError = $state<string | null>(null);
+
+let workingFiles = $state<WorkingFileEntry[]>([]);
+let workingFilesTruncated = $state(false);
+let workingFilesLoading = $state(false);
+let workingFilesError = $state<string | null>(null);
+
 let workingFolderError = $state<string | null>(null);
 let openingWorkingFolder = $state(false);
+
 let lastFilesKey = "";
 let filesRequestId = 0;
-let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+let workingFilesRequestId = 0;
+let scratchpadRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+let workingFolderRefreshTimer: ReturnType<typeof setTimeout> | null = null;
 
 const cards: { id: CardId; label: string; icon: typeof Activity }[] = [
     { id: "progress", label: "Progress", icon: Activity },
@@ -90,6 +110,13 @@ function clearFilesState() {
     filesLoading = false;
 }
 
+function clearWorkingFilesState() {
+    workingFiles = [];
+    workingFilesTruncated = false;
+    workingFilesError = null;
+    workingFilesLoading = false;
+}
+
 async function loadFiles(): Promise<void> {
     if (!activeTask?.id) {
         clearFilesState();
@@ -126,6 +153,42 @@ async function loadFiles(): Promise<void> {
     }
 }
 
+async function loadWorkingFiles(): Promise<void> {
+    if (!activeTask?.id || !activeTask.workingFolder) {
+        clearWorkingFilesState();
+        return;
+    }
+
+    const requestId = ++workingFilesRequestId;
+    workingFilesLoading = true;
+    workingFilesError = null;
+
+    try {
+        const result = await invoke<PreviewListResponse>("task_preview_list", {
+            taskId: activeTask.id,
+        });
+
+        if (requestId !== workingFilesRequestId) {
+            return;
+        }
+
+        workingFiles = result.files;
+        workingFilesTruncated = result.truncated;
+    } catch (error) {
+        if (requestId !== workingFilesRequestId) {
+            return;
+        }
+
+        workingFilesError = error instanceof Error ? error.message : String(error);
+        workingFiles = [];
+        workingFilesTruncated = false;
+    } finally {
+        if (requestId === workingFilesRequestId) {
+            workingFilesLoading = false;
+        }
+    }
+}
+
 function openPreview(file: ArtifactFileEntry) {
     if (!activeTask?.id) {
         return;
@@ -135,6 +198,14 @@ function openPreview(file: ArtifactFileEntry) {
         source: "artifact",
         artifactSource: file.source,
     });
+}
+
+function openWorkingPreview(file: WorkingFileEntry) {
+    if (!activeTask?.id) {
+        return;
+    }
+
+    previewStore.open(activeTask.id, file.path, { source: "preview" });
 }
 
 async function openWorkingFolderInFinder() {
@@ -147,7 +218,7 @@ async function openWorkingFolderInFinder() {
     workingFolderError = null;
 
     try {
-        await openPath(folder);
+        await invoke("open_path_in_finder", { path: folder });
     } catch (error) {
         workingFolderError = error instanceof Error ? error.message : String(error);
     } finally {
@@ -156,13 +227,24 @@ async function openWorkingFolderInFinder() {
 }
 
 function scheduleLoadFiles(delayMs = 200) {
-    if (refreshTimer) {
-        clearTimeout(refreshTimer);
+    if (scratchpadRefreshTimer) {
+        clearTimeout(scratchpadRefreshTimer);
     }
 
-    refreshTimer = setTimeout(() => {
-        refreshTimer = null;
+    scratchpadRefreshTimer = setTimeout(() => {
+        scratchpadRefreshTimer = null;
         void loadFiles();
+    }, delayMs);
+}
+
+function scheduleLoadWorkingFiles(delayMs = 200) {
+    if (workingFolderRefreshTimer) {
+        clearTimeout(workingFolderRefreshTimer);
+    }
+
+    workingFolderRefreshTimer = setTimeout(() => {
+        workingFolderRefreshTimer = null;
+        void loadWorkingFiles();
     }, delayMs);
 }
 
@@ -178,6 +260,7 @@ onMount(() => {
 
         lastFilesKey = nextKey;
         void loadFiles();
+        void loadWorkingFiles();
     });
 
     unsubscribeArtifactRefresh = artifactRefreshStore.subscribe((event) => {
@@ -190,6 +273,7 @@ onMount(() => {
         }
 
         scheduleLoadFiles(150);
+        scheduleLoadWorkingFiles(150);
     });
 });
 
@@ -197,9 +281,14 @@ onDestroy(() => {
     unsubscribeActive?.();
     unsubscribeArtifactRefresh?.();
 
-    if (refreshTimer) {
-        clearTimeout(refreshTimer);
-        refreshTimer = null;
+    if (scratchpadRefreshTimer) {
+        clearTimeout(scratchpadRefreshTimer);
+        scratchpadRefreshTimer = null;
+    }
+
+    if (workingFolderRefreshTimer) {
+        clearTimeout(workingFolderRefreshTimer);
+        workingFolderRefreshTimer = null;
     }
 });
 </script>
@@ -262,6 +351,53 @@ onDestroy(() => {
                                                 {workingFolderError}
                                             </div>
                                         {/if}
+
+                                        {#if workingFilesError}
+                                            <div class="rounded-md border border-red-500/30 bg-red-500/10 px-2 py-1 text-xs text-red-400">
+                                                {workingFilesError}
+                                            </div>
+                                        {/if}
+
+                                        {#if workingFilesTruncated}
+                                            <div class="rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-xs text-amber-300">
+                                                Working-folder file list truncated for responsiveness.
+                                            </div>
+                                        {/if}
+
+                                        <div class="space-y-1">
+                                            <div class="flex items-center justify-between text-[11px] uppercase tracking-wide text-muted-foreground">
+                                                <span>Files {workingFiles.length > 0 ? `(${workingFiles.length})` : ""}</span>
+                                                {#if workingFilesLoading}
+                                                    <span class="inline-flex items-center gap-1 normal-case tracking-normal text-[10px] text-muted-foreground">
+                                                        <RefreshCw class="h-3 w-3 animate-spin" />
+                                                        Updating…
+                                                    </span>
+                                                {/if}
+                                            </div>
+
+                                            <div class="max-h-48 overflow-y-auto rounded-md border border-border">
+                                                {#if workingFilesLoading && workingFiles.length === 0}
+                                                    <div class="px-2 py-2 text-xs text-muted-foreground">Loading files…</div>
+                                                {:else if workingFiles.length === 0}
+                                                    <div class="px-2 py-2 text-xs text-muted-foreground">No files in working folder yet.</div>
+                                                {:else}
+                                                    {#each workingFiles as file}
+                                                        <button
+                                                            class="flex w-full items-center gap-2 border-b border-border px-2 py-1.5 text-left text-xs hover:bg-accent last:border-b-0"
+                                                            onclick={() => openWorkingPreview(file)}
+                                                        >
+                                                            {#if file.path.endsWith('.png') || file.path.endsWith('.jpg') || file.path.endsWith('.jpeg') || file.path.endsWith('.gif') || file.path.endsWith('.webp') || file.path.endsWith('.svg')}
+                                                                <Image class="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                                                            {:else}
+                                                                <FileText class="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                                                            {/if}
+                                                            <span class="min-w-0 flex-1 truncate">{file.path}</span>
+                                                            <span class="shrink-0 text-[10px] text-muted-foreground">{formatBytes(file.size)}</span>
+                                                        </button>
+                                                    {/each}
+                                                {/if}
+                                            </div>
+                                        </div>
                                     {:else}
                                         <div class="rounded-md border border-dashed border-border px-2 py-2 text-xs text-muted-foreground">
                                             No working folder set for this task.
@@ -274,18 +410,14 @@ onDestroy(() => {
                                 <p>No active task</p>
                             {:else}
                                 <div class="space-y-3">
-                                    <div class="flex items-center justify-between">
-                                        <div class="text-[11px] uppercase tracking-wide text-muted-foreground">
-                                            Files {files.length > 0 ? `(${files.length})` : ""}
-                                        </div>
-                                        <button
-                                            class="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[11px] hover:bg-accent disabled:opacity-60"
-                                            onclick={loadFiles}
-                                            disabled={filesLoading}
-                                        >
-                                            <RefreshCw class="h-3 w-3 {filesLoading ? 'animate-spin' : ''}" />
-                                            Refresh
-                                        </button>
+                                    <div class="flex items-center justify-between text-[11px] uppercase tracking-wide text-muted-foreground">
+                                        <span>Files {files.length > 0 ? `(${files.length})` : ""}</span>
+                                        {#if filesLoading}
+                                            <span class="inline-flex items-center gap-1 normal-case tracking-normal text-[10px] text-muted-foreground">
+                                                <RefreshCw class="h-3 w-3 animate-spin" />
+                                                Updating…
+                                            </span>
+                                        {/if}
                                     </div>
 
                                     {#if scratchpadError}

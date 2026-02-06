@@ -16,6 +16,7 @@
 - [x] **Fix right-panel error isolation** — Working-folder action errors are now scoped to the Working folder card.
 - [x] **Fix first `/mnt/workdir` write reliability (race mitigation)** — task-bound folder changes now mark `taskSwitching` before validation, and prompt send is blocked until runtime is ready.
 - [ ] **Add harness regression for working-folder writes** — set folder → write file immediately → assert host path has file.
+- [ ] **Add harness check for open-folder action** — validate Working-folder header icon opens Finder path successfully.
 - [ ] **Delete remaining slop** — review docs for stale references to v1, v2 flags, sync protocol, smoke suites
 - [ ] **Dev watch scope** — avoid restarting `tauri dev` for non-runtime docs/content edits (e.g. Markdown), keep hot reload scoped to relevant source/config files.
 - [x] **Roadmap sync hygiene** — synced `docs/ui-roadmap.md` with current `TODO.md` execution state (2026-02-06).
@@ -34,7 +35,7 @@
 - [x] **Scratchpad continuity** — keep Scratchpad visible for every task and aggregate artifacts from both `outputs` and `uploads`.
 - [x] **Artifact explorer parity** — make file listing/preview behavior consistent across working-folder and no-folder tasks, including uploads read-only behavior.
 - [x] **Auto-refresh artifact panels** — Scratchpad now refreshes on `tool_execution_end` / `turn_end` / `agent_end` events (manual refresh still available).
-- [ ] **Working-folder file visibility** — show files written to working folder in UI (current card mostly shows path metadata).
+- [x] **Working-folder file visibility** — Working-folder card now lists files and updates from runtime events.
 - [ ] **Context panel usefulness** — surface active connectors/tools and task-referenced files, not just static copy.
 
 ## Later: Production

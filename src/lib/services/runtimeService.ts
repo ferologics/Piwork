@@ -114,6 +114,7 @@ export class RuntimeService {
     private pendingTaskSwitch: PendingTaskSwitch | null = null;
     private lastTaskReadyAt = new Map<string, number>();
     private workspaceRootInitialized = false;
+    private workspaceRootLocked = false;
     private vmWorkspaceRoot: string | null = null;
 
     constructor(callbacks: RuntimeServiceCallbacks = {}) {
@@ -287,9 +288,13 @@ export class RuntimeService {
         try {
             const workspaceRoot = await invoke<string | null>("runtime_workspace_root");
             if (typeof workspaceRoot === "string" && workspaceRoot.trim().length > 0) {
+                this.workspaceRootLocked = true;
                 this.patch({ workspaceRoot });
+            } else {
+                this.workspaceRootLocked = false;
             }
         } catch (error) {
+            this.workspaceRootLocked = false;
             devLog("RuntimeService", `Failed to resolve workspace root: ${error}`);
         }
     }
@@ -327,7 +332,7 @@ export class RuntimeService {
 
         const result = await invoke<WorkingFolderValidation>("runtime_validate_working_folder", {
             folder: trimmed,
-            workspaceRoot: this.snapshot.workspaceRoot,
+            workspaceRoot: this.workspaceRootLocked ? this.snapshot.workspaceRoot : null,
         });
 
         const validatedFolder = typeof result?.folder === "string" ? result.folder : null;

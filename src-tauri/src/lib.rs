@@ -238,6 +238,65 @@ fn runtime_validate_working_folder(
     })
 }
 
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
+fn open_path_in_finder(path: String) -> Result<(), String> {
+    let trimmed = path.trim();
+    if trimmed.is_empty() {
+        return Err("Path is required".to_string());
+    }
+
+    let target = Path::new(trimmed);
+    if !target.exists() {
+        return Err(format!("Path does not exist: {trimmed}"));
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        let status = Command::new("open")
+            .arg(target)
+            .status()
+            .map_err(|error| format!("Failed to open path in Finder: {error}"))?;
+
+        if !status.success() {
+            return Err(format!("Finder failed to open path: {trimmed}"));
+        }
+
+        return Ok(());
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        let status = Command::new("xdg-open")
+            .arg(target)
+            .status()
+            .map_err(|error| format!("Failed to open path: {error}"))?;
+
+        if !status.success() {
+            return Err(format!("Failed to open path: {trimmed}"));
+        }
+
+        return Ok(());
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        let status = Command::new("cmd")
+            .args(["/C", "start", "", trimmed])
+            .status()
+            .map_err(|error| format!("Failed to open path: {error}"))?;
+
+        if !status.success() {
+            return Err(format!("Failed to open path: {trimmed}"));
+        }
+
+        return Ok(());
+    }
+
+    #[allow(unreachable_code)]
+    Err("Open in file explorer is not supported on this platform".to_string())
+}
+
 fn resolve_task_preview_root(app: &tauri::AppHandle, task_id: &str) -> Result<PathBuf, String> {
     if !is_valid_task_id(task_id) {
         return Err("Invalid task id".to_string());
@@ -1149,6 +1208,7 @@ pub fn run() {
             runtime_status,
             runtime_workspace_root,
             runtime_validate_working_folder,
+            open_path_in_finder,
             task_store_list,
             task_store_upsert,
             task_store_delete,

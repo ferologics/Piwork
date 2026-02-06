@@ -49,6 +49,15 @@ let pendingUiSending = $state(false);
 let vmLogPath = $state<string | null>(null);
 let openingLog = $state(false);
 
+interface DevToast {
+    id: number;
+    message: string;
+}
+
+let devToasts = $state<DevToast[]>([]);
+let devToastCounter = 0;
+const DEV_TOAST_TTL_MS = 5000;
+
 // Task/runtime tracking
 let currentTaskId = $state<string | null>(null);
 let currentWorkingFolder = $state<string | null>(null);
@@ -129,6 +138,24 @@ function pushRpcMessage(message: string) {
     // Log to console for debugging (visible in terminal)
     devLog("RPC", message);
     maybeCaptureLoginUrl(message);
+}
+
+function pushDevToast(message: string) {
+    if (!import.meta.env.DEV) {
+        return;
+    }
+
+    const trimmed = message.trim();
+    if (!trimmed) {
+        return;
+    }
+
+    const id = ++devToastCounter;
+    devToasts = [...devToasts, { id, message: trimmed }];
+
+    setTimeout(() => {
+        devToasts = devToasts.filter((toast) => toast.id !== id);
+    }, DEV_TOAST_TTL_MS);
 }
 
 function extractUrl(message: string) {
@@ -625,7 +652,7 @@ async function initializeRuntimeService() {
             void requestState();
             void requestAvailableModels();
         },
-        onError: () => {
+        onError: (message) => {
             rpcAuthHint = null;
             rpcLoginUrl = null;
             loginCopied = false;
@@ -634,6 +661,7 @@ async function initializeRuntimeService() {
             rpcStateInfo = null;
             rpcStateRequested = false;
             rpcModelsRequested = false;
+            pushDevToast(message);
             void refreshVmLogPath();
         },
         onRpcPayload: handleRpcPayload,
@@ -835,7 +863,9 @@ async function handleFolderChange(folder: string | null): Promise<void> {
             persistWorkingFolderForActiveTask,
         });
     } catch (error) {
-        devLog("MainView", `Folder change failed: ${error}`);
+        const message = error instanceof Error ? error.message : String(error);
+        devLog("MainView", `Folder change failed: ${message}`);
+        pushDevToast(`Folder change failed: ${message}`);
     }
 }
 
@@ -1357,5 +1387,15 @@ onDestroy(() => {
                 {/if}
             </div>
         </aside>
+    {/if}
+
+    {#if import.meta.env.DEV && devToasts.length > 0}
+        <div class="pointer-events-none fixed bottom-4 right-4 z-50 flex max-w-sm flex-col gap-2">
+            {#each devToasts as toast (toast.id)}
+                <div class="rounded-md border border-red-500/40 bg-red-500/15 px-3 py-2 text-xs text-red-100 shadow">
+                    {toast.message}
+                </div>
+            {/each}
+        </div>
     {/if}
 </main>
