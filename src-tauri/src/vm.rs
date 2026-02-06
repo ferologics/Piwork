@@ -12,6 +12,8 @@ use tauri::Emitter;
 use tauri::Manager;
 
 const RPC_PORT: u16 = 19384;
+const READY_MARKER_TIMEOUT_SECS: u64 = 45;
+const RPC_CONNECT_TIMEOUT_SECS: u64 = 45;
 
 #[derive(Default)]
 pub struct VmState {
@@ -164,22 +166,24 @@ pub fn start(
     // Thread to wait for READY and then connect RPC
     let app_handle = app.clone();
     thread::spawn(move || {
+        let ready_timeout = timeout_from_env("PIWORK_VM_READY_TIMEOUT_SECS", READY_MARKER_TIMEOUT_SECS);
+        let connect_timeout = timeout_from_env("PIWORK_VM_RPC_CONNECT_TIMEOUT_SECS", RPC_CONNECT_TIMEOUT_SECS);
+
         eprintln!("[rust:vm:rpc] waiting for READY signal...");
 
-        // Wait for VM to boot by polling the log file for READY
-        let ready = wait_for_ready(&log_path, Duration::from_secs(30));
-
-        if !ready {
-            eprintln!("[rust:vm:rpc] timeout waiting for READY");
-            emit_event(&app_handle, "error", "Timeout waiting for VM to boot".to_string());
-            mark_stopped(&app_handle);
-            return;
+        // Wait for VM to boot by polling the log file for READY.
+        // If READY is not observed in time, still attempt direct RPC connect as fallback.
+        let ready = wait_for_ready(&log_path, ready_timeout);
+        if ready {
+            eprintln!("[rust:vm:rpc] READY received");
+        } else {
+            eprintln!(
+                "[rust:vm:rpc] READY marker not observed within {ready_timeout:?}; attempting TCP connect anyway"
+            );
         }
 
-        eprintln!("[rust:vm:rpc] READY received, connecting to RPC port...");
-
         // Connect to RPC port first, then emit ready once writable RPC is available.
-        match connect_rpc(RPC_PORT) {
+        match connect_rpc(RPC_PORT, connect_timeout) {
             Ok(stream) => {
                 eprintln!("[rust:vm:rpc] connected to TCP port {RPC_PORT}");
                 if let Ok(clone) = stream.try_clone() {
@@ -193,6 +197,10 @@ pub fn start(
             }
             Err(error) => {
                 eprintln!("[rust:vm:rpc] TCP connection failed: {error}");
+                let qemu_tail = read_log_tail(&log_path, 4_096);
+                if !qemu_tail.is_empty() {
+                    eprintln!("[rust:vm:rpc] qemu log tail:\n{qemu_tail}");
+                }
                 emit_event(&app_handle, "error", format!("RPC connection failed: {error}"));
             }
         }
@@ -363,6 +371,25 @@ pub fn find_in_path(binary: &str) -> Option<PathBuf> {
     None
 }
 
+fn timeout_from_env(name: &str, fallback_secs: u64) -> Duration {
+    let parsed = std::env::var(name)
+        .ok()
+        .and_then(|value| value.parse::<u64>().ok())
+        .filter(|value| *value > 0)
+        .unwrap_or(fallback_secs);
+
+    Duration::from_secs(parsed)
+}
+
+fn read_log_tail(log_path: &Path, max_bytes: usize) -> String {
+    let Ok(content) = std::fs::read(log_path) else {
+        return String::new();
+    };
+
+    let start = content.len().saturating_sub(max_bytes);
+    String::from_utf8_lossy(&content[start..]).to_string()
+}
+
 fn wait_for_ready(log_path: &Path, timeout: Duration) -> bool {
     let start = std::time::Instant::now();
 
@@ -378,22 +405,22 @@ fn wait_for_ready(log_path: &Path, timeout: Duration) -> bool {
     false
 }
 
-fn connect_rpc(port: u16) -> Result<TcpStream, String> {
+fn connect_rpc(port: u16, timeout: Duration) -> Result<TcpStream, String> {
     let addr = format!("127.0.0.1:{port}");
-    let mut attempts = 0;
+    let start = std::time::Instant::now();
+    let mut last_error = String::from("connection timeout");
 
-    loop {
+    while start.elapsed() < timeout {
         match TcpStream::connect(&addr) {
             Ok(stream) => return Ok(stream),
             Err(error) => {
-                attempts += 1;
-                if attempts > 50 {
-                    return Err(error.to_string());
-                }
+                last_error = error.to_string();
                 thread::sleep(Duration::from_millis(100));
             }
         }
     }
+
+    Err(last_error)
 }
 
 fn read_rpc_lines(app: &AppHandle, stream: TcpStream) {

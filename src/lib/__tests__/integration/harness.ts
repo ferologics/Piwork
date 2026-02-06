@@ -5,7 +5,16 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../../");
-const LOG_PATH = path.join(REPO_ROOT, "tmp/dev/piwork.integration.log");
+const INTEGRATION_LOG_PATH = path.join(REPO_ROOT, "tmp/dev/piwork.integration.log");
+const APP_LOG_PATH = path.join(REPO_ROOT, "tmp/dev/piwork.log");
+
+const HOME_DIR = process.env.HOME ?? "";
+const QEMU_LOG_CANDIDATES = HOME_DIR
+    ? [
+          path.join(HOME_DIR, "Library/Application Support/com.pi.work/vm/qemu.log"),
+          path.join(HOME_DIR, ".local/share/com.pi.work/vm/qemu.log"),
+      ]
+    : [];
 
 const TEST_SERVER_HOST = "127.0.0.1";
 const TEST_SERVER_PORT = 19385;
@@ -185,21 +194,31 @@ export class IntegrationHarness {
     private logStream: ReturnType<typeof createWriteStream> | null = null;
     private lastSnapshot: StateSnapshot | null = null;
 
-    private readLogTail(maxChars = 10_000): string {
-        if (!existsSync(LOG_PATH)) {
-            return "(log file missing)";
+    private readTail(filePath: string, maxChars = 10_000): string {
+        if (!existsSync(filePath)) {
+            return `(missing: ${filePath})`;
         }
 
         try {
-            const content = readFileSync(LOG_PATH, "utf8");
+            const content = readFileSync(filePath, "utf8");
             if (!content.trim()) {
-                return "(log file empty)";
+                return `(empty: ${filePath})`;
             }
 
             return content.slice(-maxChars);
         } catch (error) {
-            return `(failed to read log tail: ${String(error)})`;
+            return `(failed to read ${filePath}: ${String(error)})`;
         }
+    }
+
+    private resolveQemuLogPath(): string | null {
+        for (const candidate of QEMU_LOG_CANDIDATES) {
+            if (existsSync(candidate)) {
+                return candidate;
+            }
+        }
+
+        return null;
     }
 
     private timeoutDiagnostics(context: string): string {
@@ -208,13 +227,18 @@ export class IntegrationHarness {
             : "child=none";
 
         const snapshot = this.lastSnapshot ? JSON.stringify(this.lastSnapshot, null, 2) : "(no snapshot captured)";
+        const qemuLogPath = this.resolveQemuLogPath();
 
         return [
             `Context: ${context}`,
             `Child: ${childStatus}`,
             `Last snapshot: ${snapshot}`,
             "--- piwork.integration.log (tail) ---",
-            this.readLogTail(),
+            this.readTail(INTEGRATION_LOG_PATH),
+            "--- piwork.log (tail) ---",
+            this.readTail(APP_LOG_PATH),
+            "--- qemu.log (tail) ---",
+            qemuLogPath ? this.readTail(qemuLogPath) : `(missing: ${QEMU_LOG_CANDIDATES.join(", ")})`,
             "--- end log tail ---",
         ].join("\n");
     }
@@ -222,11 +246,11 @@ export class IntegrationHarness {
     async start(): Promise<void> {
         bestEffortStopProcesses();
 
-        mkdirSync(path.dirname(LOG_PATH), { recursive: true });
-        writeFileSync(LOG_PATH, "");
+        mkdirSync(path.dirname(INTEGRATION_LOG_PATH), { recursive: true });
+        writeFileSync(INTEGRATION_LOG_PATH, "");
         this.lastSnapshot = null;
 
-        this.logStream = createWriteStream(LOG_PATH, { flags: "a" });
+        this.logStream = createWriteStream(INTEGRATION_LOG_PATH, { flags: "a" });
         this.child = spawn("pnpm", ["exec", "tauri", "dev"], {
             cwd: REPO_ROOT,
             env: {
@@ -553,6 +577,6 @@ export class IntegrationHarness {
     }
 
     logPath(): string {
-        return LOG_PATH;
+        return INTEGRATION_LOG_PATH;
     }
 }

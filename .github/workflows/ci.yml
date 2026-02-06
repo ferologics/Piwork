@@ -113,12 +113,44 @@ jobs:
       - name: Run full live regression gate
         run: mise run test-regressions
 
-      - name: Upload integration logs on failure
+      - name: Collect integration diagnostics on failure
+        if: failure()
+        run: |
+          set -euo pipefail
+
+          DEST="tmp/dev/ci-diagnostics"
+          mkdir -p "$DEST"
+
+          cp -f tmp/dev/piwork.integration.log "$DEST/" 2>/dev/null || true
+          cp -f tmp/dev/piwork.log "$DEST/" 2>/dev/null || true
+
+          MAC_VM_DIR="$HOME/Library/Application Support/com.pi.work/vm"
+          LINUX_VM_DIR="$HOME/.local/share/com.pi.work/vm"
+
+          if [ -d "$MAC_VM_DIR" ]; then
+            mkdir -p "$DEST/vm-macos"
+            cp -R "$MAC_VM_DIR/." "$DEST/vm-macos/" || true
+          fi
+
+          if [ -d "$LINUX_VM_DIR" ]; then
+            mkdir -p "$DEST/vm-linux"
+            cp -R "$LINUX_VM_DIR/." "$DEST/vm-linux/" || true
+          fi
+
+          {
+            echo "=== Environment ==="
+            uname -a || true
+            echo
+            echo "HOME=$HOME"
+            echo
+            echo "=== Dest tree ==="
+            find "$DEST" -maxdepth 4 -print || true
+          } > "$DEST/diagnostics.txt"
+
+      - name: Upload integration diagnostics on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: integration-logs
-          path: |
-            tmp/dev/piwork.integration.log
-            tmp/dev/piwork.log
+          name: integration-diagnostics
+          path: tmp/dev/ci-diagnostics
           if-no-files-found: ignore
