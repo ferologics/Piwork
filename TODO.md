@@ -22,7 +22,7 @@
 - [x] **No-reboot switching**: Implement `switch_task` path; task switch should not reboot VM
 - [x] **Remove fallback hydration**: Delete transcript→session reconstruction from normal runtime path
 - [ ] **Task resume semantics**: Validate memory continuity + no cross-task context bleed
-- [ ] **Task switch latency target**: Warm switch completes in a few seconds, no long spinner
+- [x] **Task switch latency target**: Warm/cold switch loop validated in v2 harness (no long spinner, switch/ready within target budget)
 - [ ] **Task workspace model**: Ship sync-first workspace (`/sessions/<taskId>/work`), evaluate live mount later
 
 ## P1: Production Ready

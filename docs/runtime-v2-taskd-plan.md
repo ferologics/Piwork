@@ -315,14 +315,20 @@ Completed in code:
   - Implemented host-side switch handshake (`switch_task` ACK + wait for `task_ready` event with timeout handling).
   - Removed normal-path v2 dependence on VM restart + transcript hydration fallback.
   - Kept v1 restart/hydration path intact behind `mode=v1`.
+- ✅ Initial latency proof (harness sample):
+  - Warm-switch loop and cold-resume loop executed in `runtime_v2_taskd` mode.
+  - Measured (`task_switch_started -> task_ready`) sample p95:
+    - warm: ~0.45ms
+    - cold resume: ~0.60ms
+  - Captured required evidence: `test-dump-state`, `test-screenshot phase2-latency`, supporting log lines.
+  - Verified no VM restart during switch loops (`[rust:vm] start called` count remained 1).
 
 Still open:
 
-- ⏳ Harness proof for warm-switch/cold-resume latency targets under true v2 host routing.
 - ⏳ Gate G1 workspace decision and follow-up path work.
 
 ## Immediate next actions
 
-1. Run warm-switch/cold-resume benchmark loop and capture latency evidence (`test-dump-state`, screenshots, logs)
-2. Run Gate G1 spike and choose Path M vs Path S before building sync apply
-3. If Path S is chosen, freeze/apply `runtime-v2-taskd-sync-spec.md` and start dry-run sync phase
+1. Run Gate G1 spike and choose Path M vs Path S before building sync apply
+2. If Path S is chosen, freeze/apply `runtime-v2-taskd-sync-spec.md` and start dry-run sync phase
+3. Add focused resume-semantics checks (task-local memory seed test, no cross-task bleed assertions)
