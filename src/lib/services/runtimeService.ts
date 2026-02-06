@@ -518,12 +518,24 @@ export class RuntimeService {
 
             await this.waitForRpcReady();
 
+            let taskForRuntime = newTask;
+            if (newTask.workingFolder) {
+                const validated = await this.validateWorkingFolder(newTask.workingFolder);
+                if (validated.folder !== newTask.workingFolder) {
+                    taskForRuntime = {
+                        ...newTask,
+                        workingFolder: validated.folder,
+                    };
+                    this.patch({ currentWorkingFolder: validated.folder });
+                }
+            }
+
             const requiredWorkspaceRoot = this.snapshot.workspaceRoot;
             if (newTask.workingFolder && requiredWorkspaceRoot && this.vmWorkspaceRoot !== requiredWorkspaceRoot) {
                 await this.restartVmWithWorkspaceRoot();
             }
 
-            await this.ensureTaskdTaskReady(newTask);
+            await this.ensureTaskdTaskReady(taskForRuntime);
             await this.switchTaskdTask(newTaskId);
             this.callbacks.onStateRefreshRequested?.();
         } catch (error) {
