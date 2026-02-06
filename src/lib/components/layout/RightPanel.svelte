@@ -66,7 +66,7 @@ function clearFilesState() {
 }
 
 async function loadFiles(): Promise<void> {
-    if (!activeTask?.id || !activeTask.workingFolder) {
+    if (!activeTask?.id) {
         clearFilesState();
         return;
     }
@@ -155,14 +155,14 @@ onDestroy(() => {
                         {:else if card.id === "downloads"}
                             {#if !activeTask}
                                 <p>No active task</p>
-                            {:else if !activeTask.workingFolder}
-                                <p>No working folder selected.</p>
                             {:else}
                                 <div class="space-y-3">
                                     <div class="space-y-1">
-                                        <div class="text-[11px] uppercase tracking-wide text-muted-foreground">Task Folder</div>
+                                        <div class="text-[11px] uppercase tracking-wide text-muted-foreground">
+                                            {activeTask.workingFolder ? "Task Folder" : "Task Scratch Folder"}
+                                        </div>
                                         <div class="rounded-md bg-muted px-2 py-1 text-xs text-foreground break-all">
-                                            {activeTask.workingFolder}
+                                            {activeTask.workingFolder ?? "No working folder selected. Using task scratch workspace."}
                                         </div>
                                         {#if filesRoot}
                                             <div class="text-[10px] text-muted-foreground break-all">root: {filesRoot}</div>

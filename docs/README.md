@@ -17,7 +17,7 @@
 
 - `auth-flow.md` — authentication behavior
 - `permissions-model.md` — folder access model
-- `ui-roadmap.md` — UI roadmap with Cowork comparison
+- `ui-roadmap.md` — UI direction + Cowork comparison (execution tracking is in `../TODO.md`)
 
 ## Supporting
 

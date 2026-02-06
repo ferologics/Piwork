@@ -221,15 +221,20 @@ fn runtime_validate_working_folder(
     })
 }
 
-fn resolve_task_working_folder(app: &tauri::AppHandle, task_id: &str) -> Result<PathBuf, String> {
+fn resolve_task_preview_root(app: &tauri::AppHandle, task_id: &str) -> Result<PathBuf, String> {
+    if !is_valid_task_id(task_id) {
+        return Err("Invalid task id".to_string());
+    }
+
     let tasks_path = tasks_dir(app)?;
     let task = task_store::load_task(&tasks_path, task_id)?.ok_or_else(|| "Task not found".to_string())?;
-    let working_folder = task
-        .working_folder
-        .ok_or_else(|| "Task has no working folder configured".to_string())?;
 
-    let validated = runtime_validate_working_folder(working_folder, None)?;
-    Ok(PathBuf::from(validated.folder))
+    if let Some(working_folder) = task.working_folder {
+        let validated = runtime_validate_working_folder(working_folder, None)?;
+        return Ok(PathBuf::from(validated.folder));
+    }
+
+    Ok(tasks_path.join("sessions").join(task_id).join("work"))
 }
 
 fn normalize_preview_relative_path(relative_path: &str) -> Result<PathBuf, String> {
@@ -312,7 +317,7 @@ fn task_preview_list(app: tauri::AppHandle, task_id: String) -> Result<PreviewLi
     const MAX_FILES: usize = 300;
     const MAX_DEPTH: usize = 6;
 
-    let root = resolve_task_working_folder(&app, &task_id)?;
+    let root = resolve_task_preview_root(&app, &task_id)?;
     let mut files: Vec<PreviewFileEntry> = Vec::new();
     let mut stack: Vec<(PathBuf, usize)> = vec![(root.clone(), 0)];
     let mut truncated = false;
@@ -400,7 +405,7 @@ fn task_preview_read(
 ) -> Result<PreviewReadResponse, String> {
     const MAX_PREVIEW_BYTES: usize = 256 * 1024;
 
-    let root = resolve_task_working_folder(&app, &task_id)?;
+    let root = resolve_task_preview_root(&app, &task_id)?;
     let relative = normalize_preview_relative_path(&relative_path)?;
     let candidate = root.join(&relative);
 

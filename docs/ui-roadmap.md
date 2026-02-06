@@ -2,14 +2,27 @@
 
 Based on Cowork observation + our needs.
 
+> **Status:** directional product doc. The actionable, prioritized execution backlog lives in `../TODO.md`.
+> **Sync rule:** when adding/changing roadmap items here, mirror the concrete next actions in `TODO.md`.
+> **Last synced:** 2026-02-06.
+
+## Sync with TODO (current execution track)
+
+- **Right panel IA** (Working folder + Scratchpad split, collapsible cards, empty states, quick open-in-Finder) → `TODO.md` / Next
+- **Scratchpad continuity** (files remain visible after setting/changing working folder) → `TODO.md` / Next
+- **Artifact explorer parity** (same preview/list behavior for working-folder + no-folder tasks) → `TODO.md` / Next
+- **Context usefulness** (real connectors + referenced files, not static placeholder copy) → `TODO.md` / Next
+- **Progress model improvements** (Cowork-style step/milestone summaries) are explicitly **non-P0** → `TODO.md` / Later: Polish
+- **Multi-task runtime switching semantics** (switch without losing running state) → `TODO.md` / Later: Production
+
 ## P0: Base Workflows Must Work
 
-These are broken or missing - fix first:
+Baseline status snapshot:
 
-- [ ] **Task resume** - select task, restore conversation + pi session isolation
-- [ ] **Session isolation** - per-task `--session` (no context bleed)
-- [ ] **Working folder mount** - mount host folder into VM (blocked by 9p)
-- [ ] **Show created files** - right panel shows files agent creates
+- [x] **Task resume** - select task, restore conversation + task session
+- [x] **Session isolation** - per-task process/session model (taskd)
+- [x] **Working folder mount** - host folder mounted into VM via 9p
+- [ ] **Show created files clearly** - baseline exists, but right-panel IA/parity polish is still pending (tracked in `TODO.md`)
 
 ## P1: Core UX Polish
 

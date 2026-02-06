@@ -29,6 +29,7 @@ See `docs/path-i-lite-negative-suite.md`.
 ## Evidence rule
 
 For any runtime behavior claim, capture all three:
+
 1. `test-dump-state`
 2. `test-screenshot <name>`
 3. Supporting log lines (`tmp/dev/piwork.log`, VM log)

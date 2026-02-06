@@ -32,23 +32,23 @@ mise run runtime-clean      # clean runtime artifacts
 
 ### Key files
 
-| File | What |
-|------|------|
-| `mise-tasks/runtime-build` | Downloads Alpine + Node.js, builds initramfs, installs runtime |
-| `runtime/init.sh` | VM init script (mounts, networking, starts taskd) |
-| `runtime/taskd.js` | Guest process supervisor — per-task pi processes, RPC routing |
-| `src-tauri/src/vm.rs` | QEMU process management (spawn, ready detection, stop) |
-| `src-tauri/src/lib.rs` | Tauri commands (VM, tasks, auth, preview, test server) |
-| `src/lib/services/runtimeService.ts` | Frontend runtime orchestration |
-| `src/lib/components/layout/MainView.svelte` | Main UI component |
+| File                                        | What                                                           |
+| ------------------------------------------- | -------------------------------------------------------------- |
+| `mise-tasks/runtime-build`                  | Downloads Alpine + Node.js, builds initramfs, installs runtime |
+| `runtime/init.sh`                           | VM init script (mounts, networking, starts taskd)              |
+| `runtime/taskd.js`                          | Guest process supervisor — per-task pi processes, RPC routing  |
+| `src-tauri/src/vm.rs`                       | QEMU process management (spawn, ready detection, stop)         |
+| `src-tauri/src/lib.rs`                      | Tauri commands (VM, tasks, auth, preview, test server)         |
+| `src/lib/services/runtimeService.ts`        | Frontend runtime orchestration                                 |
+| `src/lib/components/layout/MainView.svelte` | Main UI component                                              |
 
 ### 9p mounts (host → VM)
 
-| Mount | Guest path | Purpose |
-|-------|-----------|---------|
-| workdir | `/mnt/workdir` | User's working folder |
+| Mount     | Guest path       | Purpose                |
+| --------- | ---------------- | ---------------------- |
+| workdir   | `/mnt/workdir`   | User's working folder  |
 | taskstate | `/mnt/taskstate` | Per-task session files |
-| authstate | `/mnt/authstate` | Host auth profiles |
+| authstate | `/mnt/authstate` | Host auth profiles     |
 
 ### Auth (current state)
 
