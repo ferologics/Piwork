@@ -35,6 +35,9 @@ mise run test-open-preview <task-id> <relative-path>  # open main-pane preview f
 mise run test-set-folder /path   # set working folder
 mise run test-set-task <id>      # set active task in UI
 mise run test-set-auth-profile <profile>  # set auth profile + restart runtime
+mise run test-auth-list [profile]         # inspect auth store entries
+mise run test-auth-set-key <provider> <key> [profile]  # write API key to auth store
+mise run test-auth-import-pi [profile]    # import ~/.pi auth into auth store
 mise run test-create-task "Title" [folder]  # create a task
 mise run test-delete-tasks       # delete all tasks
 mise run test-dump-state         # log active task/session/message count
@@ -53,7 +56,7 @@ Prerequisite: grant Screen Recording permission to the terminal app running `mis
 
 ### AI testing workflow (important)
 
-- Prefer **ad-hoc primitive tasks** (`test-create-task`, `test-set-task`, `test-set-auth-profile`, `test-prompt`, `test-open-preview`, `test-dump-state`, `test-screenshot`) over monolithic end-to-end scripts.
+- Prefer **ad-hoc primitive tasks** (`test-create-task`, `test-set-task`, `test-set-auth-profile`, `test-auth-list`, `test-auth-set-key`, `test-prompt`, `test-open-preview`, `test-dump-state`, `test-screenshot`) over monolithic end-to-end scripts.
 - Reusable suite scripts live in `scripts/harness/` (current: `path-i-lite-negative.sh`, `auth-profile-mount-smoke.sh`, `auth-profile-switch-smoke.sh`).
 - For any UI/state claim, capture all three before concluding:
   1. `test-dump-state` (state snapshot)

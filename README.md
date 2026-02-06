@@ -43,6 +43,9 @@ mise run test-start
 mise run test-create-task "Title" /path/to/folder
 mise run test-set-task <task-id>
 mise run test-set-auth-profile <profile>
+mise run test-auth-list [profile]
+mise run test-auth-set-key <provider> <key> [profile]
+mise run test-auth-import-pi [profile]
 mise run test-open-preview <task-id> <relative-path>
 mise run test-dump-state
 mise run test-screenshot name

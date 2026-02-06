@@ -713,6 +713,9 @@ fn auth_store_import_pi(
 /// - `{"cmd":"set_folder","folder":"/path"}` - changes working folder
 /// - `{"cmd":"set_task","taskId":"..."}` - selects active task
 /// - `{"cmd":"set_auth_profile","profile":"default"}` - switches auth profile and restarts runtime in UI
+/// - `{"cmd":"auth_list","profile":"default"}` - returns auth store summary JSON
+/// - `{"cmd":"auth_set_api_key","provider":"anthropic","key":"...","profile":"default"}` - writes API key to auth store
+/// - `{"cmd":"auth_import_pi","profile":"default"}` - imports ~/.pi/agent/auth.json into auth store
 /// - `{"cmd":"create_task","title":"...","workingFolder":"/path"}` - creates task
 /// - `{"cmd":"delete_all_tasks"}` - wipes all tasks
 /// - `{"cmd":"dump_state"}` - logs UI state
@@ -784,6 +787,47 @@ fn start_test_server(app_handle: tauri::AppHandle) {
                             eprintln!("[test-server] emitting test_set_auth_profile: {profile:?}");
                             let _ = app.emit("test_set_auth_profile", profile);
                             let _ = stream.write_all(b"OK\n");
+                        }
+                        "auth_list" => {
+                            let profile = json.get("profile").and_then(|v| v.as_str()).map(str::to_string);
+
+                            match auth_store_list(app.clone(), profile) {
+                                Ok(summary) => {
+                                    let payload = serde_json::to_string(&summary).unwrap_or_else(|_| "{}".to_string());
+                                    let _ = stream.write_all(format!("{payload}\n").as_bytes());
+                                }
+                                Err(error) => {
+                                    let _ = stream.write_all(format!("ERR: {error}\n").as_bytes());
+                                }
+                            }
+                        }
+                        "auth_set_api_key" => {
+                            let provider = json.get("provider").and_then(|v| v.as_str()).unwrap_or("");
+                            let key = json.get("key").and_then(|v| v.as_str()).unwrap_or("");
+                            let profile = json.get("profile").and_then(|v| v.as_str()).map(str::to_string);
+
+                            match auth_store_set_api_key(app.clone(), provider.to_string(), key.to_string(), profile) {
+                                Ok(summary) => {
+                                    let payload = serde_json::to_string(&summary).unwrap_or_else(|_| "{}".to_string());
+                                    let _ = stream.write_all(format!("{payload}\n").as_bytes());
+                                }
+                                Err(error) => {
+                                    let _ = stream.write_all(format!("ERR: {error}\n").as_bytes());
+                                }
+                            }
+                        }
+                        "auth_import_pi" => {
+                            let profile = json.get("profile").and_then(|v| v.as_str()).map(str::to_string);
+
+                            match auth_store_import_pi(app.clone(), profile) {
+                                Ok(summary) => {
+                                    let payload = serde_json::to_string(&summary).unwrap_or_else(|_| "{}".to_string());
+                                    let _ = stream.write_all(format!("{payload}\n").as_bytes());
+                                }
+                                Err(error) => {
+                                    let _ = stream.write_all(format!("ERR: {error}\n").as_bytes());
+                                }
+                            }
                         }
                         "create_task" => {
                             // Emit event to frontend to create a new task

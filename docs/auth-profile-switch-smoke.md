@@ -22,8 +22,8 @@ Preflight:
 
 Checks:
 
-1. Creates temporary `default` and `work` host auth profiles.
-2. Starts Piwork in `v2_taskd` mode.
+1. Starts Piwork in `v2_taskd` mode.
+2. Seeds `default` and `work` auth entries via harness primitives (`test-auth-set-key`).
 3. Calls `mise run test-set-auth-profile work` (UI event + runtime restart).
 4. Confirms VM boot log contains `Using mounted auth profile: work`.
 5. Confirms `test-dump-state` output includes `auth=work`.

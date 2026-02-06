@@ -44,24 +44,6 @@ if [[ -f "$WORK_AUTH" ]]; then
     cp -f "$WORK_AUTH" "$WORK_BACKUP"
 fi
 
-cat > "$DEFAULT_AUTH" <<'EOF'
-{
-    "anthropic": {
-        "type": "api_key",
-        "key": "default-profile-smoke"
-    }
-}
-EOF
-
-cat > "$WORK_AUTH" <<'EOF'
-{
-    "anthropic": {
-        "type": "api_key",
-        "key": "work-profile-smoke"
-    }
-}
-EOF
-
 echo "[auth-switch] checking screenshot permission"
 if ! mise run test-check-permissions; then
     echo "[auth-switch] screenshot preflight failed"
@@ -70,6 +52,10 @@ fi
 
 echo "[auth-switch] starting app"
 PIWORK_RUNTIME_V2_TASKD=1 PIWORK_WORKSPACE_ROOT="$ROOT_DIR" mise run test-start >/dev/null
+
+echo "[auth-switch] seeding auth store via harness primitives"
+mise run test-auth-set-key anthropic default-profile-smoke default >/dev/null
+mise run test-auth-set-key anthropic work-profile-smoke work >/dev/null
 
 sleep 1
 mise run test-set-auth-profile work >/dev/null
