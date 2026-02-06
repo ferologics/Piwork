@@ -48,6 +48,7 @@ Auth mount/profile smoke checks:
 
 - `./scripts/harness/auth-profile-mount-smoke.sh` (`docs/auth-profile-mount-smoke.md`)
 - `./scripts/harness/auth-profile-switch-smoke.sh` (`docs/auth-profile-switch-smoke.md`)
+- `./scripts/harness/auth-profile-validation-smoke.sh` (`docs/auth-profile-validation-smoke.md`)
 
 Auth-store primitive smoke check:
 

@@ -58,7 +58,7 @@ Prerequisite: grant Screen Recording permission to the terminal app running `mis
 ### AI testing workflow (important)
 
 - Prefer **ad-hoc primitive tasks** (`test-create-task`, `test-set-task`, `test-set-auth-profile`, `test-auth-list`, `test-auth-set-key`, `test-auth-delete`, `test-prompt`, `test-open-preview`, `test-dump-state`, `test-screenshot`) over monolithic end-to-end scripts.
-- Reusable suite scripts live in `scripts/harness/` (current: `path-i-lite-negative.sh`, `auth-profile-mount-smoke.sh`, `auth-profile-switch-smoke.sh`, `auth-store-primitives-smoke.sh`).
+- Reusable suite scripts live in `scripts/harness/` (current: `path-i-lite-negative.sh`, `auth-profile-mount-smoke.sh`, `auth-profile-switch-smoke.sh`, `auth-profile-validation-smoke.sh`, `auth-store-primitives-smoke.sh`).
 - For any UI/state claim, capture all three before concluding:
   1. `test-dump-state` (state snapshot)
   2. `test-screenshot <name>` (visual proof)

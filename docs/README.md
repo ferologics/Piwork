@@ -17,6 +17,7 @@ This folder contains both **current runtime docs** and **older draft/research no
 - `path-i-lite-negative-suite.md` — repeatable I2 negative checks (traversal/symlink/cross-task scope).
 - `auth-profile-mount-smoke.md` — repeatable auth mount/profile smoke verification.
 - `auth-profile-switch-smoke.md` — repeatable auth profile switch + runtime restart verification.
+- `auth-profile-validation-smoke.md` — repeatable invalid-profile validation checks.
 - `auth-store-primitives-smoke.md` — repeatable auth-store primitive verification.
 
 ## Runtime: on-hold fallback

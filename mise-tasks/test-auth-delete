@@ -15,7 +15,7 @@ if ! nc -z localhost 19385 2>/dev/null; then
     exit 1
 fi
 
-python - "$PROVIDER" "$PROFILE" <<'PY' | nc -w 2 localhost 19385
+RESULT=$(python - "$PROVIDER" "$PROFILE" <<'PY' | nc -w 2 localhost 19385
 import json
 import sys
 
@@ -26,3 +26,11 @@ payload = {
 }
 print(json.dumps(payload))
 PY
+)
+
+if [[ "$RESULT" == ERR:* ]]; then
+    echo "$RESULT"
+    exit 1
+fi
+
+echo "$RESULT"
