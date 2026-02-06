@@ -62,8 +62,8 @@ Provide a **consistent, isolated Linux environment** for desktop while keeping t
    - UI connects to `localhost:19384`
    - Task starts once RPC is ready
 
-> **Note:** Folder mounts via 9p are currently blocked (Alpine virt kernel lacks 9p modules).
-> **Future:** virtiofs + virtio‑serial, per‑task overlay.
+> **Note:** v2 dev runtime now injects required 9p modules into initramfs and mounts workspace/taskstate at boot (`/mnt/workdir`, `/mnt/taskstate`).
+> **Future:** evaluate virtiofs and stronger per-task sandbox layering.
 
 ## Host ↔ VM Communication
 

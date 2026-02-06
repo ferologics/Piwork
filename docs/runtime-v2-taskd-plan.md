@@ -348,13 +348,15 @@ Completed in code:
   - Host threads validated `workingFolderRelative` into `create_or_open_task` payload.
   - Guest validates relative subpaths and rejects traversal/symlink escapes (`WORKSPACE_POLICY_VIOLATION`).
   - Runtime state now exposes workspace root in harness dump-state output.
-- ⚠️ v2 workspace mount reliability still incomplete:
-  - In current test boots, `/mnt/workdir` may still be unavailable and taskd falls back to `/sessions/<taskId>/work`.
+- ✅ Path I-lite I1b mount reliability baseline landed:
+  - Runtime build now injects required 9p modules (`netfs`, `9pnet`, `9pnet_virtio`, `9p`) from `linux-virt` APK into initramfs.
+  - Boot init explicitly loads modules before mount attempts.
+  - Harness/QEMU logs now show mounted workspace and taskstate paths (`Mounted working folder at /mnt/workdir`, `Mounted task state at /mnt/taskstate`).
+  - Active task cwd resolves to mounted workspace path (example: `/mnt/workdir/src`).
 - ⚠️ Gate G1 decision documented as Path S, now reopened under Gate G2 reassessment.
 
 Still open:
 
-- ⏳ Phase 3I-lite I1b: workspace mount reliability in v2 taskd path.
 - ⏳ Phase 3I-lite I2: negative harness checks (escape attempts + cross-task bleed).
 - ⏳ Focused resume-semantics checks (task-local memory seed test, no cross-task bleed assertions).
 - ⏳ ADR defining MVP isolation guarantees and deferred hardening.
@@ -362,6 +364,6 @@ Still open:
 
 ## Immediate next actions
 
-1. Fix/verify v2 workspace mount availability (`/mnt/workdir`) in taskd boots
-2. Add negative harness tests for traversal/symlink/cross-task escape attempts
-3. Capture MVP security contract in ADR and align UI copy with actual guarantees
+1. Add negative harness tests for traversal/symlink/cross-task escape attempts
+2. Capture MVP security contract in ADR and align UI copy with actual guarantees
+3. Run focused resume-semantics checks with task-local memory seeds

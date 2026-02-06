@@ -22,6 +22,7 @@ INITRAMFS_DIR="$BUILD_DIR/initramfs-fast"
 # Node/pi paths
 NODE_DIR="$BUILD_DIR/runtime-node"
 PI_DIR="$BUILD_DIR/runtime-pi"
+KMOD_DIR="$BUILD_DIR/runtime-kmods"
 
 # Runtime install location
 if [[ "$(uname -s)" == "Darwin" ]]; then
@@ -99,6 +100,39 @@ else
 fi
 
 #
+# 3b. Prepare 9p kernel modules from linux-virt package
+#
+echo "[3b/6] Preparing 9p kernel modules..."
+rm -rf "$KMOD_DIR"
+mkdir -p "$KMOD_DIR" "$BUILD_DIR/apk-cache"
+
+LINUX_VIRT_VERSION=$(curl -sL "$ALPINE_MIRROR/v${ALPINE_VERSION%.*}/main/aarch64/APKINDEX.tar.gz" \
+    | tar -xzO APKINDEX 2>/dev/null \
+    | grep -A1 "^P:linux-virt$" \
+    | grep "^V:" \
+    | cut -d: -f2 \
+    | head -1)
+
+[[ -z "$LINUX_VIRT_VERSION" ]] && { echo "ERROR: failed to resolve linux-virt version"; exit 1; }
+
+LINUX_VIRT_APK="$BUILD_DIR/apk-cache/linux-virt-${LINUX_VIRT_VERSION}.apk"
+[[ ! -f "$LINUX_VIRT_APK" ]] && curl -sL "$ALPINE_MIRROR/v${ALPINE_VERSION%.*}/main/aarch64/linux-virt-${LINUX_VIRT_VERSION}.apk" -o "$LINUX_VIRT_APK"
+
+tar -xf "$LINUX_VIRT_APK" -C "$KMOD_DIR" 2>/dev/null || true
+
+KMOD_KERNEL_VERSION=""
+for maybe_dir in "$KMOD_DIR"/lib/modules/*; do
+    [[ -d "$maybe_dir" ]] || continue
+    KMOD_KERNEL_VERSION=$(basename "$maybe_dir")
+    break
+done
+
+[[ -z "$KMOD_KERNEL_VERSION" ]] && { echo "ERROR: linux-virt modules missing"; exit 1; }
+
+echo "$KMOD_KERNEL_VERSION" > "$KMOD_DIR/.kernel-version"
+echo "  linux-virt ${LINUX_VIRT_VERSION} (kernel ${KMOD_KERNEL_VERSION})"
+
+#
 # 4. Prepare pi package
 #
 if [[ ! -f "$PI_DIR/dist/cli.js" ]]; then
@@ -128,12 +162,36 @@ mkdir -p "$INITRAMFS_DIR"
 bsdtar -xf "$INITRAMFS_ORIG" -C "$INITRAMFS_DIR"
 
 # Add busybox symlinks
-for cmd in mount umount ip udhcpc cat echo printf grep sed awk chmod chown mv cp rm mkdir ls ln test nc sleep; do
+for cmd in mount umount ip udhcpc cat echo printf grep sed awk chmod chown mv cp rm mkdir ls ln test nc sleep insmod uname; do
     ln -sf /bin/busybox "$INITRAMFS_DIR/bin/$cmd" 2>/dev/null || true
 done
 
 # Copy Node.js runtime (Alpine APK structure)
 rsync -a "$NODE_DIR/" "$INITRAMFS_DIR/"
+
+# Inject 9p modules from linux-virt APK (base initramfs omits these)
+KMOD_KERNEL_VERSION=$(cat "$KMOD_DIR/.kernel-version" 2>/dev/null || true)
+if [[ -n "$KMOD_KERNEL_VERSION" ]]; then
+    MODULES=(
+        "kernel/fs/netfs/netfs.ko.gz"
+        "kernel/net/9p/9pnet.ko.gz"
+        "kernel/net/9p/9pnet_virtio.ko.gz"
+        "kernel/fs/9p/9p.ko.gz"
+    )
+
+    for rel in "${MODULES[@]}"; do
+        src="$KMOD_DIR/lib/modules/$KMOD_KERNEL_VERSION/$rel"
+        [[ -f "$src" ]] || { echo "ERROR: missing module $rel"; exit 1; }
+
+        dest="$INITRAMFS_DIR/usr/lib/modules/$KMOD_KERNEL_VERSION/${rel%.gz}"
+        mkdir -p "$(dirname "$dest")"
+        gzip -dc "$src" > "$dest"
+    done
+
+    mkdir -p "$INITRAMFS_DIR/lib"
+    ln -sfn /usr/lib/modules "$INITRAMFS_DIR/lib/modules"
+    echo "  Added 9p modules for kernel $KMOD_KERNEL_VERSION"
+fi
 
 # Copy pi package
 mkdir -p "$INITRAMFS_DIR/opt/pi"
@@ -199,9 +257,19 @@ mount -t tmpfs tmpfs /run
 
 modprobe virtio_pci 2>/dev/null || true
 modprobe virtio_net 2>/dev/null || true
+modprobe netfs 2>/dev/null || true
 modprobe 9pnet 2>/dev/null || true
 modprobe 9pnet_virtio 2>/dev/null || true
 modprobe 9p 2>/dev/null || true
+
+if ! grep -q $'\t9p$' /proc/filesystems 2>/dev/null; then
+    KVER=$(uname -r)
+    MODROOT="/usr/lib/modules/$KVER/kernel"
+    insmod "$MODROOT/fs/netfs/netfs.ko" 2>/dev/null || true
+    insmod "$MODROOT/net/9p/9pnet.ko" 2>/dev/null || true
+    insmod "$MODROOT/net/9p/9pnet_virtio.ko" 2>/dev/null || true
+    insmod "$MODROOT/fs/9p/9p.ko" 2>/dev/null || true
+fi
 
 for arg in $(cat /proc/cmdline); do
     case "$arg" in
@@ -228,7 +296,7 @@ echo "nameserver 10.0.2.3" > /etc/resolv.conf
 
 # Mount working folder if available (9p virtio share)
 mkdir -p "$WORKDIR"
-if mount -t 9p -o trans=virtio,version=9p2000.L workdir "$WORKDIR" 2>/dev/null; then
+if mount -t 9p -o trans=virtio,version=9p2000.L workdir "$WORKDIR"; then
     echo "Mounted working folder at $WORKDIR"
     export PI_WORKING_DIR="$WORKDIR"
     export PIWORK_WORKSPACE_ROOT="$WORKDIR"
@@ -239,7 +307,7 @@ fi
 
 # Mount task state folder if available (9p virtio share)
 mkdir -p "$TASK_STATE_DIR"
-if mount -t 9p -o trans=virtio,version=9p2000.L taskstate "$TASK_STATE_DIR" 2>/dev/null; then
+if mount -t 9p -o trans=virtio,version=9p2000.L taskstate "$TASK_STATE_DIR"; then
     TASK_STATE_MOUNTED=1
     echo "Mounted task state at $TASK_STATE_DIR"
 else

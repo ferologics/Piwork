@@ -25,7 +25,7 @@
 - [x] **Task switch latency target**: Warm/cold switch loop validated in v2 harness (no long spinner, switch/ready within target budget)
 - [ ] **MVP isolation pass (Path I-lite)**: enforce scoped writes on current runtime without full sandbox rewrite
   - [x] I1: Host + guest scope checks (`realpath`, traversal/symlink/special-file guards) + workspace-root/relative-path plumbing
-  - [ ] I1b: Ensure workspace mount reliability in v2 taskd path (currently falls back to `/sessions/<task>/work` when mount is unavailable)
+  - [x] I1b: Ensure workspace mount reliability in v2 taskd path (inject 9p modules in initramfs + verified `/mnt/workdir` mount)
   - [ ] I2: Negative harness tests (escape attempts + cross-task bleed)
   - [ ] I3: ADR + UI copy for honest MVP guarantees (scoped local mode)
 - [ ] **Gate G2 research lane (non-blocking)**: Gondolin vs deeper hardening path
