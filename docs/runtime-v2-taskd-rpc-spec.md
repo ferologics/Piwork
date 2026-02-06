@@ -243,8 +243,7 @@ Error object fields:
 
 ## 10) Deferred extensions (non-normative)
 
-Deferred until workspace decision gate and sync path selection.
-These items move to a dedicated Path-S spec: `docs/runtime-v2-taskd-sync-spec.md`.
+Deferred until workspace/sandbox path is decided.
 
 Deferred items:
 

@@ -1,41 +1,31 @@
 # Docs Index
 
-This folder contains both **current runtime docs** and **older draft/research notes**.
+## Runtime (source of truth)
 
-## Runtime: source of truth (current)
+- `runtime-v2-taskd-plan.md` — taskd rollout status and phases
+- `runtime-v2-taskd-rpc-spec.md` — taskd RPC contract
+- `runtime-pack.md` — VM runtime pack format and boot model
+- `pi-integration.md` — host↔VM↔pi integration overview
+- `testing-strategy.md` — test approach and harness primitives
 
-- `runtime-v2-taskd-plan.md` — rollout status, phases, and active execution track.
-- `runtime-v2-taskd-rpc-spec.md` — normative v2 taskd RPC contract.
-- `runtime-g2-architecture-spike.md` — post-MVP research lane (Path G / deeper hardening).
-- `adr/0001-runtime-g2-decision.md` — decision record template.
+## Runtime (research / deferred)
 
-## Runtime: supporting / contextual
+- `runtime-g2-architecture-spike.md` — post-MVP hardening research (Gondolin vs deeper sandbox)
+- `adr/0001-runtime-g2-decision.md` — decision record template
 
-- `pi-integration.md` — host↔VM↔pi integration overview.
-- `runtime-pack.md` — VM runtime pack + boot model (current dev behavior + packaging notes).
-- `testing-strategy.md` — test approach and harness expectations.
-- `path-i-lite-negative-suite.md` — repeatable I2 negative checks (traversal/symlink/cross-task scope).
-- `auth-profile-mount-smoke.md` — repeatable auth mount/profile smoke verification.
-- `auth-profile-switch-smoke.md` — repeatable auth profile switch + runtime restart verification.
-- `auth-profile-validation-smoke.md` — repeatable invalid-profile validation checks.
-- `auth-store-primitives-smoke.md` — repeatable auth-store primitive verification.
+## Product
 
-## Runtime: on-hold fallback
+- `auth-flow.md` — authentication behavior
+- `permissions-model.md` — folder access model
+- `ui-roadmap.md` — UI roadmap with Cowork comparison
 
-- `runtime-v2-taskd-sync-spec.md` — Path S sync protocol draft (not active unless explicitly re-selected).
+## Supporting
 
-## Product / policy docs
+- `path-i-lite-negative-suite.md` — scope enforcement test (traversal/symlink/cross-task)
+- `network-mitm-spike.md` — future network interception notes
 
-- `permissions-model.md` — user-visible permissions model.
-- `auth-flow.md` — auth behavior.
-- `mvp-definition.md` — locked MVP scope decisions (scope/auth/settings/first-run).
-- `ui-roadmap.md` — UI roadmap.
+## Research
 
-## Research notes
-
-- `research/` — Cowork notes, sketches, and field intel.
-- `research/cowork-claude-runtime-intel-2026-02-06.md` — captured runtime observations from Claude/Cowork probing.
-
----
-
-If a doc conflicts with `runtime-v2-taskd-plan.md`, treat the plan doc as authoritative.
+- `research/` — Cowork notes, sketches, field intel
+- `research/cowork-claude-runtime-intel-2026-02-06.md` — Cowork runtime observations
+- `research/sandbox-strategy.md` — cross-platform sandbox model

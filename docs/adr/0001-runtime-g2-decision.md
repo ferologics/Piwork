@@ -6,7 +6,6 @@
 - Related:
   - `docs/runtime-v2-taskd-plan.md`
   - `docs/runtime-g2-architecture-spike.md`
-  - `docs/runtime-v2-taskd-sync-spec.md`
   - `docs/permissions-model.md`
   - `docs/path-i-lite-negative-suite.md`
 

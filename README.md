@@ -55,14 +55,10 @@ mise run test-check-permissions   # quick preflight for screenshot visibility
 mise run test-stop
 ```
 
-Repeatable harness checks:
+Scope enforcement suite:
 
 ```bash
 ./scripts/harness/path-i-lite-negative.sh
-./scripts/harness/auth-profile-mount-smoke.sh
-./scripts/harness/auth-profile-switch-smoke.sh
-./scripts/harness/auth-profile-validation-smoke.sh
-./scripts/harness/auth-store-primitives-smoke.sh
 ```
 
 ### Cleanup
@@ -92,6 +88,5 @@ Rust builds use **sccache** via `.cargo/config.toml`.
 - `docs/pi-integration.md` - host↔VM↔taskd integration overview
 - `docs/runtime-pack.md` - runtime pack + VM boot model
 - `docs/auth-flow.md` - authentication flow
-- `docs/mvp-definition.md` - locked MVP scope decisions
 - `docs/permissions-model.md` - folder access model
 - `docs/research/` - Cowork observations and runtime intel

@@ -33,10 +33,7 @@ Let users authenticate once and reuse provider credentials across tasks. Support
 - Runtime reads mounted host auth profile on VM boot (restart runtime after auth/profile updates).
 - Recommended bootstrap fallback is `mise run runtime-build-auth` (optionally `PIWORK_AUTH_PATH=/path/to/auth.json`).
 - In-app auth/profile UI remains explicitly experimental.
-- Mount behavior smoke checks:
-  - `scripts/harness/auth-profile-mount-smoke.sh`
-  - `scripts/harness/auth-profile-switch-smoke.sh`
-- Harness primitive `mise run test-send-login` triggers the same UI `/login` path as the auth banner button.
+- Harness primitives: `test-auth-list`, `test-auth-set-key`, `test-auth-delete`, `test-auth-import-pi`, `test-set-auth-profile`, `test-send-login`.
 
 **Phase 2 (full login UI):**
 

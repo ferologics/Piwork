@@ -371,9 +371,7 @@ Recent completions:
 - ✅ VM ready-event ordering fixed to avoid early RPC race on task creation/switch (`src-tauri/src/vm.rs` now emits `ready` only after TCP RPC is connected).
   - Evidence captured with `test-dump-state`, `test-screenshot ready-event-race`, and log checks (no `VM not running` during task create/switch).
 - ✅ Host auth profile state is now mounted into VM (`/mnt/authstate`) and selected on boot (`piwork.auth_profile`), with baked auth as fallback.
-  - Smoke harness added: `scripts/harness/auth-profile-mount-smoke.sh`.
 
 ## Immediate next actions
 
-1. Keep Gate G2 as non-blocking research lane while MVP path ships
-2. Execute post-MVP production items from the now-locked MVP baseline (`docs/mvp-definition.md`)
+See `TODO.md` — foundation cleanup (kill v1, extract init script, fix context pollution), then UX.
