@@ -17,7 +17,7 @@ Working prototype with VM-based sandbox. See `AGENTS.md` for architecture detail
 ## Development
 
 ```bash
-mise run setup
+mise run setup       # installs deps + git hooks
 mise run tauri-dev
 ```
 
@@ -34,7 +34,7 @@ mise run test-regressions
 ```
 
 ```bash
-mise run install-git-hooks   # pre-commit/check + pre-push/check-full
+mise run install-git-hooks   # reinstall hooks manually (pre-commit/check + pre-push/check-full)
 ```
 
 ## AI Harness (debug/dev)

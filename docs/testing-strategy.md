@@ -33,7 +33,7 @@ This suite is currently supplemental smoke coverage. Equivalent contract checks 
 
 ## Suggested git hook policy
 
-- Install hooks: `mise run install-git-hooks`
+- `mise run setup` installs hooks automatically (or run `mise run install-git-hooks` manually).
 - pre-commit: `mise run check` (fast feedback)
 - pre-push: `mise run check-full` (slow, high confidence)
 

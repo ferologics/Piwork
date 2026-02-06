@@ -55,8 +55,8 @@ description = "Remove runtime artifacts"
 run = "rm -rf tmp/boot tmp/runtime-* tmp/initramfs-* tmp/apk-cache \"$HOME/Library/Application Support/com.pi.work/runtime\""
 
 [tasks.setup]
-description = "Install dependencies"
-run = "pnpm install"
+description = "Install dependencies and git hooks"
+run = "pnpm install && mise run install-git-hooks"
 
 [tasks.tauri-build]
 description = "Build the Tauri app"
