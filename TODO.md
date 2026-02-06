@@ -23,7 +23,7 @@
 - [x] **Remove fallback hydration**: Delete transcript→session reconstruction from normal runtime path
 - [ ] **Task resume semantics**: Validate memory continuity + no cross-task context bleed
 - [x] **Task switch latency target**: Warm/cold switch loop validated in v2 harness (no long spinner, switch/ready within target budget)
-- [ ] **Task workspace model**: Ship sync-first workspace (`/sessions/<taskId>/work`), evaluate live mount later
+- [ ] **Task workspace model**: Ship sync-first workspace (`/sessions/<taskId>/work`) [Path S selected at Gate G1]
 
 ## P1: Production Ready
 

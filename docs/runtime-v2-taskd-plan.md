@@ -125,8 +125,6 @@ Response includes mode to avoid ambiguity:
 
 ## Workspace strategy (decision gate)
 
-Do **not** hard-commit to sync or live-mount until warm-switch path is proven.
-
 ### Gate G1 (after host+taskd warm switch is stable)
 
 Run a focused spike and choose one path:
@@ -134,7 +132,18 @@ Run a focused spike and choose one path:
 - **Path M (live mount path):** if stable and deterministic with harness evidence
 - **Path S (sync path / Option A):** if live mount remains fragile or operationally complex
 
-Decision criteria:
+### Gate G1 outcome (2026-02-06): **Path S selected**
+
+Spike evidence:
+
+- VM boot log shows no active working-folder mount in v2 taskd test boots (`No working folder mounted`).
+- v2 folder changes are metadata-only in host path (no remount/restart on change).
+- In-guest mount check after folder changes (`grep ' /mnt/workdir ' /proc/mounts`) remained negative.
+- Task switch path is stable without VM restarts, so sync can be layered without reintroducing restart coupling.
+
+Decision: proceed with **Path S** and defer Path M.
+
+Decision criteria (for reference):
 
 - No VM restart required for folder/task switching
 - No mount/switch spinner hangs in repeated loops
@@ -142,9 +151,9 @@ Decision criteria:
 - Warm switch p95 stays within target (`< 1s`)
 - Cold resume p95 stays within target (`< 3s`)
 
-### Path S — Option A sync (if chosen)
+### Path S — Option A sync (selected)
 
-(Protocol details will be specified in `docs/runtime-v2-taskd-sync-spec.md` once Gate G1 selects Path S.)
+Protocol details are tracked in `docs/runtime-v2-taskd-sync-spec.md`.
 
 Sync moments:
 
@@ -225,17 +234,14 @@ Policy violation behavior:
 
 ### Gate G1 — Workspace strategy decision
 
-- Run mount viability spike with harness evidence
-- Choose Path M (live mount) or Path S (sync)
+- ✅ Mount viability spike run with harness evidence
+- ✅ Path S selected (live-mount path deferred)
 
-### Phase 3M — Live mount path (if G1 passes)
+### Phase 3M — Live mount path (deferred)
 
-- Implement stable mount switching workflow under taskd orchestration
-- Keep sync disabled
+- Deferred by Gate G1 outcome.
 
-**Exit criteria:** folder/task switching stable without sync engine.
-
-### Phase 3S — Sync path (if G1 fails)
+### Phase 3S — Sync path (active)
 
 - `runtime_v2_sync` dry-run first (manifest + conflict reporting)
 - then enable sync apply
@@ -290,8 +296,8 @@ Evidence requirement for claims:
 ## Risks / open questions
 
 1. `taskd` process supervision edge cases (child lifecycle under load)
-2. Live mount viability without regressions (Gate G1 outcome)
-3. Sync cost for large workspaces (if Path S selected)
+2. Sync cost for large workspaces (Path S)
+3. Conflict UX quality when apply mode lands (`SYNC_CONFLICT` ergonomics)
 4. Network-control scope creep vs core v2 delivery
 5. Whether per-task Linux users are worth complexity after baseline stabilizes
 
@@ -322,13 +328,17 @@ Completed in code:
     - cold resume: ~0.60ms
   - Captured required evidence: `test-dump-state`, `test-screenshot phase2-latency`, supporting log lines.
   - Verified no VM restart during switch loops (`[rust:vm] start called` count remained 1).
+- ✅ Gate G1 decision: Path S selected.
+  - Harness spike showed v2 folder changes are metadata-only and `/mnt/workdir` is not dynamically mounted/switched.
+  - Proceeding with sync-first workspace path (Phase 3S).
 
 Still open:
 
-- ⏳ Gate G1 workspace decision and follow-up path work.
+- ⏳ Phase 3S sync protocol + dry-run/apply implementation.
+- ⏳ Focused resume-semantics checks (task-local memory seed test, no cross-task bleed assertions).
 
 ## Immediate next actions
 
-1. Run Gate G1 spike and choose Path M vs Path S before building sync apply
-2. If Path S is chosen, freeze/apply `runtime-v2-taskd-sync-spec.md` and start dry-run sync phase
-3. Add focused resume-semantics checks (task-local memory seed test, no cross-task bleed assertions)
+1. Implement `runtime_v2_sync` dry-run plumbing (manifest + conflict reporting, no apply)
+2. Add focused resume-semantics checks (task-local memory seed test, no cross-task bleed assertions)
+3. Add sync observability in harness (`test-dump-state` + sync event capture)
