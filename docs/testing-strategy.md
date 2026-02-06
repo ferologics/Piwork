@@ -29,6 +29,8 @@ Primitive tasks (in `mise-tasks/`):
 - `test-open-preview`
 - `test-stop`
 
+Note: screenshot checks require Screen Recording permission for the terminal/app process running the harness. Blank/black captures are treated as failures.
+
 Use these primitives for focused checks instead of large brittle end-to-end scripts.
 
 Repeatable I2 scope checks are codified in:

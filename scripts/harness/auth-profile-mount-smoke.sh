@@ -68,7 +68,20 @@ if [[ "$FOUND_MOUNT" -ne 1 || "$FOUND_PROFILE" -ne 1 ]]; then
 fi
 
 mise run test-dump-state >/dev/null
-mise run test-screenshot "$SCREENSHOT_NAME" >/dev/null
+
+SHOT_OK=0
+for _ in $(seq 1 4); do
+    if mise run test-screenshot "$SCREENSHOT_NAME" >/dev/null 2>&1; then
+        SHOT_OK=1
+        break
+    fi
+    sleep 0.5
+done
+
+if [[ "$SHOT_OK" -ne 1 ]]; then
+    echo "[auth-smoke] failed to capture screenshot"
+    exit 1
+fi
 
 echo "[auth-smoke] PASS"
 echo "[auth-smoke] screenshot=$ROOT_DIR/tmp/dev/$SCREENSHOT_NAME.png"

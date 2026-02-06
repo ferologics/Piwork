@@ -44,8 +44,10 @@ These let the AI test changes without human interaction:
 
 1. `test-start` launches app and waits for "listening" in logs
 2. `test-prompt` sends via TCP test server (port 19385), waits for "agent_end"
-3. `test-screenshot` captures window without stealing focus
+3. `test-screenshot` captures window without stealing focus (and fails if capture is blank/black)
 4. Test server only runs in debug builds (`#[cfg(debug_assertions)]`)
+
+Prerequisite: grant Screen Recording permission to the terminal app running `mise`/Piwork, otherwise screenshot checks will fail.
 
 ### AI testing workflow (important)
 

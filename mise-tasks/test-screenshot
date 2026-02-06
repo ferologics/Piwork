@@ -7,6 +7,30 @@ NAME="${1:-screenshot}"
 OUTPUT="$ROOT_DIR/tmp/dev/${NAME}.png"
 WINDOWLIST="$ROOT_DIR/tmp/dev/windowlist"
 
+extract_yavg() {
+    local image_path="$1"
+
+    if ! command -v ffmpeg >/dev/null 2>&1; then
+        echo ""
+        return 0
+    fi
+
+    ffmpeg -v info -i "$image_path" -vf "signalstats,metadata=print" -f null - 2>&1 \
+        | awk -F= '/lavfi.signalstats.YAVG=/{value=$2} END{print value}'
+}
+
+is_black_capture() {
+    local image_path="$1"
+    local yavg
+
+    yavg=$(extract_yavg "$image_path")
+    if [[ -z "$yavg" ]]; then
+        return 1
+    fi
+
+    awk -v y="$yavg" 'BEGIN { exit !(y <= 16.2) }'
+}
+
 # Build windowlist helper if needed
 if [[ ! -x "$WINDOWLIST" ]]; then
     swiftc -O "$ROOT_DIR/scripts/windowlist.swift" -o "$WINDOWLIST" 2>/dev/null
@@ -21,5 +45,25 @@ if [[ -z "$WINDOW_ID" ]]; then
 fi
 
 # Capture without stealing focus (-o no shadow, -x no sound)
-screencapture -o -x -l"$WINDOW_ID" "$OUTPUT"
-echo "✓ Saved: $OUTPUT"
+if screencapture -o -x -l"$WINDOW_ID" "$OUTPUT"; then
+    if is_black_capture "$OUTPUT"; then
+        echo "Captured image appears blank/black"
+        exit 1
+    fi
+
+    echo "✓ Saved: $OUTPUT"
+    exit 0
+fi
+
+echo "Window capture failed, trying full-screen fallback"
+if ! screencapture -x "$OUTPUT"; then
+    echo "Failed to capture screenshot"
+    exit 1
+fi
+
+if is_black_capture "$OUTPUT"; then
+    echo "Captured image appears blank/black (likely screen recording permission issue)"
+    exit 1
+fi
+
+echo "✓ Saved (fullscreen fallback): $OUTPUT"

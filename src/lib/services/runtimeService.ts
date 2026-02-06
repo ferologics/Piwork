@@ -12,6 +12,7 @@ const TASK_STATE_MOUNT_CHECK_TIMEOUT_MS = 1500;
 const SESSION_DIR_CREATE_TIMEOUT_MS = 2000;
 const SESSION_WRITE_TIMEOUT_MS = 5000;
 const SESSION_SWITCH_TIMEOUT_MS = 3000;
+const AUTH_PROFILE_STORAGE_KEY = "piwork:auth-profile";
 
 export const TASK_SESSION_FILE = "/mnt/taskstate/session.json";
 
@@ -31,6 +32,7 @@ export interface RuntimeServiceSnapshot {
     currentWorkingFolder: string | null;
     currentSessionFile: string | null;
     workspaceRoot: string | null;
+    authProfile: string;
     taskSwitching: boolean;
     mode: RuntimeMode;
     runtimeV2Taskd: boolean;
@@ -260,6 +262,7 @@ export class RuntimeService {
             currentWorkingFolder: null,
             currentSessionFile: null,
             workspaceRoot: null,
+            authProfile: "default",
             taskSwitching: false,
             mode: normalized.mode,
             runtimeV2Taskd: normalized.runtimeV2Taskd,
@@ -421,14 +424,17 @@ export class RuntimeService {
             folderForConnect = this.snapshot.workspaceRoot ?? this.snapshot.currentWorkingFolder;
         }
 
-        await client.connect(folderForConnect, this.snapshot.currentTaskId, this.getAuthProfileForVmStart());
+        const authProfile = this.getAuthProfileForVmStart();
+        if (authProfile !== this.snapshot.authProfile) {
+            this.patch({ authProfile });
+        }
+
+        await client.connect(folderForConnect, this.snapshot.currentTaskId, authProfile);
     }
 
     private getAuthProfileForVmStart(): string {
-        const key = "piwork:auth-profile";
-
         try {
-            const stored = localStorage.getItem(key);
+            const stored = localStorage.getItem(AUTH_PROFILE_STORAGE_KEY);
             const normalized = stored?.trim();
             if (normalized) {
                 return normalized;

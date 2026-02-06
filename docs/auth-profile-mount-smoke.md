@@ -31,3 +31,5 @@ Optional screenshot name:
 
 - screenshot: `tmp/dev/<name>.png`
 - VM log: `~/Library/Application Support/com.pi.work/vm/qemu.log`
+
+If screenshot capture reports blank/black, grant Screen Recording permission to the terminal/app running the harness and retry.
