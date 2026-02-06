@@ -61,6 +61,12 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Cache Rust artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            src-tauri -> src-tauri/target
+
       - name: Setup mise
         uses: jdx/mise-action@v2
 
@@ -98,6 +104,12 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Cache Rust artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            src-tauri -> src-tauri/target
+
       - name: Setup mise
         uses: jdx/mise-action@v2
 
@@ -111,6 +123,8 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Run full live regression gate
+        env:
+          PIWORK_QEMU_ACCEL: tcg
         run: mise run test-regressions
 
       - name: Collect integration diagnostics on failure

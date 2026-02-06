@@ -259,6 +259,41 @@ fn attach_9p_mount(command: &mut Command, id: &str, mount_tag: &str, path: &Path
         .arg(format!("virtio-9p-pci,fsdev={id},mount_tag={mount_tag}"));
 }
 
+fn default_qemu_accel() -> &'static str {
+    if cfg!(target_os = "macos") {
+        "hvf"
+    } else {
+        "tcg"
+    }
+}
+
+fn resolve_qemu_accel() -> String {
+    let raw = std::env::var("PIWORK_QEMU_ACCEL")
+        .ok()
+        .map(|value| value.trim().to_ascii_lowercase())
+        .unwrap_or_default();
+
+    match raw.as_str() {
+        "" => default_qemu_accel().to_string(),
+        "hvf" | "tcg" => raw,
+        _ => {
+            eprintln!(
+                "[rust:vm] Invalid PIWORK_QEMU_ACCEL='{raw}', falling back to {}",
+                default_qemu_accel()
+            );
+            default_qemu_accel().to_string()
+        }
+    }
+}
+
+fn resolve_qemu_cpu_model(accel: &str) -> &'static str {
+    if accel == "tcg" {
+        "max"
+    } else {
+        "host"
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 fn spawn_qemu(
     manifest: &RuntimeManifest,
@@ -293,12 +328,16 @@ fn spawn_qemu(
     let log_out = log_file.try_clone().map_err(|e| e.to_string())?;
     let log_err = log_file.try_clone().map_err(|e| e.to_string())?;
 
+    let qemu_accel = resolve_qemu_accel();
+    let qemu_cpu_model = resolve_qemu_cpu_model(&qemu_accel);
+    eprintln!("[rust:vm] qemu accel={qemu_accel} cpu={qemu_cpu_model}");
+
     let mut command = Command::new(qemu_binary);
     command
         .arg("-machine")
-        .arg("virt,accel=hvf")
+        .arg(format!("virt,accel={qemu_accel}"))
         .arg("-cpu")
-        .arg("host")
+        .arg(qemu_cpu_model)
         .arg("-smp")
         .arg("2")
         .arg("-m")
