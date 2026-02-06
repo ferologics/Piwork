@@ -19,6 +19,7 @@ const DEFAULT_MODEL = process.env.PIWORK_DEFAULT_MODEL || "claude-opus-4-5";
 const DEFAULT_THINKING_LEVEL = process.env.PIWORK_DEFAULT_THINKING || "high";
 const LEGACY_TASK_ID = "__legacy__";
 const CHILD_COMMAND_TIMEOUT_MS = 10_000;
+const SYSTEM_BASH_TIMEOUT_MS = 10_000;
 const STOP_GRACE_PERIOD_MS = 1_200;
 
 const FALLBACK_MODELS = [
@@ -823,13 +824,111 @@ async function startPromptOnActiveTask(message) {
     return task;
 }
 
-async function runShellCommand(command) {
+function getActiveTaskCwd() {
+    const activeTask = activeTaskId ? tasks.get(activeTaskId) : null;
+    if (!activeTask || typeof activeTask.currentCwd !== "string" || activeTask.currentCwd.length === 0) {
+        return null;
+    }
+
+    try {
+        const stats = fs.statSync(activeTask.currentCwd);
+        if (!stats.isDirectory()) {
+            return null;
+        }
+    } catch {
+        return null;
+    }
+
+    return activeTask.currentCwd;
+}
+
+function resolveSystemBashCwd(rawCwd) {
+    if (rawCwd === null || rawCwd === undefined) {
+        return { cwd: getActiveTaskCwd() };
+    }
+
+    if (typeof rawCwd !== "string") {
+        return { error: "cwd must be a string" };
+    }
+
+    const trimmed = rawCwd.trim();
+    if (trimmed.length === 0) {
+        return { cwd: null };
+    }
+
+    const activeTaskCwd = getActiveTaskCwd();
+    const baseCwd = activeTaskCwd || process.cwd();
+    const resolved = path.isAbsolute(trimmed) ? path.resolve(trimmed) : path.resolve(baseCwd, trimmed);
+
+    try {
+        const stats = fs.statSync(resolved);
+        if (!stats.isDirectory()) {
+            return { error: "cwd must be a directory" };
+        }
+    } catch {
+        return { error: "cwd does not exist" };
+    }
+
+    return { cwd: resolved };
+}
+
+function parseSystemBashRequest(request) {
+    const commandFromPayload = typeof request.payload.command === "string" ? request.payload.command : null;
+    const commandFromRaw = typeof request.raw.command === "string" ? request.raw.command : null;
+    const command = commandFromPayload ?? commandFromRaw ?? "";
+
+    if (!command.trim()) {
+        return { error: "command is required" };
+    }
+
+    const cwdFromPayload =
+        typeof request.payload.cwd === "string"
+            ? request.payload.cwd
+            : typeof request.payload.workingDirectory === "string"
+              ? request.payload.workingDirectory
+              : undefined;
+    const cwdFromRaw =
+        typeof request.raw.cwd === "string"
+            ? request.raw.cwd
+            : typeof request.raw.workingDirectory === "string"
+              ? request.raw.workingDirectory
+              : undefined;
+
+    const cwdResult = resolveSystemBashCwd(cwdFromPayload ?? cwdFromRaw);
+    if (cwdResult.error) {
+        return { error: cwdResult.error };
+    }
+
+    return {
+        command,
+        cwd: cwdResult.cwd,
+    };
+}
+
+async function runSystemBash(command, cwd = null) {
     return await new Promise((resolve) => {
         const child = spawn("/bin/sh", ["-lc", command], {
+            cwd: cwd || undefined,
             stdio: ["ignore", "pipe", "pipe"],
         });
 
         let output = "";
+        let timedOut = false;
+        let settled = false;
+
+        const finish = (result) => {
+            if (settled) {
+                return;
+            }
+
+            settled = true;
+            resolve(result);
+        };
+
+        const timeout = setTimeout(() => {
+            timedOut = true;
+            child.kill("SIGKILL");
+        }, SYSTEM_BASH_TIMEOUT_MS);
 
         child.stdout.on("data", (chunk) => {
             output += chunk.toString();
@@ -840,16 +939,20 @@ async function runShellCommand(command) {
         });
 
         child.on("error", (error) => {
-            resolve({
+            clearTimeout(timeout);
+            finish({
                 output: `${output}${String(error)}`,
                 exitCode: 1,
+                timedOut: false,
             });
         });
 
         child.on("close", (code) => {
-            resolve({
+            clearTimeout(timeout);
+            finish({
                 output,
-                exitCode: typeof code === "number" ? code : 1,
+                exitCode: timedOut ? 124 : typeof code === "number" ? code : 1,
+                timedOut,
             });
         });
     });
@@ -967,6 +1070,21 @@ function handleV2GetState(request) {
     return sendV2Success(request, payload);
 }
 
+async function handleV2SystemBash(request) {
+    const parsed = parseSystemBashRequest(request);
+    if (parsed.error) {
+        return sendV2Error(request, "INVALID_REQUEST", parsed.error, false, {});
+    }
+
+    const result = await runSystemBash(parsed.command, parsed.cwd);
+    return sendV2Success(request, {
+        output: result.output,
+        exitCode: result.exitCode,
+        timedOut: result.timedOut,
+        cwd: parsed.cwd,
+    });
+}
+
 async function handleV2StopTask(request) {
     const taskId = typeof request.payload.taskId === "string" ? request.payload.taskId : null;
 
@@ -1024,6 +1142,9 @@ async function handleV2Request(request) {
             return;
         case "get_state":
             handleV2GetState(request);
+            return;
+        case "system_bash":
+            await handleV2SystemBash(request);
             return;
         case "stop_task":
             await handleV2StopTask(request);
@@ -1165,20 +1286,22 @@ async function handleLegacyExtensionUiResponse(request) {
     sendLegacyResponse("extension_ui_response", true, {}, null, request.id || undefined);
 }
 
-async function handleLegacyBash(request) {
-    const command = typeof request.raw.command === "string" ? request.raw.command : "";
-    if (!command.trim()) {
-        sendLegacyResponse("bash", false, null, "command is required", request.id || undefined);
+async function handleLegacySystemBash(request, commandName) {
+    const parsed = parseSystemBashRequest(request);
+    if (parsed.error) {
+        sendLegacyResponse(commandName, false, null, parsed.error, request.id || undefined);
         return;
     }
 
-    const result = await runShellCommand(command);
+    const result = await runSystemBash(parsed.command, parsed.cwd);
     sendLegacyResponse(
-        "bash",
+        commandName,
         true,
         {
             output: result.output,
             exitCode: result.exitCode,
+            timedOut: result.timedOut,
+            cwd: parsed.cwd,
         },
         null,
         request.id || undefined,
@@ -1213,7 +1336,10 @@ async function handleLegacyRequest(request) {
             await handleLegacyExtensionUiResponse(request);
             return;
         case "bash":
-            await handleLegacyBash(request);
+            await handleLegacySystemBash(request, "bash");
+            return;
+        case "system_bash":
+            await handleLegacySystemBash(request, "system_bash");
             return;
         case "switch_session":
             await handleLegacySwitchSession(request);
@@ -1228,7 +1354,7 @@ function isV2Request(request) {
         return true;
     }
 
-    return ["create_or_open_task", "switch_task", "stop_task"].includes(request.type);
+    return ["create_or_open_task", "switch_task", "stop_task", "system_bash"].includes(request.type);
 }
 
 async function handleRawHostLine(line) {
