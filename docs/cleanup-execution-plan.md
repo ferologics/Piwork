@@ -54,6 +54,41 @@ Stop regressions from slipping through by moving core behavior checks into autom
 - `mise run test-regressions`
 - `mise run check-full`
 
+### PR-0 follow-up phases (agreed)
+
+#### PR-0A — Hygiene + speed baseline
+
+- Remove low-signal/noise tests (e.g. trivial smoke assertions).
+- Fix stale/misleading assertions (e.g. hardcoded legacy session path expectations).
+- Keep test output clean enough that failures are obvious.
+- Add CI enforcement for both gates:
+  - fast: `mise run check`
+  - full: `mise run check-full`
+
+#### PR-0B — Fast contract coverage (default lane)
+
+Add fast Vitest/Rust contract tests for high-risk UI/runtime logic without booting the live app:
+
+- `RuntimeService` task switch ordering/race handling
+- folder-bind continuity state transitions in `MainView`
+- working-folder refresh trigger behavior
+- mismatch badge semantics
+- model picker truth-state modes
+
+#### PR-0C — Live regression layout (hybrid)
+
+Use a hybrid live suite instead of only tiny tests or only one giant test:
+
+- **One sequential journey canary**: exercises a realistic happy path end-to-end (messages, model selection, folder bind, reopen, artifacts).
+- **A few focused canaries**: each isolates a brittle invariant (e.g. reopen cwd correctness, continuity, panel freshness).
+
+Rationale: one long journey amortizes startup and catches integration drift; focused canaries keep failure diagnosis clear and reduce flake blast radius.
+
+#### PR-0D — Scope/security contract migration
+
+- Port core traversal/symlink/cross-scope assertions into fast Rust/Vitest tests.
+- Keep one live scope canary for end-to-end confidence.
+
 ---
 
 ## PR-1 — Add V2 bridge commands + migrate UI off legacy host commands (and make models truthful)

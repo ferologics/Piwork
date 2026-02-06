@@ -58,6 +58,18 @@ The regression gate should make these guarantees explicit:
 4. **Runtime mismatch badge semantics**
    - Badge only appears for real mismatches, not transient boot/reconfigure or legacy sentinel state.
 
+## Live integration strategy (hybrid)
+
+- Keep **one sequential journey canary** that covers a realistic end-to-end flow (messages, models, working folder, artifacts, reopen).
+- Keep **a few focused canaries** for brittle invariants so failures are easy to diagnose.
+- Do not rely on a single giant scenario as the only guardrail; it is too hard to debug when it fails.
+
+## Speed policy
+
+- `mise run check` should stay snappy (fast lane only).
+- `mise run check-full` is allowed to be slower, but should stay bounded and stable.
+- Integration tests should share setup where possible and use `state_snapshot` polling instead of fixed sleeps.
+
 ## Deferred
 
 Playwright/driver-based E2E deferred until runtime stabilizes.
