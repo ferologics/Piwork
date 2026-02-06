@@ -5,6 +5,7 @@ import { openPath } from "@tauri-apps/plugin-opener";
 import { Activity, FolderOpen, Link, ChevronDown, RefreshCw, FileText, Image, ExternalLink } from "@lucide/svelte";
 import { taskStore } from "$lib/stores/taskStore";
 import { previewStore } from "$lib/stores/previewStore";
+import { artifactRefreshStore } from "$lib/stores/artifactRefreshStore";
 import type { TaskMetadata } from "$lib/types/task";
 
 type CardId = "progress" | "workingFolder" | "scratchpad" | "context";
@@ -31,13 +32,17 @@ let expanded = $state<Record<CardId, boolean>>({
 
 let activeTask: TaskMetadata | null = $state(null);
 let unsubscribeActive: (() => void) | null = null;
+let unsubscribeArtifactRefresh: (() => void) | null = null;
 
 let files = $state<ArtifactFileEntry[]>([]);
 let filesTruncated = $state(false);
 let filesLoading = $state(false);
-let filesError = $state<string | null>(null);
+let scratchpadError = $state<string | null>(null);
+let workingFolderError = $state<string | null>(null);
+let openingWorkingFolder = $state(false);
 let lastFilesKey = "";
 let filesRequestId = 0;
+let refreshTimer: ReturnType<typeof setTimeout> | null = null;
 
 const cards: { id: CardId; label: string; icon: typeof Activity }[] = [
     { id: "progress", label: "Progress", icon: Activity },
@@ -81,7 +86,7 @@ function cardTitle(card: CardId): string {
 function clearFilesState() {
     files = [];
     filesTruncated = false;
-    filesError = null;
+    scratchpadError = null;
     filesLoading = false;
 }
 
@@ -93,7 +98,7 @@ async function loadFiles(): Promise<void> {
 
     const requestId = ++filesRequestId;
     filesLoading = true;
-    filesError = null;
+    scratchpadError = null;
 
     try {
         const result = await invoke<ArtifactListResponse>("task_artifact_list", {
@@ -111,7 +116,7 @@ async function loadFiles(): Promise<void> {
             return;
         }
 
-        filesError = error instanceof Error ? error.message : String(error);
+        scratchpadError = error instanceof Error ? error.message : String(error);
         files = [];
         filesTruncated = false;
     } finally {
@@ -134,18 +139,37 @@ function openPreview(file: ArtifactFileEntry) {
 
 async function openWorkingFolderInFinder() {
     const folder = activeTask?.workingFolder;
-    if (!folder) {
+    if (!folder || openingWorkingFolder) {
         return;
     }
 
-    await openPath(folder).catch((error) => {
-        filesError = error instanceof Error ? error.message : String(error);
-    });
+    openingWorkingFolder = true;
+    workingFolderError = null;
+
+    try {
+        await openPath(folder);
+    } catch (error) {
+        workingFolderError = error instanceof Error ? error.message : String(error);
+    } finally {
+        openingWorkingFolder = false;
+    }
+}
+
+function scheduleLoadFiles(delayMs = 200) {
+    if (refreshTimer) {
+        clearTimeout(refreshTimer);
+    }
+
+    refreshTimer = setTimeout(() => {
+        refreshTimer = null;
+        void loadFiles();
+    }, delayMs);
 }
 
 onMount(() => {
     unsubscribeActive = taskStore.activeTask.subscribe((value) => {
         activeTask = value;
+        workingFolderError = null;
 
         const nextKey = `${value?.id ?? ""}`;
         if (nextKey === lastFilesKey) {
@@ -155,10 +179,28 @@ onMount(() => {
         lastFilesKey = nextKey;
         void loadFiles();
     });
+
+    unsubscribeArtifactRefresh = artifactRefreshStore.subscribe((event) => {
+        if (!activeTask?.id) {
+            return;
+        }
+
+        if (!event.taskId || event.taskId !== activeTask.id) {
+            return;
+        }
+
+        scheduleLoadFiles(150);
+    });
 });
 
 onDestroy(() => {
     unsubscribeActive?.();
+    unsubscribeArtifactRefresh?.();
+
+    if (refreshTimer) {
+        clearTimeout(refreshTimer);
+        refreshTimer = null;
+    }
 });
 </script>
 
@@ -166,14 +208,35 @@ onDestroy(() => {
     <div class="space-y-2">
         {#each cards as card}
             <div class="rounded-lg border border-border bg-card">
-                <button
-                    class="flex w-full items-center gap-2 p-3 text-left text-sm font-medium"
-                    onclick={() => toggle(card.id)}
-                >
-                    <card.icon class="h-4 w-4 text-muted-foreground" />
-                    <span class="flex-1">{cardTitle(card.id)}</span>
-                    <ChevronDown class="h-4 w-4 text-muted-foreground transition-transform {expanded[card.id] ? 'rotate-180' : ''}" />
-                </button>
+                <div class="flex w-full items-center gap-1 p-3 text-sm font-medium">
+                    <button
+                        class="flex min-w-0 flex-1 items-center gap-2 text-left"
+                        onclick={() => toggle(card.id)}
+                    >
+                        <card.icon class="h-4 w-4 text-muted-foreground" />
+                        <span class="truncate">{cardTitle(card.id)}</span>
+                    </button>
+
+                    {#if card.id === "workingFolder" && activeTask?.workingFolder}
+                        <button
+                            class="inline-flex h-7 w-7 items-center justify-center rounded-md border border-border text-muted-foreground hover:bg-accent disabled:opacity-60"
+                            onclick={openWorkingFolderInFinder}
+                            disabled={openingWorkingFolder}
+                            title="Open in Finder"
+                            aria-label="Open in Finder"
+                        >
+                            <ExternalLink class="h-3.5 w-3.5" />
+                        </button>
+                    {/if}
+
+                    <button
+                        class="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent"
+                        onclick={() => toggle(card.id)}
+                        aria-label={expanded[card.id] ? "Collapse card" : "Expand card"}
+                    >
+                        <ChevronDown class="h-4 w-4 transition-transform {expanded[card.id] ? 'rotate-180' : ''}" />
+                    </button>
+                </div>
 
                 {#if expanded[card.id]}
                     <div class="border-t border-border px-3 py-3 text-sm text-muted-foreground">
@@ -193,13 +256,12 @@ onDestroy(() => {
                                         <div class="rounded-md bg-muted px-2 py-1 text-xs text-foreground break-all">
                                             {activeTask.workingFolder}
                                         </div>
-                                        <button
-                                            class="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[11px] hover:bg-accent"
-                                            onclick={openWorkingFolderInFinder}
-                                        >
-                                            <ExternalLink class="h-3 w-3" />
-                                            Open in Finder
-                                        </button>
+
+                                        {#if workingFolderError}
+                                            <div class="rounded-md border border-red-500/30 bg-red-500/10 px-2 py-1 text-xs text-red-400">
+                                                {workingFolderError}
+                                            </div>
+                                        {/if}
                                     {:else}
                                         <div class="rounded-md border border-dashed border-border px-2 py-2 text-xs text-muted-foreground">
                                             No working folder set for this task.
@@ -226,9 +288,9 @@ onDestroy(() => {
                                         </button>
                                     </div>
 
-                                    {#if filesError}
+                                    {#if scratchpadError}
                                         <div class="rounded-md border border-red-500/30 bg-red-500/10 px-2 py-1 text-xs text-red-400">
-                                            {filesError}
+                                            {scratchpadError}
                                         </div>
                                     {/if}
 

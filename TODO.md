@@ -12,9 +12,9 @@
 - [x] **Implement artifact contract in runtime/UI** — enforce one-time folder bind, surface Scratchpad from `outputs` + `uploads`, and apply uploads read-only policy.
 - [ ] **Untangle auth state from runtime artifacts** — keep auth storage purpose clear; avoid mixing credentials with unrelated pi/session artifacts.
 - [ ] **Fix sendLogin optimistic log** — logs `[info] Sent /login` even if not connected
-- [ ] **Fix opener permission path** — `Open in Finder` currently fails with `opener.open_path not allowed`.
-- [ ] **Fix right-panel error isolation** — Working-folder action errors currently render inside Scratchpad panel.
-- [ ] **Fix first `/mnt/workdir` write reliability** — first write to working folder can claim success but not appear until retry.
+- [x] **Fix opener permission path** — added `opener:allow-open-path` capability so `Open in Finder` is authorized.
+- [x] **Fix right-panel error isolation** — Working-folder action errors are now scoped to the Working folder card.
+- [x] **Fix first `/mnt/workdir` write reliability (race mitigation)** — task-bound folder changes now mark `taskSwitching` before validation, and prompt send is blocked until runtime is ready.
 - [ ] **Add harness regression for working-folder writes** — set folder → write file immediately → assert host path has file.
 - [ ] **Delete remaining slop** — review docs for stale references to v1, v2 flags, sync protocol, smoke suites
 - [ ] **Dev watch scope** — avoid restarting `tauri dev` for non-runtime docs/content edits (e.g. Markdown), keep hot reload scoped to relevant source/config files.
@@ -30,10 +30,10 @@
 - [ ] **Markdown rendering** — render agent responses (bold, lists, code blocks). Biggest UX gap.
 - [ ] **Tool call display** — collapsible "Created a file ›", "Ran command ›" in message stream
 - [x] **Right panel IA pass** — replace “Downloads” with “Working folder” card semantics (dynamic title = folder basename when set), clear empty states, and open-in-Finder affordance.
-- [ ] **Move Working-folder open action to header** — use icon-only action in card header (left of chevron), remove body button.
+- [x] **Move Working-folder open action to header** — icon-only action is now in card header (left of chevron), body button removed.
 - [x] **Scratchpad continuity** — keep Scratchpad visible for every task and aggregate artifacts from both `outputs` and `uploads`.
 - [x] **Artifact explorer parity** — make file listing/preview behavior consistent across working-folder and no-folder tasks, including uploads read-only behavior.
-- [ ] **Auto-refresh artifact panels** — refresh Scratchpad/Working-folder file views on new tool/file activity (not manual refresh only).
+- [x] **Auto-refresh artifact panels** — Scratchpad now refreshes on `tool_execution_end` / `turn_end` / `agent_end` events (manual refresh still available).
 - [ ] **Working-folder file visibility** — show files written to working folder in UI (current card mostly shows path metadata).
 - [ ] **Context panel usefulness** — surface active connectors/tools and task-referenced files, not just static copy.
 

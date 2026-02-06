@@ -9,6 +9,7 @@ import { devLog } from "$lib/utils/devLog";
 import { MessageAccumulator } from "$lib/rpc";
 import type { RpcPayload, ConversationState } from "$lib/rpc";
 import { taskStore } from "$lib/stores/taskStore";
+import { artifactRefreshStore } from "$lib/stores/artifactRefreshStore";
 import type { TaskMetadata } from "$lib/types/task";
 import FolderSelector from "$lib/components/FolderSelector.svelte";
 import QuickStartTiles from "$lib/components/QuickStartTiles.svelte";
@@ -467,6 +468,10 @@ function handleRpcPayload(payload: Record<string, unknown>) {
 
     const type = payload.type;
 
+    if ((type === "tool_execution_end" || type === "turn_end" || type === "agent_end") && currentTaskId) {
+        artifactRefreshStore.request(currentTaskId, type);
+    }
+
     if (type === "response") {
         const command = typeof payload.command === "string" ? payload.command : null;
 
@@ -692,13 +697,13 @@ async function sendPrompt(message?: string): Promise<boolean> {
         devLog("MainView", `Auto-created task: ${task.id} with folder: ${currentWorkingFolder}`);
     }
 
-    await runtimeService.waitForTaskSwitchComplete().catch((error) => {
-        devLog("MainView", `Task switch not ready for prompt: ${error}`);
-    });
-
-    await runtimeService.waitForRpcReady().catch((error) => {
-        devLog("MainView", `RPC not ready for prompt: ${error}`);
-    });
+    try {
+        await runtimeService.waitForTaskSwitchComplete();
+        await runtimeService.waitForRpcReady();
+    } catch (error) {
+        devLog("MainView", `Prompt blocked until runtime ready: ${error}`);
+        return false;
+    }
 
     if (!getRpcClient() || !rpcConnected || taskSwitching) {
         return false;

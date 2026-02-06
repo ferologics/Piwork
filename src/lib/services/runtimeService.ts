@@ -416,35 +416,36 @@ export class RuntimeService {
             return;
         }
 
-        const validated = await this.validateWorkingFolder(requestedFolder);
-        const nextFolder = validated.folder;
-        const nextRelativePath = validated.relativePath;
-
         if (!taskId) {
-            this.patch({ currentWorkingFolder: nextFolder });
-            devLog("RuntimeService", `Draft working folder set: ${nextFolder}`);
+            const validated = await this.validateWorkingFolder(requestedFolder);
+            this.patch({ currentWorkingFolder: validated.folder });
+            devLog("RuntimeService", `Draft working folder set: ${validated.folder}`);
             return;
         }
 
-        if (previousFolder === nextFolder) {
-            return;
-        }
-
-        this.patch({ currentWorkingFolder: nextFolder });
-        await deps.persistWorkingFolderForActiveTask(nextFolder);
-
-        if (!this.snapshot.rpcConnected) {
-            devLog(
-                "RuntimeService",
-                "Initial working folder set while runtime disconnected; apply deferred until task resume",
-            );
-            return;
-        }
-
-        devLog("RuntimeService", `Applying initial working folder for active task ${taskId}: ${nextFolder}`);
         this.patch({ taskSwitching: true, rpcError: null });
 
         try {
+            const validated = await this.validateWorkingFolder(requestedFolder);
+            const nextFolder = validated.folder;
+            const nextRelativePath = validated.relativePath;
+
+            if (previousFolder === nextFolder) {
+                return;
+            }
+
+            this.patch({ currentWorkingFolder: nextFolder });
+            await deps.persistWorkingFolderForActiveTask(nextFolder);
+
+            if (!this.snapshot.rpcConnected) {
+                devLog(
+                    "RuntimeService",
+                    "Initial working folder set while runtime disconnected; apply deferred until task resume",
+                );
+                return;
+            }
+
+            devLog("RuntimeService", `Applying initial working folder for active task ${taskId}: ${nextFolder}`);
             await this.waitForRpcReady();
 
             const requiredWorkspaceRoot = this.snapshot.workspaceRoot;
