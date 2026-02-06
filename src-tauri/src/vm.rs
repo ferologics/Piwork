@@ -174,16 +174,18 @@ pub fn start(
         }
 
         eprintln!("[rust:vm:rpc] READY received, connecting to RPC port...");
-        set_status(&app_handle, VmStatus::Ready);
-        emit_event(&app_handle, "ready", "READY".to_string());
 
-        // Connect to RPC port
+        // Connect to RPC port first, then emit ready once writable RPC is available.
         match connect_rpc(RPC_PORT) {
             Ok(stream) => {
                 eprintln!("[rust:vm:rpc] connected to TCP port {RPC_PORT}");
                 if let Ok(clone) = stream.try_clone() {
                     *rpc_writer.lock().unwrap() = Some(clone);
                 }
+
+                set_status(&app_handle, VmStatus::Ready);
+                emit_event(&app_handle, "ready", "READY".to_string());
+
                 read_rpc_lines(&app_handle, stream);
             }
             Err(error) => {

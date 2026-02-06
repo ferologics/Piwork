@@ -368,6 +368,8 @@ Recent completions:
 - ✅ Phase 3I-lite I2 codified as repeatable harness flow (`scripts/harness/path-i-lite-negative.sh`, `docs/path-i-lite-negative-suite.md`).
 - ✅ ADR updated with MVP contract + deferred hardening (`docs/adr/0001-runtime-g2-decision.md`).
 - ✅ UI copy aligned to scoped local mode messaging (Context panel).
+- ✅ VM ready-event ordering fixed to avoid early RPC race on task creation/switch (`src-tauri/src/vm.rs` now emits `ready` only after TCP RPC is connected).
+  - Evidence captured with `test-dump-state`, `test-screenshot ready-event-race`, and log checks (no `VM not running` during task create/switch).
 
 ## Immediate next actions
 
