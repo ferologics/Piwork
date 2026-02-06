@@ -824,18 +824,22 @@ async function startPromptOnActiveTask(message) {
     return task;
 }
 
+function inspectDirectory(targetPath) {
+    try {
+        const stats = fs.statSync(targetPath);
+        return stats.isDirectory() ? "directory" : "not_directory";
+    } catch {
+        return "missing";
+    }
+}
+
 function getActiveTaskCwd() {
     const activeTask = activeTaskId ? tasks.get(activeTaskId) : null;
     if (!activeTask || typeof activeTask.currentCwd !== "string" || activeTask.currentCwd.length === 0) {
         return null;
     }
 
-    try {
-        const stats = fs.statSync(activeTask.currentCwd);
-        if (!stats.isDirectory()) {
-            return null;
-        }
-    } catch {
+    if (inspectDirectory(activeTask.currentCwd) !== "directory") {
         return null;
     }
 
@@ -859,42 +863,44 @@ function resolveSystemBashCwd(rawCwd) {
     const activeTaskCwd = getActiveTaskCwd();
     const baseCwd = activeTaskCwd || process.cwd();
     const resolved = path.isAbsolute(trimmed) ? path.resolve(trimmed) : path.resolve(baseCwd, trimmed);
+    const directoryState = inspectDirectory(resolved);
 
-    try {
-        const stats = fs.statSync(resolved);
-        if (!stats.isDirectory()) {
-            return { error: "cwd must be a directory" };
-        }
-    } catch {
+    if (directoryState === "not_directory") {
+        return { error: "cwd must be a directory" };
+    }
+
+    if (directoryState === "missing") {
         return { error: "cwd does not exist" };
     }
 
     return { cwd: resolved };
 }
 
-function parseSystemBashRequest(request) {
-    const commandFromPayload = typeof request.payload.command === "string" ? request.payload.command : null;
-    const commandFromRaw = typeof request.raw.command === "string" ? request.raw.command : null;
-    const command = commandFromPayload ?? commandFromRaw ?? "";
+function readSystemBashString(request, keys) {
+    for (const source of [request.payload, request.raw]) {
+        if (!isRecord(source)) {
+            continue;
+        }
 
+        for (const key of keys) {
+            const value = source[key];
+            if (typeof value === "string") {
+                return value;
+            }
+        }
+    }
+
+    return null;
+}
+
+function parseSystemBashRequest(request) {
+    const command = readSystemBashString(request, ["command"]) || "";
     if (!command.trim()) {
         return { error: "command is required" };
     }
 
-    const cwdFromPayload =
-        typeof request.payload.cwd === "string"
-            ? request.payload.cwd
-            : typeof request.payload.workingDirectory === "string"
-              ? request.payload.workingDirectory
-              : undefined;
-    const cwdFromRaw =
-        typeof request.raw.cwd === "string"
-            ? request.raw.cwd
-            : typeof request.raw.workingDirectory === "string"
-              ? request.raw.workingDirectory
-              : undefined;
-
-    const cwdResult = resolveSystemBashCwd(cwdFromPayload ?? cwdFromRaw);
+    const requestedCwd = readSystemBashString(request, ["cwd", "workingDirectory"]);
+    const cwdResult = resolveSystemBashCwd(requestedCwd);
     if (cwdResult.error) {
         return { error: cwdResult.error };
     }
