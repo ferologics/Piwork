@@ -34,6 +34,7 @@ mise run test-check-permissions   # verify screenshot permission/visibility
 mise run test-open-preview <task-id> <relative-path>  # open main-pane preview for a file
 mise run test-set-folder /path   # set working folder
 mise run test-set-task <id>      # set active task in UI
+mise run test-set-auth-profile <profile>  # set auth profile + restart runtime
 mise run test-create-task "Title" [folder]  # create a task
 mise run test-delete-tasks       # delete all tasks
 mise run test-dump-state         # log active task/session/message count
@@ -52,8 +53,8 @@ Prerequisite: grant Screen Recording permission to the terminal app running `mis
 
 ### AI testing workflow (important)
 
-- Prefer **ad-hoc primitive tasks** (`test-create-task`, `test-set-task`, `test-prompt`, `test-open-preview`, `test-dump-state`, `test-screenshot`) over monolithic end-to-end scripts.
-- Reusable suite scripts live in `scripts/harness/` (current: `path-i-lite-negative.sh`, `auth-profile-mount-smoke.sh`).
+- Prefer **ad-hoc primitive tasks** (`test-create-task`, `test-set-task`, `test-set-auth-profile`, `test-prompt`, `test-open-preview`, `test-dump-state`, `test-screenshot`) over monolithic end-to-end scripts.
+- Reusable suite scripts live in `scripts/harness/` (current: `path-i-lite-negative.sh`, `auth-profile-mount-smoke.sh`, `auth-profile-switch-smoke.sh`).
 - For any UI/state claim, capture all three before concluding:
   1. `test-dump-state` (state snapshot)
   2. `test-screenshot <name>` (visual proof)

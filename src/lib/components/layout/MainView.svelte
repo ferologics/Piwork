@@ -725,6 +725,7 @@ let testCreateTaskUnlisten: (() => void) | null = null;
 let testDeleteAllTasksUnlisten: (() => void) | null = null;
 let testDumpStateUnlisten: (() => void) | null = null;
 let testOpenPreviewUnlisten: (() => void) | null = null;
+let testSetAuthProfileUnlisten: (() => void) | null = null;
 
 async function saveConversationForTask(taskId: string | null): Promise<void> {
     if (!taskId || messageAccumulator.getState().messages.length === 0) {
@@ -813,6 +814,40 @@ async function handleFolderChange(folder: string | null): Promise<void> {
         });
     } catch (error) {
         devLog("MainView", `Folder change failed: ${error}`);
+    }
+}
+
+function normalizeAuthProfile(value: string | null | undefined): string {
+    const trimmed = value?.trim() ?? "";
+    return trimmed.length > 0 ? trimmed : "default";
+}
+
+async function applyAuthProfileForTest(profileValue: string | null | undefined): Promise<void> {
+    const profile = normalizeAuthProfile(profileValue);
+
+    try {
+        localStorage.setItem("piwork:auth-profile", profile);
+    } catch {
+        // Ignore storage errors in test flows.
+    }
+
+    authProfile = profile;
+    devLog("TestHarness", `applying auth profile: ${profile}`);
+
+    const previousTaskId = currentTaskId;
+
+    if (previousTaskId) {
+        taskStore.setActive(null);
+    }
+
+    await disconnectRpc();
+    await invoke("vm_stop").catch((error) => {
+        devLog("MainView", `vm_stop failed during auth profile apply: ${error}`);
+    });
+    await connectRpc();
+
+    if (previousTaskId) {
+        taskStore.setActive(previousTaskId);
     }
 }
 
@@ -931,6 +966,13 @@ onMount(() => {
             testTaskUnlisten = unlisten;
         });
 
+        listen<string | null>("test_set_auth_profile", (event) => {
+            devLog("TestHarness", `received test_set_auth_profile: ${event.payload}`);
+            void applyAuthProfileForTest(event.payload);
+        }).then((unlisten) => {
+            testSetAuthProfileUnlisten = unlisten;
+        });
+
         listen<{ title?: string | null; workingFolder?: string | null }>("test_create_task", (event) => {
             const title = event.payload?.title ?? "New Task";
             const folder = event.payload?.workingFolder ?? null;
@@ -990,6 +1032,7 @@ onDestroy(() => {
     testPromptUnlisten?.();
     testFolderUnlisten?.();
     testTaskUnlisten?.();
+    testSetAuthProfileUnlisten?.();
     testCreateTaskUnlisten?.();
     testDeleteAllTasksUnlisten?.();
     testDumpStateUnlisten?.();

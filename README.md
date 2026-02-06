@@ -42,6 +42,7 @@ File-based harness tasks live in `mise-tasks/`:
 mise run test-start
 mise run test-create-task "Title" /path/to/folder
 mise run test-set-task <task-id>
+mise run test-set-auth-profile <profile>
 mise run test-open-preview <task-id> <relative-path>
 mise run test-dump-state
 mise run test-screenshot name
@@ -54,6 +55,7 @@ Repeatable harness checks:
 ```bash
 ./scripts/harness/path-i-lite-negative.sh
 ./scripts/harness/auth-profile-mount-smoke.sh
+./scripts/harness/auth-profile-switch-smoke.sh
 ```
 
 ### Cleanup

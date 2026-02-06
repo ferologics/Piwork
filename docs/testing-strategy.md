@@ -22,6 +22,7 @@ Primitive tasks (in `mise-tasks/`):
 - `test-prompt`
 - `test-set-folder`
 - `test-set-task`
+- `test-set-auth-profile`
 - `test-create-task`
 - `test-delete-tasks`
 - `test-dump-state`
@@ -39,12 +40,12 @@ Repeatable I2 scope checks are codified in:
 - `./scripts/harness/path-i-lite-negative.sh`
 - reference: `docs/path-i-lite-negative-suite.md`
 
-Auth mount/profile smoke check:
+Auth mount/profile smoke checks:
 
-- `./scripts/harness/auth-profile-mount-smoke.sh`
-- reference: `docs/auth-profile-mount-smoke.md`
+- `./scripts/harness/auth-profile-mount-smoke.sh` (`docs/auth-profile-mount-smoke.md`)
+- `./scripts/harness/auth-profile-switch-smoke.sh` (`docs/auth-profile-switch-smoke.md`)
 
-Both suite scripts run a screenshot-permission preflight (`mise run test-check-permissions`) before executing checks.
+All suite scripts run a screenshot-permission preflight (`mise run test-check-permissions`) before executing checks.
 
 ## Evidence rule for runtime behavior claims
 
