@@ -458,6 +458,29 @@ export class IntegrationHarness {
         }
     }
 
+    async writeWorkingFile(relativePath: string, content: string): Promise<void> {
+        const response = await this.sendCommand({
+            cmd: "write_working_file",
+            relativePath,
+            content,
+        });
+
+        if (!isOkResponse(response)) {
+            throw new Error(`write_working_file failed: ${response}`);
+        }
+    }
+
+    async openWorkingFolder(taskId: string): Promise<void> {
+        const response = await this.sendCommand({
+            cmd: "open_working_folder",
+            taskId,
+        });
+
+        if (!isOkResponse(response)) {
+            throw new Error(`open_working_folder failed: ${response}`);
+        }
+    }
+
     async previewList(taskId: string): Promise<PreviewListResponse> {
         return await this.sendJson<PreviewListResponse>({ cmd: "preview_list", taskId });
     }
@@ -513,6 +536,27 @@ export class IntegrationHarness {
             250,
             `artifact ${source}:${relativePath}`,
             async () => this.timeoutDiagnostics(`artifact ${source}:${relativePath}`),
+        );
+    }
+
+    async waitForHostFile(filePath: string, expectedContent: string, timeoutMs = 60_000): Promise<string> {
+        return await waitFor(
+            async () => {
+                if (!existsSync(filePath)) {
+                    return null;
+                }
+
+                try {
+                    const content = readFileSync(filePath, "utf8");
+                    return content === expectedContent ? content : null;
+                } catch {
+                    return null;
+                }
+            },
+            timeoutMs,
+            250,
+            `host file ${filePath}`,
+            async () => this.timeoutDiagnostics(`host file ${filePath}`),
         );
     }
 

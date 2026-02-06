@@ -56,6 +56,8 @@ mise run test-auth-set-key <provider> <key>
 mise run test-auth-delete <provider>
 mise run test-auth-import-pi
 mise run test-open-preview <task-id> <relative-path>
+mise run test-write-working-file <relative-path> [content]
+mise run test-open-working-folder <task-id>
 mise run test-dump-state
 mise run test-screenshot name
 mise run test-check-permissions   # quick preflight for screenshot visibility

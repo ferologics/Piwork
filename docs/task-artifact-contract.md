@@ -61,8 +61,8 @@ Last updated: 2026-02-06
 - [ ] Add harness evidence for contract:
   - [x] folder-change rejection on existing task
   - [x] scratchpad aggregation (`outputs` + `uploads`)
-  - [ ] opener action permission success (`Open in Finder` works in packaged UI)
-  - [ ] first-write working-folder reliability (`/mnt/workdir` write appears on host without retry)
+  - [x] opener action permission success (`Open in Finder` works in packaged UI)
+  - [x] first-write working-folder reliability (`/mnt/workdir` write appears on host without retry)
   - [ ] uploads write-denied behavior
 
 ## Notes

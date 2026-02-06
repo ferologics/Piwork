@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+#MISE description="Write a file into /mnt/workdir via runtime (test harness)"
+set -euo pipefail
+
+RELATIVE_PATH="${1:-}"
+CONTENT="${2:-}"
+
+if [[ -z "$RELATIVE_PATH" ]]; then
+    echo "Usage: mise run test-write-working-file <relative-path> [content]"
+    exit 1
+fi
+
+if ! nc -z localhost 19385 2>/dev/null; then
+    echo "Test server not running. Run: mise run test-start"
+    exit 1
+fi
+
+RESULT=$(python - "$RELATIVE_PATH" "$CONTENT" <<'PY' | nc -w 2 localhost 19385
+import json
+import sys
+
+payload = {
+    "cmd": "write_working_file",
+    "relativePath": sys.argv[1],
+    "content": sys.argv[2],
+}
+print(json.dumps(payload))
+PY
+)
+
+if [[ "$RESULT" == ERR:* ]]; then
+    echo "$RESULT"
+    exit 1
+fi
+
+echo "$RESULT"

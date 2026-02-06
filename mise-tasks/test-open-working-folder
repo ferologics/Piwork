@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+#MISE description="Open a task's working folder via the Finder action path (test harness)"
+set -euo pipefail
+
+TASK_ID="${1:-}"
+
+if [[ -z "$TASK_ID" ]]; then
+    echo "Usage: mise run test-open-working-folder <task-id>"
+    exit 1
+fi
+
+if ! nc -z localhost 19385 2>/dev/null; then
+    echo "Test server not running. Run: mise run test-start"
+    exit 1
+fi
+
+RESULT=$(python - "$TASK_ID" <<'PY' | nc -w 2 localhost 19385
+import json
+import sys
+
+payload = {
+    "cmd": "open_working_folder",
+    "taskId": sys.argv[1],
+}
+print(json.dumps(payload))
+PY
+)
+
+if [[ "$RESULT" == ERR:* ]]; then
+    echo "$RESULT"
+    exit 1
+fi
+
+echo "$RESULT"

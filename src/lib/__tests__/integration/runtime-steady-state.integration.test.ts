@@ -1,5 +1,6 @@
 /* @vitest-environment node */
 
+import { mkdirSync, rmSync } from "node:fs";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { IntegrationHarness } from "./harness";
@@ -8,8 +9,10 @@ describe.sequential("runtime steady-state contracts", () => {
     const harness = new IntegrationHarness();
     const prefix = `regression-steady-${Date.now()}`;
     const workingFolder = path.resolve(process.cwd());
+    const firstWriteFolder = path.resolve(process.cwd(), "tmp/integration/first-write");
 
     beforeAll(async () => {
+        mkdirSync(firstWriteFolder, { recursive: true });
         await harness.start();
         await harness.deleteTasksByPrefix(prefix);
     }, 360_000);
@@ -17,6 +20,7 @@ describe.sequential("runtime steady-state contracts", () => {
     afterAll(async () => {
         await harness.deleteTasksByPrefix(prefix).catch(() => undefined);
         await harness.stop();
+        rmSync(firstWriteFolder, { recursive: true, force: true });
     }, 120_000);
 
     async function createAndSelectTask(suffix: string) {
@@ -172,6 +176,63 @@ describe.sequential("runtime steady-state contracts", () => {
         }, 150_000);
 
         expect(settledAfterBind.runtimeDebug.mismatchVisible).toBe(false);
+    }, 240_000);
+
+    it("writes to the host working folder when queued immediately after first bind", async () => {
+        const task = await createAndSelectTask("first-write");
+        const fileName = `first-write-${Date.now()}.txt`;
+        const fileContent = `first-write-token-${Date.now()}`;
+        const hostPath = path.join(firstWriteFolder, fileName);
+
+        await harness.setFolder(firstWriteFolder);
+        await harness.writeWorkingFile(fileName, fileContent);
+        await harness.waitForHostFile(hostPath, fileContent, 120_000);
+
+        const settled = await harness.waitForSnapshot((snapshot) => {
+            if (snapshot.task.currentTaskId !== task.id) {
+                return null;
+            }
+
+            if (!snapshot.runtime.rpcConnected || snapshot.runtime.taskSwitching) {
+                return null;
+            }
+
+            if (snapshot.task.currentWorkingFolder !== firstWriteFolder) {
+                return null;
+            }
+
+            if (!snapshot.runtimeDebug.currentCwd?.startsWith("/mnt/workdir")) {
+                return null;
+            }
+
+            return snapshot;
+        }, 150_000);
+
+        expect(settled.runtimeDebug.currentCwd?.startsWith("/mnt/workdir")).toBe(true);
+    }, 240_000);
+
+    it("opens task working folder through the Finder action path", async () => {
+        const task = await createAndSelectTask("open-working-folder");
+
+        await harness.setFolder(workingFolder);
+
+        await harness.waitForSnapshot((snapshot) => {
+            if (snapshot.task.currentTaskId !== task.id) {
+                return null;
+            }
+
+            if (!snapshot.runtime.rpcConnected || snapshot.runtime.taskSwitching) {
+                return null;
+            }
+
+            if (snapshot.task.currentWorkingFolder !== workingFolder) {
+                return null;
+            }
+
+            return snapshot;
+        }, 150_000);
+
+        await harness.openWorkingFolder(task.id);
     }, 240_000);
 
     it("keeps model picker state truthful (empty/error/real)", async () => {

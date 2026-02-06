@@ -29,8 +29,8 @@
 - [x] **Fix opener permission path** — added `opener:allow-open-path` capability so `Open in Finder` is authorized.
 - [x] **Fix right-panel error isolation** — Working-folder action errors are now scoped to the Working folder card.
 - [x] **Fix first `/mnt/workdir` write reliability (race mitigation)** — task-bound folder changes now mark `taskSwitching` before validation, and prompt send is blocked until runtime is ready.
-- [ ] **Add harness regression for working-folder writes** — set folder → write file immediately → assert host path has file.
-- [ ] **Add harness check for open-folder action** — validate Working-folder header icon opens Finder path successfully.
+- [x] **Add harness regression for working-folder writes** — set folder → write file immediately → assert host path has file.
+- [x] **Add harness check for open-folder action** — validate Working-folder header icon opens Finder path successfully.
 - [ ] **Inject minimal FS runtime hint into prompts** — include working-folder host path + `/mnt/workdir` alias + scratchpad path, and refresh when folder is bound later (not just at startup).
 - [x] **Fix dev cwd chip staleness on task reopen** — reopen now validates persisted working folder before runtime prep, then refreshes on `task_ready`, so cwd settles to `/mnt/workdir...` instead of sticking at `/mnt/taskstate/.../outputs`.
 - [ ] **Delete remaining slop** — review docs for stale references to v1, v2 flags, sync protocol, smoke suites
@@ -84,6 +84,6 @@
 
 ## Testing
 
-- Harness primitives: `test-start`, `test-prompt`, `test-screenshot`, `test-set-folder`, `test-set-task`, `test-create-task`, `test-delete-tasks`, `test-dump-state`, `test-stop`, `test-open-preview`, `test-auth-*`, `test-send-login`, `test-check-permissions`
+- Harness primitives: `test-start`, `test-prompt`, `test-screenshot`, `test-set-folder`, `test-set-task`, `test-create-task`, `test-delete-tasks`, `test-dump-state`, `test-stop`, `test-open-preview`, `test-write-working-file`, `test-open-working-folder`, `test-auth-*`, `test-send-login`, `test-check-permissions`
 - Scope enforcement: `scripts/harness/path-i-lite-negative.sh`
 - Rule: primitives only, no monolithic E2E scripts

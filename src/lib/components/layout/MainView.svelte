@@ -813,6 +813,71 @@ async function sendPrompt(message?: string): Promise<boolean> {
     }
 }
 
+function shellQuote(value: string): string {
+    return `'${value.split("'").join(`'"'"'`)}'`;
+}
+
+function normalizeHarnessRelativePath(rawPath: string): string | null {
+    const trimmed = rawPath.trim();
+    if (!trimmed || trimmed.startsWith("/") || trimmed.includes("\\") || trimmed.includes("\0")) {
+        return null;
+    }
+
+    const normalized = trimmed
+        .replace(/^\.\//, "")
+        .replace(/\/{2,}/g, "/")
+        .replace(/\/+$|^\/+/, "");
+
+    if (!normalized || normalized === ".") {
+        return null;
+    }
+
+    if (normalized.split("/").some((segment) => segment.length === 0 || segment === "." || segment === "..")) {
+        return null;
+    }
+
+    if (!/^[A-Za-z0-9._/-]+$/.test(normalized)) {
+        return null;
+    }
+
+    return normalized;
+}
+
+async function writeWorkingFileForTest(relativePath: string, content: string): Promise<void> {
+    if (!runtimeService) {
+        devLog("TestHarness", "write_working_file ignored: runtime service unavailable");
+        return;
+    }
+
+    if (!currentTaskId) {
+        devLog("TestHarness", "write_working_file ignored: no active task");
+        return;
+    }
+
+    const normalizedRelativePath = normalizeHarnessRelativePath(relativePath);
+    if (!normalizedRelativePath) {
+        devLog("TestHarness", `write_working_file rejected path: ${relativePath}`);
+        return;
+    }
+
+    const targetPath = `/mnt/workdir/${normalizedRelativePath}`;
+    const command = `TARGET=${shellQuote(targetPath)}; PARENT="${"$"}{TARGET%/*}"; if [ "$PARENT" != "$TARGET" ]; then mkdir -p "$PARENT"; fi; printf '%s' ${shellQuote(content)} > "$TARGET"`;
+
+    try {
+        await runtimeService.waitForTaskSwitchComplete(15_000);
+        await runtimeService.waitForRpcReady(15_000);
+        await runtimeService.send({
+            id: `test_write_working_file_${Date.now()}`,
+            type: "system_bash",
+            payload: {
+                command,
+            },
+        });
+    } catch (error) {
+        devLog("TestHarness", `write_working_file failed: ${error}`);
+    }
+}
+
 let testPromptUnlisten: (() => void) | null = null;
 let testInjectMessageUnlisten: (() => void) | null = null;
 let testFolderUnlisten: (() => void) | null = null;
@@ -822,6 +887,7 @@ let testDeleteAllTasksUnlisten: (() => void) | null = null;
 let testDumpStateUnlisten: (() => void) | null = null;
 let testStateSnapshotUnlisten: (() => void) | null = null;
 let testOpenPreviewUnlisten: (() => void) | null = null;
+let testWriteWorkingFileUnlisten: (() => void) | null = null;
 let testSendLoginUnlisten: (() => void) | null = null;
 
 function buildTestStateSnapshot() {
@@ -1214,6 +1280,21 @@ onMount(() => {
         }).then((unlisten) => {
             testOpenPreviewUnlisten = unlisten;
         });
+
+        listen<{ relativePath?: string | null; content?: string | null }>("test_write_working_file", (event) => {
+            const relativePath = event.payload?.relativePath ?? null;
+            const content = typeof event.payload?.content === "string" ? event.payload.content : "";
+
+            devLog("TestHarness", `received test_write_working_file: ${relativePath}`);
+
+            if (!relativePath) {
+                return;
+            }
+
+            void writeWorkingFileForTest(relativePath, content);
+        }).then((unlisten) => {
+            testWriteWorkingFileUnlisten = unlisten;
+        });
     }
 });
 
@@ -1236,6 +1317,7 @@ onDestroy(() => {
     testDumpStateUnlisten?.();
     testStateSnapshotUnlisten?.();
     testOpenPreviewUnlisten?.();
+    testWriteWorkingFileUnlisten?.();
 });
 </script>
 

@@ -22,6 +22,7 @@ Tasks: `test-create-task`, `test-delete-tasks`, `test-set-task`
 Folders: `test-set-folder` (one-time bind; existing bound task rejects changes)
 Auth: `test-auth-list`, `test-auth-set-key`, `test-auth-delete`, `test-auth-import-pi`, `test-send-login`
 Preview: `test-open-preview`
+Working-folder helpers: `test-write-working-file`, `test-open-working-folder`
 Preflight: `test-check-permissions` (screenshot permission)
 
 Screenshot checks require Screen Recording permission. Blank/black captures fail.

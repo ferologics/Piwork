@@ -87,6 +87,8 @@ mise run test-delete-tasks
 mise run test-auth-list / test-auth-set-key / test-auth-delete / test-auth-import-pi
 mise run test-send-login                 # trigger /login UI flow
 mise run test-open-preview <task> <path> # open file preview
+mise run test-write-working-file <path> [content] # write file via runtime /mnt/workdir path
+mise run test-open-working-folder <task> # open task working folder via Finder action path
 mise run test-check-permissions          # verify screenshot capture works
 ```
 

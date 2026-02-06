@@ -963,6 +963,8 @@ fn sanitize_test_server_value(value: &serde_json::Value) -> serde_json::Value {
 /// - `{"cmd":"artifact_list","taskId":"..."}` - returns scratchpad artifact list JSON (`outputs` + `uploads`)
 /// - `{"cmd":"artifact_read","taskId":"...","source":"outputs|uploads","relativePath":"..."}` - returns artifact file content JSON
 /// - `{"cmd":"open_preview","taskId":"...","relativePath":"..."}` - opens preview pane in UI
+/// - `{"cmd":"write_working_file","relativePath":"...","content":"..."}` - writes a file via runtime `system_bash` after folder bind settles
+/// - `{"cmd":"open_working_folder","taskId":"..."}` - opens a task working folder via the same `open_path_in_finder` path as the UI action
 /// - `{"cmd":"rpc",...}` - sends raw RPC to VM
 #[cfg(debug_assertions)]
 #[allow(clippy::too_many_lines)]
@@ -1235,6 +1237,70 @@ fn start_test_server(app_handle: tauri::AppHandle) {
                             });
                             let _ = app.emit("test_open_preview", payload);
                             let _ = stream.write_all(b"OK\n");
+                        }
+                        "write_working_file" => {
+                            let relative_path = json.get("relativePath").and_then(|v| v.as_str()).unwrap_or("");
+                            let content = json.get("content").and_then(|v| v.as_str()).unwrap_or("");
+
+                            if relative_path.trim().is_empty() {
+                                let _ = stream.write_all(b"ERR: relativePath is required\n");
+                                continue;
+                            }
+
+                            eprintln!("[test-server] emitting test_write_working_file: {relative_path}");
+                            let payload = serde_json::json!({
+                                "relativePath": relative_path,
+                                "content": content,
+                            });
+                            let _ = app.emit("test_write_working_file", payload);
+                            let _ = stream.write_all(b"OK\n");
+                        }
+                        "open_working_folder" => {
+                            let task_id = json.get("taskId").and_then(|v| v.as_str()).unwrap_or("").trim();
+
+                            if task_id.is_empty() {
+                                let _ = stream.write_all(b"ERR: taskId is required\n");
+                                continue;
+                            }
+
+                            if !is_valid_task_id(task_id) {
+                                let _ = stream.write_all(b"ERR: Invalid task id\n");
+                                continue;
+                            }
+
+                            let tasks_path = match tasks_dir(&app) {
+                                Ok(path) => path,
+                                Err(error) => {
+                                    let _ = stream.write_all(format!("ERR: {error}\n").as_bytes());
+                                    continue;
+                                }
+                            };
+
+                            let task = match task_store::load_task(&tasks_path, task_id) {
+                                Ok(Some(task)) => task,
+                                Ok(None) => {
+                                    let _ = stream.write_all(b"ERR: Task not found\n");
+                                    continue;
+                                }
+                                Err(error) => {
+                                    let _ = stream.write_all(format!("ERR: {error}\n").as_bytes());
+                                    continue;
+                                }
+                            };
+
+                            let Some(folder) = task.working_folder else {
+                                let _ = stream.write_all(b"ERR: Task has no working folder\n");
+                                continue;
+                            };
+
+                            match open_path_in_finder(folder) {
+                                Ok(()) => {
+                                    let _ = stream.write_all(b"OK\n");
+                                }
+                                Err(error) => {
+                                    let _ = stream.write_all(format!("ERR: {error}\n").as_bytes());
+                                }
+                            }
                         }
                         _ => {
                             // Direct RPC send (bypass UI)
