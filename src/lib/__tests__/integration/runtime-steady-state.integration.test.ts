@@ -47,7 +47,7 @@ describe.sequential("runtime steady-state contracts", () => {
 
         expect(initial.ui.quickStartVisible).toBe(true);
 
-        await harness.prompt("steady-state continuity probe");
+        await harness.injectMessage("steady-state continuity probe");
 
         const withMessage = await harness.waitForSnapshot((snapshot) => {
             if (snapshot.task.currentTaskId !== task.id) {

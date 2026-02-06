@@ -67,7 +67,7 @@ describe.sequential("sequential journey canary", () => {
 
         const baselineMessageCount = initial.conversation.messageCount;
 
-        await harness.prompt("sequential journey continuity probe");
+        await harness.injectMessage("sequential journey continuity probe");
 
         const withMessage = await harness.waitForSnapshot((snapshot) => {
             if (snapshot.task.currentTaskId !== task.id) {

@@ -975,6 +975,7 @@ fn sanitize_test_server_value(value: &serde_json::Value) -> serde_json::Value {
 /// Test server for automated testing (dev mode only)
 /// Listens on port `19385` and accepts commands:
 /// - `{"cmd":"prompt","message":"..."}` - triggers UI sendPrompt flow
+/// - `{"cmd":"inject_message","message":"..."}` - injects a user message into UI conversation (no provider call)
 /// - `{"cmd":"set_folder","folder":"/path"}` - sets working folder (one-time bind for active task)
 /// - `{"cmd":"set_task","taskId":"..."}` - selects active task
 /// - `{"cmd":"set_auth_profile","profile":"default"}` - switches auth profile and restarts runtime in UI
@@ -1038,6 +1039,13 @@ fn start_test_server(app_handle: tauri::AppHandle) {
                             let message = json.get("message").and_then(|v| v.as_str()).unwrap_or("");
                             eprintln!("[test-server] emitting test_prompt: {message}");
                             let _ = app.emit("test_prompt", message);
+                            let _ = stream.write_all(b"OK\n");
+                        }
+                        "inject_message" => {
+                            // Emit event to frontend to inject a user message without provider traffic
+                            let message = json.get("message").and_then(|v| v.as_str()).unwrap_or("");
+                            eprintln!("[test-server] emitting test_inject_message: {message}");
+                            let _ = app.emit("test_inject_message", message);
                             let _ = stream.write_all(b"OK\n");
                         }
                         "set_folder" => {

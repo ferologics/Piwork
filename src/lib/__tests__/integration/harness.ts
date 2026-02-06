@@ -414,6 +414,13 @@ export class IntegrationHarness {
         }
     }
 
+    async injectMessage(message: string): Promise<void> {
+        const response = await this.sendCommand({ cmd: "inject_message", message });
+        if (!isOkResponse(response)) {
+            throw new Error(`inject_message failed: ${response}`);
+        }
+    }
+
     async sendRpc(request: Record<string, unknown>): Promise<void> {
         const response = await this.sendCommand(request);
         if (!isOkResponse(response)) {

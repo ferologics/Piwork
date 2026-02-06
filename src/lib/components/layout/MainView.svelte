@@ -803,6 +803,7 @@ async function sendPrompt(message?: string): Promise<boolean> {
 }
 
 let testPromptUnlisten: (() => void) | null = null;
+let testInjectMessageUnlisten: (() => void) | null = null;
 let testFolderUnlisten: (() => void) | null = null;
 let testTaskUnlisten: (() => void) | null = null;
 let testCreateTaskUnlisten: (() => void) | null = null;
@@ -1138,6 +1139,19 @@ onMount(() => {
             testPromptUnlisten = unlisten;
         });
 
+        listen<string>("test_inject_message", (event) => {
+            const content = event.payload.trim();
+            if (!content) {
+                return;
+            }
+
+            devLog("TestHarness", `received test_inject_message: ${content}`);
+            messageAccumulator.addUserMessage(content);
+            conversation = messageAccumulator.getState();
+        }).then((unlisten) => {
+            testInjectMessageUnlisten = unlisten;
+        });
+
         listen<string | null>("test_set_folder", (event) => {
             devLog("TestHarness", `received test_set_folder: ${event.payload}`);
             void handleFolderChange(event.payload);
@@ -1240,6 +1254,7 @@ onDestroy(() => {
     unsubscribeRuntimeService?.();
     void disconnectRpc();
     testPromptUnlisten?.();
+    testInjectMessageUnlisten?.();
     testFolderUnlisten?.();
     testTaskUnlisten?.();
     testSetAuthProfileUnlisten?.();

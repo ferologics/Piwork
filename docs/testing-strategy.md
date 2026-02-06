@@ -71,6 +71,7 @@ Implemented live canaries (integration):
 - Keep exactly **two live runs**:
   1. a focused steady-state suite (`runtime-steady-state.integration.test.ts`)
   2. a restart continuity journey (`journey-sequential.integration.test.ts`)
+- Default live regressions are **authless/tokenless**: they use deterministic test hooks (`inject_message`) and runtime/system contracts instead of provider completions.
 - Do not rely on a single giant scenario as the only guardrail; it is too hard to debug when it fails.
 
 ## Speed policy
