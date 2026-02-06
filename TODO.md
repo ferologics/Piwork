@@ -4,6 +4,10 @@
 
 ## Now: Foundation cleanup
 
+- [ ] **Testing sanity gate (P0)** — define and ship a real automated regression suite for the liftoff path (Vitest + Rust), make it part of `mise run check`, and stop relying on ad-hoc/manual shell-harness runs for core correctness.
+  - Add a machine-readable `state_snapshot` contract for deterministic assertions (no log-grep testing).
+  - Add gated Vitest regressions for: folder-bind continuity (no UI reset), reopen cwd correctness (`/mnt/workdir...`), working-folder panel refresh on folder change, and runtime-mismatch badge rules.
+  - Wire a single `mise run test-regressions` task into `mise run check` once stable.
 - [x] **Kill v1 runtime** — remove `PIWORK_RUNTIME_V2_TASKD` flag, v1 code paths in runtimeService (`handleTaskSwitchV1`, `handleFolderChangeV1`, `ensureTaskSessionReady`), v1 `nc -l` loop in init script, `RuntimeMode` type. taskd is the only runtime.
 - [x] **Rename v2_taskd → runtime** — drop "v2" prefix everywhere (types, logs, flags, docs)
 - [x] **Extract init script** — move the heredoc out of `mise-tasks/runtime-build` into `runtime/init.sh`
@@ -20,7 +24,7 @@
 - [ ] **Add harness regression for working-folder writes** — set folder → write file immediately → assert host path has file.
 - [ ] **Add harness check for open-folder action** — validate Working-folder header icon opens Finder path successfully.
 - [ ] **Inject minimal FS runtime hint into prompts** — include working-folder host path + `/mnt/workdir` alias + scratchpad path, and refresh when folder is bound later (not just at startup).
-- [ ] **Fix dev cwd chip staleness on task reopen** — top-bar runtime cwd can remain at `/mnt/taskstate/.../outputs` even after task runtime moves to `/mnt/workdir`.
+- [x] **Fix dev cwd chip staleness on task reopen** — reopen now validates persisted working folder before runtime prep, then refreshes on `task_ready`, so cwd settles to `/mnt/workdir...` instead of sticking at `/mnt/taskstate/.../outputs`.
 - [ ] **Delete remaining slop** — review docs for stale references to v1, v2 flags, sync protocol, smoke suites
 - [ ] **Dev watch scope** — avoid restarting `tauri dev` for non-runtime docs/content edits (e.g. Markdown), keep hot reload scoped to relevant source/config files.
 - [x] **Roadmap sync hygiene** — synced `docs/ui-roadmap.md` with current `TODO.md` execution state (2026-02-06).

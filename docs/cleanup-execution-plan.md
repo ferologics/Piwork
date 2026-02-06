@@ -23,6 +23,36 @@ Non-goals (explicitly out of scope for this plan): sandbox hardening beyond curr
 
 ---
 
+## PR-0 — Testing sanity gate (highest priority)
+
+### Goal
+
+Stop regressions from slipping through by moving core behavior checks into automated test code (Vitest + Rust), and make those checks part of normal `check` flow.
+
+### Scope / changes
+
+1. Add a machine-readable debug snapshot command for tests (instead of log-string parsing).
+2. Add Vitest regression tests for:
+   - folder bind continuity (no conversation/UI reset)
+   - reopen existing folder-bound task resolves runtime cwd to `/mnt/workdir...`
+   - working-folder panel refresh when folder changes on same task id
+   - runtime mismatch badge only when truly mismatched (not transient boot/legacy)
+   - tests run against a live app process and assert on structured `state_snapshot` payloads (not log grep)
+3. Keep shell harness only as optional smoke/probe while parity is reached; do not treat ad-hoc shell runs as primary quality gate.
+4. Add a single regression task (`mise run test-regressions`) and include it in `mise run check` once stable.
+
+### Done when
+
+- Reproductions for recent regressions fail before fix and pass after fix in automated tests.
+- `mise run check` blocks merges when liftoff path contracts break.
+
+### Validation
+
+- `mise run check`
+- `mise run test-regressions`
+
+---
+
 ## PR-1 — Add V2 bridge commands + migrate UI off legacy host commands (and make models truthful)
 
 ### Goal
