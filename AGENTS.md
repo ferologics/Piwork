@@ -94,3 +94,4 @@ mise run test-check-permissions          # verify screenshot capture works
 - 4-space indentation
 - Use mise tasks, not direct pnpm/cargo
 - Keep configs sorted
+- Pre-alpha policy: breaking changes are acceptable; do not add migration/fallback/compat shims unless explicitly requested

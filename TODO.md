@@ -7,8 +7,9 @@
 - [x] **Extract init script** — move the heredoc out of `mise-tasks/runtime-build` into `runtime/init.sh`
 - [x] **Fix context pollution** — infrastructure bash commands (grep mount check, mkdir, session writes) go through pi's RPC and pollute the agent's conversation. Add `system_bash` to taskd that bypasses pi sessions, or do checks in taskd before spawning pi.
 - [x] **Simplify auth/settings** — strip Settings modal to: show current auth status + "Import from pi" button. Kill multi-profile UI. For MVP: baked auth or `~/.pi/agent/auth.json` import.
-- [x] **Clarify folder-change semantics** — define expected behavior when changing a task’s working folder (especially for already-open tasks), then make runtime behavior match.
-- [ ] **Define task artifact persistence contract** — document where task-created files live with/without a working folder, and what should persist across switch/restart.
+- [ ] **Lock working folder after task creation** — `workingFolder` is immutable for an existing task; if the wrong folder was selected, create a new task.
+- [x] **Define task artifact persistence contract** — documented in `docs/task-artifact-contract.md` (`outputs` writable, `uploads` read-only, Scratchpad aggregates both).
+- [ ] **Implement artifact contract in runtime/UI** — enforce immutable folder updates, remove folder-change apply flow, surface Scratchpad from `outputs` + `uploads`, and enforce uploads read-only.
 - [ ] **Untangle auth state from runtime artifacts** — keep auth storage purpose clear; avoid mixing credentials with unrelated pi/session artifacts.
 - [ ] **Fix sendLogin optimistic log** — logs `[info] Sent /login` even if not connected
 - [ ] **Delete remaining slop** — review docs for stale references to v1, v2 flags, sync protocol, smoke suites
@@ -19,9 +20,9 @@
 
 - [ ] **Markdown rendering** — render agent responses (bold, lists, code blocks). Biggest UX gap.
 - [ ] **Tool call display** — collapsible "Created a file ›", "Ran command ›" in message stream
-- [ ] **Right panel IA pass** — separate Working folder and Scratchpad sections (collapsible), include clear empty states, and add quick open-in-Finder affordance where relevant.
-- [ ] **Scratchpad continuity** — keep scratchpad artifacts visible even after setting/changing a task working folder (don’t make prior task files appear to disappear).
-- [ ] **Artifact explorer parity** — make file listing/preview behavior consistent across working-folder tasks and no-folder scratch tasks.
+- [ ] **Right panel IA pass** — replace “Downloads” with “Working folder” card semantics (dynamic title = folder basename when set), clear empty states, and open-in-Finder affordance.
+- [ ] **Scratchpad continuity** — keep Scratchpad visible for every task and aggregate artifacts from both `outputs` and `uploads`.
+- [ ] **Artifact explorer parity** — make file listing/preview behavior consistent across working-folder and no-folder tasks, including uploads read-only behavior.
 - [ ] **Context panel usefulness** — surface active connectors/tools and task-referenced files, not just static copy.
 
 ## Later: Production

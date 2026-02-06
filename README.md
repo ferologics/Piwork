@@ -89,4 +89,5 @@ Rust builds use **sccache** via `.cargo/config.toml`.
 - `docs/runtime-pack.md` - runtime pack + VM boot model
 - `docs/auth-flow.md` - authentication flow
 - `docs/permissions-model.md` - folder access model
+- `docs/task-artifact-contract.md` - working-folder immutability + outputs/uploads contract
 - `docs/research/` - Cowork observations and runtime intel
