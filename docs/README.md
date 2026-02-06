@@ -15,6 +15,7 @@ This folder contains both **current runtime docs** and **older draft/research no
 - `runtime-pack.md` — VM runtime pack + boot model (current dev behavior + packaging notes).
 - `testing-strategy.md` — test approach and harness expectations.
 - `path-i-lite-negative-suite.md` — repeatable I2 negative checks (traversal/symlink/cross-task scope).
+- `auth-profile-mount-smoke.md` — repeatable auth mount/profile smoke verification.
 
 ## Runtime: on-hold fallback
 

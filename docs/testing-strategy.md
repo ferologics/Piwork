@@ -36,6 +36,11 @@ Repeatable I2 scope checks are codified in:
 - `./scripts/harness/path-i-lite-negative.sh`
 - reference: `docs/path-i-lite-negative-suite.md`
 
+Auth mount/profile smoke check:
+
+- `./scripts/harness/auth-profile-mount-smoke.sh`
+- reference: `docs/auth-profile-mount-smoke.md`
+
 ## Evidence rule for runtime behavior claims
 
 Always capture all three:

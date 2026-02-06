@@ -48,10 +48,11 @@ mise run test-screenshot name
 mise run test-stop
 ```
 
-Repeatable Path I-lite negative checks:
+Repeatable harness checks:
 
 ```bash
 ./scripts/harness/path-i-lite-negative.sh
+./scripts/harness/auth-profile-mount-smoke.sh
 ```
 
 ### Cleanup
