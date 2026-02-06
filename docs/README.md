@@ -24,6 +24,7 @@ This folder contains both **current runtime docs** and **older draft/research no
 
 - `permissions-model.md` — user-visible permissions model.
 - `auth-flow.md` — auth behavior.
+- `mvp-definition.md` — locked MVP scope decisions (scope/auth/settings/first-run).
 - `ui-roadmap.md` — UI roadmap.
 
 ## Research notes

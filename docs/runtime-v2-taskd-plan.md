@@ -374,4 +374,4 @@ Recent completions:
 ## Immediate next actions
 
 1. Keep Gate G2 as non-blocking research lane while MVP path ships
-2. Continue product-level MVP polish around auth/settings/onboarding constraints
+2. Execute post-MVP production items from the now-locked MVP baseline (`docs/mvp-definition.md`)

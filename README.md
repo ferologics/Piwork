@@ -81,5 +81,6 @@ Rust builds use **sccache** via `.cargo/config.toml`.
 - `docs/pi-integration.md` - host↔VM↔taskd integration overview
 - `docs/runtime-pack.md` - runtime pack + VM boot model
 - `docs/auth-flow.md` - authentication flow
+- `docs/mvp-definition.md` - locked MVP scope decisions
 - `docs/permissions-model.md` - folder access model
 - `docs/research/` - Cowork observations and runtime intel

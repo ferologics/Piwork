@@ -2,10 +2,11 @@
 
 ## P0: MVP Definition
 
-- [ ] **Define MVP scope**: must-have flows for v0 (task create, run prompt, working folder)
-- [ ] **Auth/login decision**: require auth UI vs. auto-import from local pi
-- [ ] **Settings scope**: keep minimal settings or remove entirely for MVP
-- [ ] **First-run flow**: clarify what onboarding is required for MVP
+- [x] **Define MVP scope**: must-have flows for v0 (task create, run prompt, working folder)
+- [x] **Auth/login decision**: require auth UI vs. auto-import from local pi
+- [x] **Settings scope**: keep minimal settings or remove entirely for MVP
+- [x] **First-run flow**: clarify what onboarding is required for MVP
+  - source: `docs/mvp-definition.md`
 
 ## P0: Core Broken / Must Work
 
