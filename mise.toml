@@ -28,7 +28,7 @@ run = "pnpm exec vite dev"
 
 [tasks.format]
 description = "Format code (Biome + dprint + rustfmt)"
-run = "pnpm exec biome format --write src src-tauri/tauri.conf.json src-tauri/capabilities/default.json package.json components.json svelte.config.js vite.config.js tailwind.config.ts tsconfig.json biome.json dprint.json && dprint fmt && cargo fmt --manifest-path src-tauri/Cargo.toml"
+run = "pnpm exec biome format --write src src-tauri/tauri.conf.json src-tauri/capabilities/default.json package.json components.json svelte.config.js vite.config.js tailwind.config.ts tsconfig.json biome.json dprint.json && pnpm exec dprint fmt && cargo fmt --manifest-path src-tauri/Cargo.toml"
 
 [tasks.icons]
 description = "Regenerate app icons from assets/logo.svg"
