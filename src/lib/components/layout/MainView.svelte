@@ -36,6 +36,7 @@ let conversation = $state<ConversationState>(messageAccumulator.getState());
 let rpcConnected = $state(false);
 let rpcConnecting = $state(false);
 let rpcError = $state<string | null>(null);
+let hasConnectedOnce = $state(false);
 let rpcAuthHint = $state<string | null>(null);
 let rpcLoginUrl = $state<string | null>(null);
 let openingLoginUrl = $state(false);
@@ -301,6 +302,10 @@ function applyRuntimeSnapshot(snapshot: RuntimeServiceSnapshot) {
     workspaceRoot = snapshot.workspaceRoot;
     authProfile = snapshot.authProfile;
     taskSwitching = snapshot.taskSwitching;
+
+    if (snapshot.rpcConnected) {
+        hasConnectedOnce = true;
+    }
 
     if (wasTaskSwitching && !taskSwitching) {
         void requestState();
@@ -605,6 +610,19 @@ function handleRpcPayload(payload: Record<string, unknown>) {
             pushRpcMessage(`[error] ${error}`);
             updateAuthHint(error);
         }
+        return;
+    }
+
+    if (type === "event") {
+        const eventName = typeof payload.event === "string" ? payload.event : null;
+        const eventTaskId = typeof payload.taskId === "string" ? payload.taskId : null;
+
+        if (eventName === "task_ready" && eventTaskId) {
+            artifactRefreshStore.request(eventTaskId, "task_ready");
+            void requestState();
+            void requestAvailableModels();
+        }
+
         return;
     }
 
@@ -1132,7 +1150,7 @@ onDestroy(() => {
     <!-- Chat transcript area -->
     <div class="flex-1 overflow-y-auto p-4 mr-2">
         <div class="mx-auto max-w-3xl space-y-4">
-            {#if !rpcConnected}
+            {#if !rpcConnected && !hasConnectedOnce}
                 <div class="flex h-full flex-col items-center justify-center py-20 text-center">
                     <FolderOpen class="mb-4 h-12 w-12 text-muted-foreground" />
                     <h2 class="mb-2 text-lg font-medium">Booting runtime…</h2>
@@ -1169,6 +1187,18 @@ onDestroy(() => {
                 </div>
             {:else}
                 <div class="flex-1 flex flex-col">
+                    {#if !rpcConnected}
+                        <div class="mt-2 rounded-md border border-border bg-muted/40 px-2 py-1 text-[11px] text-muted-foreground">
+                            {#if rpcConnecting || taskSwitching}
+                                Reconfiguring runtime…
+                            {:else if rpcError}
+                                Runtime disconnected: {rpcError}
+                            {:else}
+                                Runtime disconnected.
+                            {/if}
+                        </div>
+                    {/if}
+
                     {#if rpcAuthHint}
                         <div class="mt-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-[11px] text-amber-200">
                             {rpcAuthHint}

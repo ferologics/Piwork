@@ -58,7 +58,7 @@ let workingFilesError = $state<string | null>(null);
 let workingFolderError = $state<string | null>(null);
 let openingWorkingFolder = $state(false);
 
-let lastFilesKey = "";
+let lastTaskContextKey = "";
 let filesRequestId = 0;
 let workingFilesRequestId = 0;
 let scratchpadRefreshTimer: ReturnType<typeof setTimeout> | null = null;
@@ -253,12 +253,12 @@ onMount(() => {
         activeTask = value;
         workingFolderError = null;
 
-        const nextKey = `${value?.id ?? ""}`;
-        if (nextKey === lastFilesKey) {
+        const nextKey = `${value?.id ?? ""}|${value?.workingFolder ?? ""}`;
+        if (nextKey === lastTaskContextKey) {
             return;
         }
 
-        lastFilesKey = nextKey;
+        lastTaskContextKey = nextKey;
         void loadFiles();
         void loadWorkingFiles();
     });
