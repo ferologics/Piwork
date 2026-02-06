@@ -9,8 +9,8 @@
   - [x] Add first gated Vitest regression: reopen cwd correctness (`/mnt/workdir...`) on folder-bound task reopen.
   - [ ] Add remaining gated Vitest regressions: folder-bind continuity (no UI reset), working-folder panel refresh on folder change, and runtime-mismatch badge rules.
   - [ ] Add one sequential live journey canary (messages + models + workdir + artifacts + reopen), while keeping focused canaries for isolated invariants.
-  - [ ] Add CI enforcement for both gates (`check` on PRs, `check-full` required before merge).
-  - [ ] Remove low-signal/noise tests and stale assertions (smoke test, legacy session-file assumptions, noisy debug logs).
+  - [x] Add CI enforcement for both gates (`check` on PRs, `check-full` required before merge).
+  - [x] Remove low-signal/noise tests and stale assertions (smoke test, legacy session-file assumptions, noisy debug logs).
   - [x] Add `mise run test-regressions` task (currently runs live-app regression tests).
   - [x] Split gates: `mise run check` (fast) and `mise run check-full` (includes regressions).
 - [x] **Kill v1 runtime** — remove `PIWORK_RUNTIME_V2_TASKD` flag, v1 code paths in runtimeService (`handleTaskSwitchV1`, `handleFolderChangeV1`, `ensureTaskSessionReady`), v1 `nc -l` loop in init script, `RuntimeMode` type. taskd is the only runtime.

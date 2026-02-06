@@ -10,6 +10,8 @@ import type {
     ToolExecutionEndEvent,
 } from "./types";
 
+const ENABLE_ACCUMULATOR_DEBUG = import.meta.env.DEV && import.meta.env.VITE_DEBUG_ACCUMULATOR === "1";
+
 export interface TextBlock {
     type: "text";
     text: string;
@@ -82,9 +84,8 @@ export class MessageAccumulator {
     }
 
     processEvent(payload: RpcPayload): void {
-        // Debug: log what we receive
-        if (import.meta.env.DEV) {
-            console.log("[Accumulator]", payload.type, payload);
+        if (ENABLE_ACCUMULATOR_DEBUG) {
+            console.debug("[Accumulator]", payload.type, payload);
         }
 
         switch (payload.type) {

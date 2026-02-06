@@ -29,6 +29,7 @@ mise run runtime-clean      # clean runtime artifacts
 - Git hooks are installed by `mise run setup` (or manually via `mise run install-git-hooks`).
 - `pre-commit` runs `mise run check`.
 - `pre-push` runs `mise run check-full`.
+- CI (`.github/workflows/ci.yml`) runs both `check` and `check-full` gates on PRs/pushes.
 - **Agent rule**: avoid running a redundant manual `mise run check` immediately before `git commit` when hooks are active; rely on pre-commit output unless explicit extra verification is requested.
 
 ## Architecture

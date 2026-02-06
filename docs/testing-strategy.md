@@ -36,6 +36,7 @@ This suite is currently supplemental smoke coverage. Equivalent contract checks 
 - `mise run setup` installs hooks automatically (or run `mise run install-git-hooks` manually).
 - pre-commit: `mise run check` (fast feedback)
 - pre-push: `mise run check-full` (slow, high confidence)
+- CI (`.github/workflows/ci.yml`): `check` + `check-full` jobs on PRs/pushes.
 
 ## Evidence rule
 

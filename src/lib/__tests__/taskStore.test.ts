@@ -8,24 +8,19 @@ vi.mock("@tauri-apps/api/core", () => ({
     invoke: (...args: unknown[]) => invokeMock(...args),
 }));
 
-const SESSION_FILE = "/mnt/taskstate/session.json";
-
-function expectedSessionFile(_id: string) {
-    return SESSION_FILE;
-}
-
-function sampleTask(): TaskMetadata {
+function sampleTask(overrides: Partial<TaskMetadata> = {}): TaskMetadata {
     return {
         id: "task-1",
         title: "Test task",
         status: "idle",
         createdAt: "2026-02-04T00:00:00.000Z",
         updatedAt: "2026-02-04T00:00:00.000Z",
-        sessionFile: null,
+        sessionFile: "/sessions/task-1/session.json",
         mounts: [],
         model: null,
         thinkingLevel: null,
         connectorsEnabled: [],
+        ...overrides,
     };
 }
 
@@ -42,7 +37,16 @@ describe("taskStore", () => {
         await taskStore.load();
 
         expect(invokeMock).toHaveBeenCalledWith("task_store_list");
-        expect(get(taskStore)[0].sessionFile).toBe(expectedSessionFile(task.id));
+        expect(get(taskStore)[0].sessionFile).toBe(task.sessionFile);
+    });
+
+    it("normalizes missing sessionFile from backend metadata", async () => {
+        const task = sampleTask({ sessionFile: undefined });
+        invokeMock.mockResolvedValue([task]);
+
+        await taskStore.load();
+
+        expect(get(taskStore)[0].sessionFile).toBeNull();
     });
 
     it("upserts tasks and moves them to the top", async () => {
@@ -55,7 +59,7 @@ describe("taskStore", () => {
         invokeMock.mockResolvedValue(undefined);
         await taskStore.upsert(updated);
 
-        const normalized = { ...updated, sessionFile: expectedSessionFile(updated.id) };
+        const normalized = { ...updated, sessionFile: updated.sessionFile };
         expect(invokeMock).toHaveBeenCalledWith("task_store_upsert", { task: normalized });
         expect(get(taskStore)[0]).toEqual(normalized);
     });
@@ -114,7 +118,7 @@ describe("taskStore", () => {
         expect(task.title).toBe("New task");
         expect(task.status).toBe("idle");
         expect(task.id).toBeTruthy();
-        expect(task.sessionFile).toBe(expectedSessionFile(task.id));
+        expect(task.sessionFile).toBeNull();
         expect(task.createdAt).toBeTruthy();
         expect(task.updatedAt).toBeTruthy();
     });

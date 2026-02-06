@@ -26,6 +26,8 @@ mise run check        # fast local gate
 mise run check-full   # includes live runtime regressions
 ```
 
+CI mirrors this split (`.github/workflows/ci.yml`): fast `check` + live `check-full`.
+
 ```bash
 mise run test
 mise run test-vite

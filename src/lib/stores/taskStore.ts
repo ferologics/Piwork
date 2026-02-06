@@ -6,8 +6,6 @@ const tasks = writable<TaskMetadata[]>([]);
 const activeTaskId = writable<string | null>(null);
 const activeTask = derived([tasks, activeTaskId], ([list, id]) => list.find((task) => task.id === id) ?? null);
 
-const SESSION_FILE = "/mnt/taskstate/session.json";
-
 // Recent folders (persisted to localStorage)
 const RECENT_FOLDERS_KEY = "piwork_recent_folders";
 const MAX_RECENT_FOLDERS = 10;
@@ -42,7 +40,7 @@ function addRecentFolder(folder: string) {
 function normalizeTask(task: TaskMetadata): TaskMetadata {
     return {
         ...task,
-        sessionFile: SESSION_FILE,
+        sessionFile: task.sessionFile ?? null,
     };
 }
 
@@ -90,7 +88,7 @@ function createTask(title: string, workingFolder: string | null = null) {
         status: "idle",
         createdAt: now,
         updatedAt: now,
-        sessionFile: SESSION_FILE,
+        sessionFile: null,
         workingFolder,
         mounts: [],
         model: null,
