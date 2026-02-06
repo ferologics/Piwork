@@ -112,3 +112,13 @@ jobs:
 
       - name: Run full live regression gate
         run: mise run test-regressions
+
+      - name: Upload integration logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-logs
+          path: |
+            tmp/dev/piwork.integration.log
+            tmp/dev/piwork.log
+          if-no-files-found: ignore

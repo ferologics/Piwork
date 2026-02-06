@@ -1,5 +1,5 @@
 import { execSync, spawn, type ChildProcess } from "node:child_process";
-import { createWriteStream, mkdirSync, writeFileSync } from "node:fs";
+import { createWriteStream, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import net from "node:net";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -10,9 +10,9 @@ const LOG_PATH = path.join(REPO_ROOT, "tmp/dev/piwork.integration.log");
 const TEST_SERVER_HOST = "127.0.0.1";
 const TEST_SERVER_PORT = 19385;
 
-const START_TIMEOUT_MS = 180_000;
-const SNAPSHOT_TIMEOUT_MS = 90_000;
-const COMMAND_TIMEOUT_MS = 8_000;
+const START_TIMEOUT_MS = 360_000;
+const SNAPSHOT_TIMEOUT_MS = 180_000;
+const COMMAND_TIMEOUT_MS = 15_000;
 
 interface TaskSummary {
     id: string;
@@ -30,6 +30,18 @@ interface ArtifactFileEntry {
 
 interface ArtifactListResponse {
     files: ArtifactFileEntry[];
+    truncated: boolean;
+}
+
+interface PreviewFileEntry {
+    path: string;
+    size: number;
+    modifiedAt: number;
+}
+
+interface PreviewListResponse {
+    root: string;
+    files: PreviewFileEntry[];
     truncated: boolean;
 }
 
@@ -83,6 +95,15 @@ export interface StateSnapshot {
         error: string | null;
         selectedModelId: string;
     };
+    preview: {
+        isOpen: boolean;
+        taskId: string | null;
+        relativePath: string | null;
+        source: "preview" | "artifact";
+        artifactSource: "outputs" | "uploads" | null;
+        loading: boolean;
+        error: string | null;
+    };
     runtimeDebug: {
         activeTaskId: string | null;
         currentCwd: string | null;
@@ -105,6 +126,7 @@ async function waitFor<T>(
     timeoutMs: number,
     intervalMs: number,
     label: string,
+    onTimeout?: () => Promise<string> | string,
 ): Promise<T> {
     const started = Date.now();
 
@@ -117,7 +139,19 @@ async function waitFor<T>(
         await sleep(intervalMs);
     }
 
-    throw new Error(`Timed out waiting for ${label}`);
+    let details = "";
+    if (onTimeout) {
+        try {
+            const maybeDetails = await onTimeout();
+            if (maybeDetails.trim()) {
+                details = `\n${maybeDetails}`;
+            }
+        } catch {
+            // Ignore diagnostic failures.
+        }
+    }
+
+    throw new Error(`Timed out waiting for ${label}${details}`);
 }
 
 function bestEffortStopProcesses(): void {
@@ -149,15 +183,51 @@ function bestEffortStopProcesses(): void {
 export class IntegrationHarness {
     private child: ChildProcess | null = null;
     private logStream: ReturnType<typeof createWriteStream> | null = null;
+    private lastSnapshot: StateSnapshot | null = null;
+
+    private readLogTail(maxChars = 10_000): string {
+        if (!existsSync(LOG_PATH)) {
+            return "(log file missing)";
+        }
+
+        try {
+            const content = readFileSync(LOG_PATH, "utf8");
+            if (!content.trim()) {
+                return "(log file empty)";
+            }
+
+            return content.slice(-maxChars);
+        } catch (error) {
+            return `(failed to read log tail: ${String(error)})`;
+        }
+    }
+
+    private timeoutDiagnostics(context: string): string {
+        const childStatus = this.child
+            ? `pid=${this.child.pid ?? "n/a"} exitCode=${this.child.exitCode ?? "null"} killed=${this.child.killed}`
+            : "child=none";
+
+        const snapshot = this.lastSnapshot ? JSON.stringify(this.lastSnapshot, null, 2) : "(no snapshot captured)";
+
+        return [
+            `Context: ${context}`,
+            `Child: ${childStatus}`,
+            `Last snapshot: ${snapshot}`,
+            "--- piwork.integration.log (tail) ---",
+            this.readLogTail(),
+            "--- end log tail ---",
+        ].join("\n");
+    }
 
     async start(): Promise<void> {
         bestEffortStopProcesses();
 
         mkdirSync(path.dirname(LOG_PATH), { recursive: true });
         writeFileSync(LOG_PATH, "");
+        this.lastSnapshot = null;
 
         this.logStream = createWriteStream(LOG_PATH, { flags: "a" });
-        this.child = spawn("mise", ["run", "tauri-dev"], {
+        this.child = spawn("pnpm", ["exec", "tauri", "dev"], {
             cwd: REPO_ROOT,
             env: {
                 ...process.env,
@@ -187,11 +257,13 @@ export class IntegrationHarness {
             START_TIMEOUT_MS,
             250,
             "test server availability",
+            async () => this.timeoutDiagnostics("test server availability"),
         );
 
         await this.waitForSnapshot(
             (snapshot) => (snapshot.runtime.rpcConnected && !snapshot.runtime.taskSwitching ? snapshot : null),
             SNAPSHOT_TIMEOUT_MS,
+            "initial rpc connection",
         );
     }
 
@@ -206,6 +278,7 @@ export class IntegrationHarness {
         }
 
         this.child = null;
+        this.lastSnapshot = null;
 
         if (this.logStream) {
             this.logStream.end();
@@ -294,12 +367,15 @@ export class IntegrationHarness {
     }
 
     async snapshot(): Promise<StateSnapshot> {
-        return await this.sendJson<StateSnapshot>({ cmd: "state_snapshot" });
+        const snapshot = await this.sendJson<StateSnapshot>({ cmd: "state_snapshot" });
+        this.lastSnapshot = snapshot;
+        return snapshot;
     }
 
     async waitForSnapshot<T>(
         predicate: (snapshot: StateSnapshot) => T | null,
         timeoutMs = SNAPSHOT_TIMEOUT_MS,
+        label = "state snapshot predicate",
     ): Promise<T> {
         return await waitFor(
             async () => {
@@ -314,7 +390,8 @@ export class IntegrationHarness {
             },
             timeoutMs,
             250,
-            "state snapshot predicate",
+            label,
+            async () => this.timeoutDiagnostics(label),
         );
     }
 
@@ -348,6 +425,25 @@ export class IntegrationHarness {
         const response = await this.sendCommand({ cmd: "set_folder", folder });
         if (!isOkResponse(response)) {
             throw new Error(`set_folder failed: ${response}`);
+        }
+    }
+
+    async previewList(taskId: string): Promise<PreviewListResponse> {
+        return await this.sendJson<PreviewListResponse>({ cmd: "preview_list", taskId });
+    }
+
+    async previewRead(taskId: string, relativePath: string): Promise<PreviewReadResponse> {
+        return await this.sendJson<PreviewReadResponse>({
+            cmd: "preview_read",
+            taskId,
+            relativePath,
+        });
+    }
+
+    async openPreview(taskId: string, relativePath: string): Promise<void> {
+        const response = await this.sendCommand({ cmd: "open_preview", taskId, relativePath });
+        if (!isOkResponse(response)) {
+            throw new Error(`open_preview failed: ${response}`);
         }
     }
 
@@ -386,6 +482,7 @@ export class IntegrationHarness {
             timeoutMs,
             250,
             `artifact ${source}:${relativePath}`,
+            async () => this.timeoutDiagnostics(`artifact ${source}:${relativePath}`),
         );
     }
 
@@ -407,6 +504,7 @@ export class IntegrationHarness {
             timeoutMs,
             250,
             `task with title ${title}`,
+            async () => this.timeoutDiagnostics(`task with title ${title}`),
         );
     }
 

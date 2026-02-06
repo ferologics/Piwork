@@ -63,16 +63,14 @@ The regression gate should make these guarantees explicit:
 
 Implemented live canaries (integration):
 
-- `journey-sequential.integration.test.ts`
-- `reopen-cwd.integration.test.ts`
-- `folder-bind-continuity.integration.test.ts`
-- `working-folder-panel-refresh.integration.test.ts`
-- `runtime-mismatch-badge.integration.test.ts`
+- `runtime-steady-state.integration.test.ts` (focused invariants in one live run)
+- `journey-sequential.integration.test.ts` (restart continuity journey)
 
 ## Live integration strategy (hybrid)
 
-- Keep **one sequential journey canary** that covers a realistic end-to-end flow (messages, models, working folder, artifacts, reopen).
-- Keep **a few focused canaries** for brittle invariants so failures are easy to diagnose.
+- Keep exactly **two live runs**:
+  1. a focused steady-state suite (`runtime-steady-state.integration.test.ts`)
+  2. a restart continuity journey (`journey-sequential.integration.test.ts`)
 - Do not rely on a single giant scenario as the only guardrail; it is too hard to debug when it fails.
 
 ## Speed policy

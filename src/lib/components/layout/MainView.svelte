@@ -878,6 +878,15 @@ function buildTestStateSnapshot() {
             error: modelsError,
             selectedModelId,
         },
+        preview: {
+            isOpen: previewSelection.isOpen,
+            taskId: previewSelection.taskId,
+            relativePath: previewSelection.relativePath,
+            source: previewSelection.source,
+            artifactSource: previewSelection.artifactSource,
+            loading: previewLoading,
+            error: previewError,
+        },
         runtimeDebug: {
             activeTaskId: runtimeDebug.activeTaskId,
             currentCwd: runtimeDebug.currentCwd,

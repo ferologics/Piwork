@@ -138,6 +138,39 @@ describe.sequential("sequential journey canary", () => {
         expect(afterBind.conversation.messageCount).toBeGreaterThanOrEqual(withMessage.conversation.messageCount);
         expect(afterBind.ui.quickStartVisible).toBe(false);
 
+        const previewList = await harness.previewList(task.id);
+        expect(previewList.files.length).toBeGreaterThan(0);
+
+        const previewPath = previewList.files[0]?.path ?? null;
+        if (!previewPath) {
+            throw new Error("missing preview path after working-folder bind");
+        }
+
+        await harness.openPreview(task.id, previewPath);
+
+        const previewSnapshot = await harness.waitForSnapshot((snapshot) => {
+            if (snapshot.task.currentTaskId !== task.id) {
+                return null;
+            }
+
+            if (!snapshot.preview.isOpen || snapshot.preview.taskId !== task.id) {
+                return null;
+            }
+
+            if (snapshot.preview.relativePath !== previewPath) {
+                return null;
+            }
+
+            if (snapshot.preview.loading) {
+                return null;
+            }
+
+            return snapshot;
+        }, 90_000);
+
+        expect(previewSnapshot.preview.error).toBe(null);
+        expect(previewSnapshot.preview.source).toBe("preview");
+
         const artifactPath = `${outputsDir}/${artifactFileName}`;
         const writeCommand = `mkdir -p ${shellQuote(outputsDir)} && printf '%s' ${shellQuote(artifactToken)} > ${shellQuote(artifactPath)}`;
 
