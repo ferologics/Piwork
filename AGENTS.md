@@ -34,7 +34,7 @@ mise run test-check-permissions   # verify screenshot permission/visibility
 mise run test-open-preview <task-id> <relative-path>  # open main-pane preview for a file
 mise run test-set-folder /path   # set working folder
 mise run test-set-task <id>      # set active task in UI
-mise run test-set-auth-profile <profile>  # set auth profile + restart runtime
+mise run test-set-auth-profile <profile>  # set auth profile, restart runtime, wait until applied
 mise run test-auth-list [profile]         # inspect auth store entries
 mise run test-auth-set-key <provider> <key> [profile]  # write API key to auth store
 mise run test-auth-delete <provider> [profile]          # delete provider from auth store
