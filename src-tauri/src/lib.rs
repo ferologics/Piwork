@@ -35,14 +35,6 @@ struct RuntimeStatus {
 
 #[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]
-struct RuntimeFlags {
-    runtime_v2_taskd: bool,
-    runtime_v2_sync: bool,
-    mode: String,
-}
-
-#[derive(serde::Serialize)]
-#[serde(rename_all = "camelCase")]
 struct WorkingFolderValidation {
     folder: String,
     workspace_root: String,
@@ -135,38 +127,6 @@ fn check_accel_available() -> Option<bool> {
     }
 
     None
-}
-
-fn parse_bool_env(name: &str) -> Option<bool> {
-    let raw = std::env::var(name).ok()?;
-    let normalized = raw.trim().to_ascii_lowercase();
-
-    match normalized.as_str() {
-        "1" | "true" | "yes" | "on" => Some(true),
-        "0" | "false" | "no" | "off" => Some(false),
-        _ => None,
-    }
-}
-
-fn current_runtime_flags() -> RuntimeFlags {
-    let runtime_v2_taskd = parse_bool_env("PIWORK_RUNTIME_V2_TASKD").unwrap_or(false);
-    let requested_sync = parse_bool_env("PIWORK_RUNTIME_V2_SYNC").unwrap_or(false);
-    let runtime_v2_sync = runtime_v2_taskd && requested_sync;
-
-    RuntimeFlags {
-        runtime_v2_taskd,
-        runtime_v2_sync,
-        mode: if runtime_v2_taskd {
-            "v2_taskd".to_string()
-        } else {
-            "v1".to_string()
-        },
-    }
-}
-
-#[tauri::command]
-fn runtime_flags() -> RuntimeFlags {
-    current_runtime_flags()
 }
 
 fn canonicalize_directory(path: &Path, label: &str) -> Result<PathBuf, String> {
@@ -559,14 +519,8 @@ fn vm_start(
     auth_profile: Option<String>,
 ) -> Result<vm::VmStatusResponse, String> {
     let runtime_dir = runtime_dir(&app)?;
-    let flags = current_runtime_flags();
-
-    let folder_path = if flags.runtime_v2_taskd {
-        if let Some(workspace_root) = resolve_workspace_root_from_env()? {
-            Some(workspace_root)
-        } else {
-            working_folder.as_ref().map(std::path::PathBuf::from)
-        }
+    let folder_path = if let Some(workspace_root) = resolve_workspace_root_from_env()? {
+        Some(workspace_root)
     } else {
         working_folder.as_ref().map(std::path::PathBuf::from)
     };
@@ -586,26 +540,16 @@ fn vm_start(
         .join("auth");
     std::fs::create_dir_all(auth_state_path.join(&selected_auth_profile)).map_err(|error| error.to_string())?;
 
-    let task_state_path = if flags.runtime_v2_taskd {
-        let path = tasks_dir(&app)?;
-        std::fs::create_dir_all(&path).map_err(|error| error.to_string())?;
-        Some(path)
-    } else if let Some(task_id) = task_id.as_deref() {
-        let path = tasks_dir(&app)?.join(task_id);
-        std::fs::create_dir_all(&path).map_err(|error| error.to_string())?;
-        Some(path)
-    } else {
-        None
-    };
+    let task_state_path = tasks_dir(&app)?;
+    std::fs::create_dir_all(&task_state_path).map_err(|error| error.to_string())?;
 
     vm::start(
         &app,
         &state,
         &runtime_dir,
         folder_path.as_deref(),
-        task_state_path.as_deref(),
+        Some(task_state_path.as_path()),
         Some(auth_state_path.as_path()),
-        flags.runtime_v2_taskd,
         task_id.as_deref(),
         Some(selected_auth_profile.as_str()),
     )
@@ -981,7 +925,6 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             dev_log,
             runtime_status,
-            runtime_flags,
             runtime_workspace_root,
             runtime_validate_working_folder,
             task_store_list,

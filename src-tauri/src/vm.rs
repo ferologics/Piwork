@@ -110,7 +110,6 @@ pub fn start(
     working_folder: Option<&Path>,
     task_state_dir: Option<&Path>,
     auth_state_dir: Option<&Path>,
-    runtime_v2_taskd: bool,
     initial_task_id: Option<&str>,
     auth_profile: Option<&str>,
 ) -> Result<VmStatusResponse, String> {
@@ -145,7 +144,6 @@ pub fn start(
         working_folder,
         task_state_dir,
         auth_state_dir,
-        runtime_v2_taskd,
         initial_task_id,
         auth_profile,
     )?;
@@ -263,7 +261,6 @@ fn spawn_qemu(
     working_folder: Option<&Path>,
     task_state_dir: Option<&Path>,
     auth_state_dir: Option<&Path>,
-    runtime_v2_taskd: bool,
     initial_task_id: Option<&str>,
     auth_profile: Option<&str>,
 ) -> Result<Child, String> {
@@ -281,14 +278,6 @@ fn spawn_qemu(
 
     let base_cmdline = manifest.cmdline.as_deref().unwrap_or("quiet console=ttyAMA0");
     let mut cmdline = base_cmdline.to_string();
-
-    if task_state_dir.is_some() && !runtime_v2_taskd {
-        cmdline.push_str(" piwork.session_file=/mnt/taskstate/session.json");
-    }
-
-    if runtime_v2_taskd {
-        cmdline.push_str(" piwork.runtime_mode=taskd");
-    }
 
     if let Some(task_id) = initial_task_id {
         let _ = write!(&mut cmdline, " piwork.task_id={task_id}");

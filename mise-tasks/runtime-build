@@ -247,8 +247,6 @@ TASK_STATE_DIR=/mnt/taskstate
 AUTH_STATE_DIR=/mnt/authstate
 TASK_STATE_MOUNTED=0
 AUTH_STATE_MOUNTED=0
-RUNTIME_MODE="v1"
-SESSION_FILE=""
 SESSIONS_ROOT=""
 INITIAL_TASK_ID=""
 AUTH_PROFILE="default"
@@ -276,12 +274,6 @@ fi
 
 for arg in $(cat /proc/cmdline); do
     case "$arg" in
-        piwork.runtime_mode=taskd)
-            RUNTIME_MODE="taskd"
-            ;;
-        piwork.session_file=*)
-            SESSION_FILE="${arg#piwork.session_file=}"
-            ;;
         piwork.sessions_root=*)
             SESSIONS_ROOT="${arg#piwork.sessions_root=}"
             ;;
@@ -337,14 +329,6 @@ if [ -z "$SESSIONS_ROOT" ]; then
     fi
 fi
 
-if [ -n "$SESSION_FILE" ]; then
-    SESSION_DIR="${SESSION_FILE%/*}"
-    if [ -n "$SESSION_DIR" ] && [ "$SESSION_DIR" != "$SESSION_FILE" ]; then
-        mkdir -p "$SESSION_DIR"
-    fi
-    echo "Session file: $SESSION_FILE"
-fi
-
 if [ "$AUTH_STATE_MOUNTED" = "1" ]; then
     PROFILE_DIR="$AUTH_STATE_DIR/$AUTH_PROFILE"
     if [ -f "$PROFILE_DIR/auth.json" ]; then
@@ -365,27 +349,19 @@ fi
 
 echo "READY"
 
-if [ -x /usr/bin/node ] && [ -f /opt/pi/dist/cli.js ]; then
-    if [ "$RUNTIME_MODE" = "taskd" ] && [ -f /opt/piwork/taskd.js ]; then
-        mkdir -p "$SESSIONS_ROOT"
-        export PIWORK_RPC_PORT="$RPC_PORT"
-        export PIWORK_PI_CLI=/opt/pi/dist/cli.js
-        export PIWORK_TASKD_SESSIONS_ROOT="$SESSIONS_ROOT"
-        [ -n "$INITIAL_TASK_ID" ] && export PIWORK_INITIAL_TASK_ID="$INITIAL_TASK_ID"
+if [ -x /usr/bin/node ] && [ -f /opt/pi/dist/cli.js ] && [ -f /opt/piwork/taskd.js ]; then
+    mkdir -p "$SESSIONS_ROOT"
+    export PIWORK_RPC_PORT="$RPC_PORT"
+    export PIWORK_PI_CLI=/opt/pi/dist/cli.js
+    export PIWORK_TASKD_SESSIONS_ROOT="$SESSIONS_ROOT"
+    [ -n "$INITIAL_TASK_ID" ] && export PIWORK_INITIAL_TASK_ID="$INITIAL_TASK_ID"
 
-        echo "Runtime mode: taskd"
-        echo "Taskd sessions root: $SESSIONS_ROOT"
+    echo "Runtime: taskd"
+    echo "Taskd sessions root: $SESSIONS_ROOT"
 
-        /usr/bin/node /opt/piwork/taskd.js 2>&1 &
-    else
-        echo "Runtime mode: pi rpc"
-        while true; do
-            SESSION_ARGS=""
-            [ -n "$SESSION_FILE" ] && SESSION_ARGS="--session $SESSION_FILE"
-            nc -l -p $RPC_PORT -e /usr/bin/node /opt/pi/dist/cli.js --mode rpc $SESSION_ARGS 2>&1
-            sleep 1
-        done &
-    fi
+    /usr/bin/node /opt/piwork/taskd.js 2>&1 &
+else
+    echo "ERROR: taskd runtime dependencies missing"
 fi
 
 exec /bin/sh -i

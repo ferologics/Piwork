@@ -18,8 +18,8 @@ echo "{\"cmd\":\"set_folder\",\"folder\":\"$FOLDER\"}" | nc -w 2 localhost 19385
 echo "Waiting for folder change..."
 sleep 1
 
-if grep -q "Runtime mode: taskd" "$HOME/Library/Application Support/com.pi.work/vm/qemu.log"; then
-    echo "✓ Folder change requested (v2 taskd mode; no VM restart expected)"
+if grep -q "Runtime: taskd" "$HOME/Library/Application Support/com.pi.work/vm/qemu.log"; then
+    echo "✓ Folder change requested (runtime mode; no VM restart expected)"
     exit 0
 fi
 

@@ -14,7 +14,7 @@ import FolderSelector from "$lib/components/FolderSelector.svelte";
 import QuickStartTiles from "$lib/components/QuickStartTiles.svelte";
 import ExtensionUiDialog from "$lib/components/ExtensionUiDialog.svelte";
 import type { ExtensionUiRequest } from "$lib/components/ExtensionUiDialog.svelte";
-import { RuntimeService, type RuntimeMode, type RuntimeServiceSnapshot } from "$lib/services/runtimeService";
+import { RuntimeService, type RuntimeServiceSnapshot } from "$lib/services/runtimeService";
 import { normalizeAuthProfile } from "$lib/services/authProfile";
 import { previewStore, type PreviewSelection } from "$lib/stores/previewStore";
 
@@ -55,9 +55,6 @@ let currentSessionFile = $state<string | null>(null);
 let workspaceRoot = $state<string | null>(null);
 let authProfile = $state("default");
 let taskSwitching = $state(false);
-let runtimeMode = $state<RuntimeMode>("v1");
-let runtimeV2Taskd = $state(false);
-let runtimeV2Sync = $state(false);
 let unsubscribeActiveTask: (() => void) | null = null;
 
 interface PreviewReadResponse {
@@ -275,9 +272,6 @@ function applyRuntimeSnapshot(snapshot: RuntimeServiceSnapshot) {
     workspaceRoot = snapshot.workspaceRoot;
     authProfile = snapshot.authProfile;
     taskSwitching = snapshot.taskSwitching;
-    runtimeMode = snapshot.mode;
-    runtimeV2Taskd = snapshot.runtimeV2Taskd;
-    runtimeV2Sync = snapshot.runtimeV2Sync;
 }
 
 function getRpcClient() {
@@ -331,8 +325,10 @@ async function handleUiCancel() {
 }
 
 async function sendLogin() {
-    await sendPrompt("/login");
-    pushRpcMessage("[info] Sent /login");
+    const sent = await sendPrompt("/login");
+    if (sent) {
+        pushRpcMessage("[info] Sent /login");
+    }
 }
 
 function ensureModelOption(option: ModelOption) {
@@ -611,8 +607,7 @@ async function initializeRuntimeService() {
         return;
     }
 
-    const flags = await RuntimeService.loadFlags();
-    runtimeService = new RuntimeService(flags, {
+    runtimeService = new RuntimeService({
         onConnected: () => {
             rpcAuthHint = null;
             rpcLoginUrl = null;
@@ -641,7 +636,7 @@ async function initializeRuntimeService() {
     });
 
     unsubscribeRuntimeService = runtimeService.subscribe(applyRuntimeSnapshot);
-    devLog("MainView", `Runtime mode: ${flags.mode} (taskd=${flags.runtimeV2Taskd}, sync=${flags.runtimeV2Sync})`);
+    devLog("MainView", "Runtime initialized");
 }
 
 async function connectRpc() {
@@ -679,11 +674,11 @@ async function disconnectRpc() {
     pendingUiSending = false;
 }
 
-async function sendPrompt(message?: string) {
-    if (!runtimeService) return;
+async function sendPrompt(message?: string): Promise<boolean> {
+    if (!runtimeService) return false;
 
     const content = (message ?? prompt).trim();
-    if (!content) return;
+    if (!content) return false;
 
     // Auto-create task if none active
     if (!currentTaskId) {
@@ -703,7 +698,7 @@ async function sendPrompt(message?: string) {
     });
 
     if (!getRpcClient() || !rpcConnected || taskSwitching) {
-        return;
+        return false;
     }
 
     // Add user message to conversation
@@ -713,8 +708,10 @@ async function sendPrompt(message?: string) {
     try {
         await runtimeService.sendPrompt(content);
         prompt = "";
+        return true;
     } catch (error) {
         devLog("MainView", `Prompt send failed: ${error}`);
+        return false;
     }
 }
 
@@ -796,7 +793,6 @@ async function handleTaskSwitch(newTask: TaskMetadata | null): Promise<void> {
         await runtimeService.handleTaskSwitch(newTask, {
             saveConversationForTask,
             loadConversationForTask,
-            getConversationState: () => conversation,
         });
     } catch (error) {
         devLog("MainView", `Task switch failed: ${error}`);
@@ -811,7 +807,6 @@ async function handleFolderChange(folder: string | null): Promise<void> {
     try {
         await runtimeService.handleFolderChange(folder, {
             persistWorkingFolderForActiveTask,
-            getConversationState: () => conversation,
         });
     } catch (error) {
         devLog("MainView", `Folder change failed: ${error}`);
@@ -1003,7 +998,7 @@ onMount(() => {
                 "TestHarness",
                 `state: task=${currentTaskId ?? "none"} session=${currentSessionFile ?? "none"} folder=${
                     currentWorkingFolder ?? "none"
-                } root=${workspaceRoot ?? "none"} auth=${authProfile} messages=${messageCount} streaming=${hasStreaming} switching=${taskSwitching} mode=${runtimeMode} taskd=${runtimeV2Taskd} sync=${runtimeV2Sync}`,
+                } root=${workspaceRoot ?? "none"} auth=${authProfile} messages=${messageCount} streaming=${hasStreaming} switching=${taskSwitching}`,
             );
         }).then((unlisten) => {
             testDumpStateUnlisten = unlisten;

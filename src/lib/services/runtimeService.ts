@@ -2,28 +2,14 @@ import { invoke } from "@tauri-apps/api/core";
 import { TauriRpcClient } from "$lib/rpc";
 import { devLog } from "$lib/utils/devLog";
 import { normalizeAuthProfile } from "$lib/services/authProfile";
-import type { ContentBlock, ConversationMessage, ConversationState, RpcEvent } from "$lib/rpc";
+import type { RpcEvent } from "$lib/rpc";
 import type { TaskMetadata } from "$lib/types/task";
 
 const POLL_INTERVAL_MS = 100;
 const TASK_SWITCH_TIMEOUT_MS = 5000;
 const RPC_READY_TIMEOUT_MS = 6000;
 const RPC_COMMAND_TIMEOUT_MS = 5000;
-const TASK_STATE_MOUNT_CHECK_TIMEOUT_MS = 1500;
-const SESSION_DIR_CREATE_TIMEOUT_MS = 2000;
-const SESSION_WRITE_TIMEOUT_MS = 5000;
-const SESSION_SWITCH_TIMEOUT_MS = 3000;
 const AUTH_PROFILE_STORAGE_KEY = "piwork:auth-profile";
-
-export const TASK_SESSION_FILE = "/mnt/taskstate/session.json";
-
-export type RuntimeMode = "v1" | "v2_taskd";
-
-export interface RuntimeFlags {
-    runtimeV2Taskd: boolean;
-    runtimeV2Sync: boolean;
-    mode: RuntimeMode;
-}
 
 export interface RuntimeServiceSnapshot {
     rpcConnected: boolean;
@@ -35,9 +21,6 @@ export interface RuntimeServiceSnapshot {
     workspaceRoot: string | null;
     authProfile: string;
     taskSwitching: boolean;
-    mode: RuntimeMode;
-    runtimeV2Taskd: boolean;
-    runtimeV2Sync: boolean;
 }
 
 interface VmStatusResponse {
@@ -88,23 +71,10 @@ interface RuntimeServiceCallbacks {
 interface TaskSwitchDeps {
     saveConversationForTask(taskId: string | null): Promise<void>;
     loadConversationForTask(taskId: string | null): Promise<void>;
-    getConversationState(): ConversationState;
 }
 
 interface FolderChangeDeps {
     persistWorkingFolderForActiveTask(folder: string | null): Promise<void>;
-    getConversationState(): ConversationState;
-}
-
-function normalizeFlags(flags: Partial<RuntimeFlags> | null | undefined): RuntimeFlags {
-    const runtimeV2Taskd = flags?.runtimeV2Taskd === true;
-    const runtimeV2Sync = runtimeV2Taskd && flags?.runtimeV2Sync === true;
-
-    return {
-        runtimeV2Taskd,
-        runtimeV2Sync,
-        mode: runtimeV2Taskd ? "v2_taskd" : "v1",
-    };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -135,113 +105,6 @@ function inferProviderFromModel(modelId: string | null | undefined): string | nu
     return null;
 }
 
-function shellQuote(value: string): string {
-    return `'${value.replace(/'/g, `'\\''`)}'`;
-}
-
-function contentBlockToSessionText(block: ContentBlock): string | null {
-    switch (block.type) {
-        case "text": {
-            const text = block.text.trim();
-            return text.length > 0 ? text : null;
-        }
-        case "tool_call": {
-            const name = (block.name || "tool").trim();
-            const input = block.input.trim();
-            return input.length > 0 ? `[tool:${name}] ${input}` : `[tool:${name}]`;
-        }
-        case "tool_result": {
-            const output = block.output.trim();
-            if (output.length === 0) {
-                return null;
-            }
-            return block.isError ? `[tool-error] ${output}` : output;
-        }
-        default:
-            return null;
-    }
-}
-
-function conversationToSessionJsonl(taskId: string, messages: ConversationMessage[]): string {
-    const now = new Date().toISOString();
-    const lines: string[] = [
-        JSON.stringify({
-            type: "session",
-            version: 3,
-            id: taskId,
-            timestamp: now,
-            cwd: "/",
-        }),
-    ];
-
-    let parentId: string | null = null;
-
-    for (const message of messages) {
-        if (message.role !== "user") {
-            continue;
-        }
-
-        const text = message.blocks
-            .map(contentBlockToSessionText)
-            .filter((part): part is string => Boolean(part))
-            .join("\n\n")
-            .trim();
-
-        if (!text) {
-            continue;
-        }
-
-        const entryId = crypto.randomUUID().replaceAll("-", "").slice(0, 8);
-        lines.push(
-            JSON.stringify({
-                type: "message",
-                id: entryId,
-                parentId,
-                timestamp: new Date().toISOString(),
-                message: {
-                    role: "user",
-                    content: [{ type: "text", text }],
-                    timestamp: Date.now(),
-                },
-            }),
-        );
-
-        parentId = entryId;
-    }
-
-    return `${lines.join("\n")}\n`;
-}
-
-function rpcBashExitCode(response: Record<string, unknown>): number {
-    if (response.type !== "response" || response.command !== "bash") {
-        return 0;
-    }
-
-    const data = typeof response.data === "object" && response.data ? (response.data as Record<string, unknown>) : null;
-    return typeof data?.exitCode === "number" ? data.exitCode : 0;
-}
-
-function ensureRpcCommandSuccess(response: Record<string, unknown>, label: string) {
-    if (response.type !== "response") {
-        return;
-    }
-
-    if (response.success === false) {
-        const error = typeof response.error === "string" ? response.error : `${label} failed`;
-        throw new Error(error);
-    }
-
-    if (response.command === "bash") {
-        const exitCode = rpcBashExitCode(response);
-        if (exitCode !== 0) {
-            const data =
-                typeof response.data === "object" && response.data ? (response.data as Record<string, unknown>) : null;
-            const output = typeof data?.output === "string" ? data.output.trim() : "";
-            throw new Error(output || `${label} failed with exit code ${exitCode}`);
-        }
-    }
-}
-
 export class RuntimeService {
     private callbacks: RuntimeServiceCallbacks;
     private snapshot: RuntimeServiceSnapshot;
@@ -252,8 +115,7 @@ export class RuntimeService {
     private lastTaskReadyAt = new Map<string, number>();
     private workspaceRootInitialized = false;
 
-    constructor(flags: RuntimeFlags, callbacks: RuntimeServiceCallbacks = {}) {
-        const normalized = normalizeFlags(flags);
+    constructor(callbacks: RuntimeServiceCallbacks = {}) {
         this.callbacks = callbacks;
         this.snapshot = {
             rpcConnected: false,
@@ -265,19 +127,7 @@ export class RuntimeService {
             workspaceRoot: null,
             authProfile: "default",
             taskSwitching: false,
-            mode: normalized.mode,
-            runtimeV2Taskd: normalized.runtimeV2Taskd,
-            runtimeV2Sync: normalized.runtimeV2Sync,
         };
-    }
-
-    static async loadFlags(): Promise<RuntimeFlags> {
-        try {
-            const flags = await invoke<RuntimeFlags>("runtime_flags");
-            return normalizeFlags(flags);
-        } catch {
-            return normalizeFlags(null);
-        }
     }
 
     static async refreshVmLogPath(): Promise<string | null> {
@@ -319,26 +169,20 @@ export class RuntimeService {
             throw new Error("Prompt message is empty");
         }
 
-        if (this.snapshot.mode === "v2_taskd") {
-            await this.waitForRpcReady();
-            const promptId = crypto.randomUUID();
-            const result = await this.sendTaskdCommand(
-                "prompt",
-                {
-                    message: content,
-                    promptId,
-                },
-                RPC_COMMAND_TIMEOUT_MS,
-            );
+        await this.waitForRpcReady();
+        const promptId = crypto.randomUUID();
+        const result = await this.sendTaskdCommand(
+            "prompt",
+            {
+                message: content,
+                promptId,
+            },
+            RPC_COMMAND_TIMEOUT_MS,
+        );
 
-            if (result.accepted !== true) {
-                throw new TaskdError("TASK_NOT_READY", "Prompt was not accepted", true);
-            }
-
-            return;
+        if (result.accepted !== true) {
+            throw new TaskdError("TASK_NOT_READY", "Prompt was not accepted", true);
         }
-
-        await this.send({ type: "prompt", message: content });
     }
 
     async connectRpc() {
@@ -360,7 +204,7 @@ export class RuntimeService {
                     this.snapshot.currentTaskId ?? "none"
                 }`,
             );
-            await this.connectForMode(client);
+            await this.connectRuntime(client);
             devLog("RuntimeService", "client.connect returned");
         } catch (error) {
             devLog("RuntimeService", `connectRpc error: ${error}`);
@@ -399,31 +243,16 @@ export class RuntimeService {
     }
 
     async handleTaskSwitch(newTask: TaskMetadata | null, deps: TaskSwitchDeps): Promise<void> {
-        if (this.snapshot.mode === "v2_taskd") {
-            await this.handleTaskSwitchV2Taskd(newTask, deps);
-            return;
-        }
-
-        await this.handleTaskSwitchV1(newTask, deps);
+        await this.handleTaskSwitchRuntime(newTask, deps);
     }
 
     async handleFolderChange(folder: string | null, deps: FolderChangeDeps): Promise<void> {
-        if (this.snapshot.mode === "v2_taskd") {
-            await this.handleFolderChangeV2Taskd(folder, deps);
-            return;
-        }
-
-        await this.handleFolderChangeV1(folder, deps);
+        await this.handleFolderChangeRuntime(folder, deps);
     }
 
-    private async connectForMode(client: TauriRpcClient) {
-        let folderForConnect = this.snapshot.currentWorkingFolder;
-
-        if (this.snapshot.mode === "v2_taskd") {
-            devLog("RuntimeService", "runtime_v2_taskd enabled");
-            await this.ensureWorkspaceRootInitialized();
-            folderForConnect = this.snapshot.workspaceRoot ?? this.snapshot.currentWorkingFolder;
-        }
+    private async connectRuntime(client: TauriRpcClient) {
+        await this.ensureWorkspaceRootInitialized();
+        const folderForConnect = this.snapshot.workspaceRoot ?? this.snapshot.currentWorkingFolder;
 
         const authProfile = this.getAuthProfileForVmStart();
         if (authProfile !== this.snapshot.authProfile) {
@@ -493,55 +322,15 @@ export class RuntimeService {
         };
     }
 
-    private async handleTaskSwitchV1(newTask: TaskMetadata | null, deps: TaskSwitchDeps) {
+    private async handleTaskSwitchRuntime(newTask: TaskMetadata | null, deps: TaskSwitchDeps) {
         const newTaskId = newTask?.id ?? null;
         const oldTaskId = this.snapshot.currentTaskId;
-        const previousFolder = this.snapshot.currentWorkingFolder;
 
         if (newTaskId === oldTaskId) {
             return;
         }
 
         devLog("RuntimeService", `Task switch: ${oldTaskId} -> ${newTaskId}`);
-
-        this.patch({ taskSwitching: true });
-
-        try {
-            await deps.saveConversationForTask(oldTaskId);
-            await deps.loadConversationForTask(newTaskId);
-
-            const nextFolder = newTask?.workingFolder ?? null;
-            this.patch({
-                currentTaskId: newTaskId,
-                currentWorkingFolder: nextFolder,
-                currentSessionFile: newTaskId ? TASK_SESSION_FILE : null,
-            });
-
-            if (!newTaskId || !this.rpcClient) {
-                return;
-            }
-
-            const folderChanged = nextFolder !== previousFolder;
-            const reason = folderChanged
-                ? "Restarting VM for task switch (folder change)..."
-                : "Restarting VM for task switch...";
-
-            await this.restartVm(reason);
-            await this.ensureTaskSessionReady(newTaskId, TASK_SESSION_FILE, deps.getConversationState());
-        } finally {
-            this.patch({ taskSwitching: false });
-        }
-    }
-
-    private async handleTaskSwitchV2Taskd(newTask: TaskMetadata | null, deps: TaskSwitchDeps) {
-        const newTaskId = newTask?.id ?? null;
-        const oldTaskId = this.snapshot.currentTaskId;
-
-        if (newTaskId === oldTaskId) {
-            return;
-        }
-
-        devLog("RuntimeService", `Task switch (v2): ${oldTaskId} -> ${newTaskId}`);
         this.patch({ taskSwitching: true, rpcError: null });
 
         try {
@@ -573,43 +362,14 @@ export class RuntimeService {
         }
     }
 
-    private async handleFolderChangeV1(folder: string | null, deps: FolderChangeDeps) {
+    private async handleFolderChangeRuntime(folder: string | null, deps: FolderChangeDeps) {
         let nextFolder = folder;
         if (nextFolder) {
             const validated = await this.validateWorkingFolder(nextFolder);
             nextFolder = validated.folder;
         }
 
-        this.patch({
-            currentWorkingFolder: nextFolder,
-            taskSwitching: true,
-        });
-        devLog("RuntimeService", `Working folder changed: ${nextFolder}`);
-
-        try {
-            await deps.persistWorkingFolderForActiveTask(nextFolder);
-            await this.restartVm("Restarting VM with new folder...");
-
-            if (this.snapshot.currentTaskId) {
-                await this.ensureTaskSessionReady(
-                    this.snapshot.currentTaskId,
-                    TASK_SESSION_FILE,
-                    deps.getConversationState(),
-                );
-            }
-        } finally {
-            this.patch({ taskSwitching: false });
-        }
-    }
-
-    private async handleFolderChangeV2Taskd(folder: string | null, deps: FolderChangeDeps) {
-        let nextFolder = folder;
-        if (nextFolder) {
-            const validated = await this.validateWorkingFolder(nextFolder);
-            nextFolder = validated.folder;
-        }
-
-        devLog("RuntimeService", `Working folder changed (v2 metadata only): ${nextFolder}`);
+        devLog("RuntimeService", `Working folder changed (metadata only): ${nextFolder}`);
 
         this.patch({ currentWorkingFolder: nextFolder });
         await deps.persistWorkingFolderForActiveTask(nextFolder);
@@ -918,92 +678,6 @@ export class RuntimeService {
         await waitForReady;
     }
 
-    private async isTaskStateMounted() {
-        const response = await this.sendRpcCommandWithResponse(
-            {
-                type: "bash",
-                command: "grep -F ' /mnt/taskstate ' /proc/mounts >/dev/null",
-            },
-            TASK_STATE_MOUNT_CHECK_TIMEOUT_MS,
-        );
-
-        if (response.type !== "response" || response.command !== "bash") {
-            return false;
-        }
-
-        return rpcBashExitCode(response) === 0;
-    }
-
-    private async restoreTaskSessionInVm(taskId: string, sessionPath: string, state: ConversationState) {
-        if (!this.rpcClient || !this.snapshot.rpcConnected) {
-            return;
-        }
-
-        const slashIndex = sessionPath.lastIndexOf("/");
-        const sessionDir = slashIndex >= 0 ? sessionPath.slice(0, slashIndex) : "/tmp/piwork/sessions";
-
-        const mkdirResponse = await this.sendRpcCommandWithResponse(
-            {
-                type: "bash",
-                command: `mkdir -p ${shellQuote(sessionDir)}`,
-            },
-            SESSION_DIR_CREATE_TIMEOUT_MS,
-        );
-        ensureRpcCommandSuccess(mkdirResponse, "mkdir session dir");
-
-        if (state.messages.length > 0) {
-            const sessionJsonl = conversationToSessionJsonl(taskId, state.messages);
-
-            let delimiter = `__PIWORK_SESSION_${crypto.randomUUID().replaceAll("-", "_")}__`;
-            while (sessionJsonl.includes(delimiter)) {
-                delimiter = `__PIWORK_SESSION_${crypto.randomUUID().replaceAll("-", "_")}__`;
-            }
-
-            const writeResponse = await this.sendRpcCommandWithResponse(
-                {
-                    type: "bash",
-                    command: `cat > ${shellQuote(sessionPath)} <<'${delimiter}'\n${sessionJsonl}${delimiter}\n`,
-                },
-                SESSION_WRITE_TIMEOUT_MS,
-            );
-            ensureRpcCommandSuccess(writeResponse, "write session file");
-            devLog("RuntimeService", `Hydrated VM session for task ${taskId}`);
-        }
-
-        const switchResponse = await this.sendRpcCommandWithResponse(
-            {
-                type: "switch_session",
-                sessionPath,
-            },
-            SESSION_SWITCH_TIMEOUT_MS,
-        );
-        ensureRpcCommandSuccess(switchResponse, "switch_session");
-        devLog("RuntimeService", `Switched RPC session to ${sessionPath}`);
-
-        this.callbacks.onStateRefreshRequested?.();
-    }
-
-    private async ensureTaskSessionReady(taskId: string, sessionPath: string, state: ConversationState) {
-        await this.waitForRpcReady().catch(() => undefined);
-        if (!this.rpcClient || !this.snapshot.rpcConnected) {
-            return;
-        }
-
-        try {
-            const mounted = await this.isTaskStateMounted();
-            if (mounted) {
-                devLog("RuntimeService", "Task state mount detected; using persisted session file");
-                this.callbacks.onStateRefreshRequested?.();
-                return;
-            }
-
-            devLog("RuntimeService", "Task state mount missing; hydrating session from host transcript");
-            await this.restoreTaskSessionInVm(taskId, sessionPath, state);
-        } catch (error) {
-            devLog("RuntimeService", `Failed to prepare task session: ${error}`);
-        }
-    }
-
     private async waitForCondition(condition: () => boolean, timeoutMs: number, timeoutMessage: string): Promise<void> {
         if (condition()) {
             return;
@@ -1024,17 +698,5 @@ export class RuntimeService {
                 }
             }, POLL_INTERVAL_MS);
         });
-    }
-
-    private async restartVm(reason: string) {
-        if (!this.rpcClient) {
-            return;
-        }
-
-        devLog("RuntimeService", reason);
-        this.patch({ rpcConnected: false });
-        await this.rpcClient.stopVm();
-        this.rpcClient = null;
-        await this.connectRpc();
     }
 }

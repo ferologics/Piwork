@@ -27,7 +27,7 @@ if ! mise run test-check-permissions; then
 fi
 
 echo "[path-i-lite] starting app with scoped workspace root"
-PIWORK_RUNTIME_V2_TASKD=1 PIWORK_WORKSPACE_ROOT="$WORKSPACE_ROOT" mise run test-start >/dev/null
+PIWORK_WORKSPACE_ROOT="$WORKSPACE_ROOT" mise run test-start >/dev/null
 
 mise run test-delete-tasks >/dev/null
 sleep 1
