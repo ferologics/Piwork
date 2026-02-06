@@ -36,8 +36,10 @@ Pack includes (current dev path):
 3. Init script mounts:
    - `/mnt/workdir` (workspace mount)
    - `/mnt/taskstate` (task state mount)
-4. In `v2_taskd` mode, init starts `taskd`.
-5. Host waits for `READY`, then connects RPC on TCP `19384`.
+   - `/mnt/authstate` (host auth profiles)
+4. Init selects auth profile (`PI_CODING_AGENT_DIR`) from mounted auth state when available, with baked auth as fallback.
+5. In `v2_taskd` mode, init starts `taskd`.
+6. Host waits for `READY`, then connects RPC on TCP `19384`.
 
 ## Transport (current)
 
@@ -48,7 +50,9 @@ Pack includes (current dev path):
 
 The dev runtime now injects required 9p modules from `linux-virt` into initramfs (`netfs`, `9pnet`, `9pnet_virtio`, `9p`) and loads them during init before mount attempts.
 
-## Auth bake-in (dev)
+## Auth bake-in (dev fallback)
+
+Mounted host auth state is preferred when available. Baked auth remains a fallback bootstrap path.
 
 Supported inputs for runtime build:
 

@@ -443,9 +443,9 @@ onDestroy(() => {
             </div>
 
             <div class="mt-3 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
-                Settings/auth UI is experimental and untested. Recommended path: rebuild the runtime with
-                <span class="font-mono">mise run runtime-build-auth</span> (optionally with
-                <span class="font-mono">PIWORK_AUTH_PATH=/path/to/auth.json</span>).
+                Settings/auth UI is experimental. Changes are stored on host and mounted into the VM by profile;
+                restart runtime after updates. Fallback path: <span class="font-mono">mise run runtime-build-auth</span>
+                (optionally with <span class="font-mono">PIWORK_AUTH_PATH=/path/to/auth.json</span>).
             </div>
 
             <div class="mt-6 space-y-4">

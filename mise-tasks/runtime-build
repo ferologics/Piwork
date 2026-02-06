@@ -244,11 +244,14 @@ export PI_PACKAGE_DIR=/opt/pi
 RPC_PORT=19384
 WORKDIR=/mnt/workdir
 TASK_STATE_DIR=/mnt/taskstate
+AUTH_STATE_DIR=/mnt/authstate
 TASK_STATE_MOUNTED=0
+AUTH_STATE_MOUNTED=0
 RUNTIME_MODE="v1"
 SESSION_FILE=""
 SESSIONS_ROOT=""
 INITIAL_TASK_ID=""
+AUTH_PROFILE="default"
 
 mount -t proc proc /proc
 mount -t sysfs sysfs /sys
@@ -285,6 +288,9 @@ for arg in $(cat /proc/cmdline); do
         piwork.task_id=*)
             INITIAL_TASK_ID="${arg#piwork.task_id=}"
             ;;
+        piwork.auth_profile=*)
+            AUTH_PROFILE="${arg#piwork.auth_profile=}"
+            ;;
     esac
 done
 
@@ -314,6 +320,15 @@ else
     echo "No task state mounted"
 fi
 
+# Mount auth state folder if available (9p virtio share)
+mkdir -p "$AUTH_STATE_DIR"
+if mount -t 9p -o trans=virtio,version=9p2000.L authstate "$AUTH_STATE_DIR"; then
+    AUTH_STATE_MOUNTED=1
+    echo "Mounted auth state at $AUTH_STATE_DIR"
+else
+    echo "No auth state mounted"
+fi
+
 if [ -z "$SESSIONS_ROOT" ]; then
     if [ "$TASK_STATE_MOUNTED" = "1" ]; then
         SESSIONS_ROOT="$TASK_STATE_DIR/sessions"
@@ -330,7 +345,22 @@ if [ -n "$SESSION_FILE" ]; then
     echo "Session file: $SESSION_FILE"
 fi
 
-[ -f /opt/pi-agent/auth.json ] && export PI_CODING_AGENT_DIR=/opt/pi-agent
+if [ "$AUTH_STATE_MOUNTED" = "1" ]; then
+    PROFILE_DIR="$AUTH_STATE_DIR/$AUTH_PROFILE"
+    if [ -f "$PROFILE_DIR/auth.json" ]; then
+        export PI_CODING_AGENT_DIR="$PROFILE_DIR"
+        echo "Using mounted auth profile: $AUTH_PROFILE"
+    elif [ -f "$AUTH_STATE_DIR/default/auth.json" ]; then
+        export PI_CODING_AGENT_DIR="$AUTH_STATE_DIR/default"
+        echo "Using mounted auth profile: default"
+    fi
+fi
+
+if [ -z "${PI_CODING_AGENT_DIR:-}" ] && [ -f /opt/pi-agent/auth.json ]; then
+    export PI_CODING_AGENT_DIR=/opt/pi-agent
+    echo "Using baked auth at /opt/pi-agent"
+fi
+
 [ -f /opt/pi-agent/env.sh ] && . /opt/pi-agent/env.sh
 
 echo "READY"

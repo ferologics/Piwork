@@ -6,14 +6,15 @@ Let users authenticate once and reuse provider credentials across tasks. Support
 
 ## Principles
 
-- Store credentials on the **host**, not inside the VM.
-- Sync credentials into the VM at task start.
+- Store credentials on the **host**, not inside the VM image by default.
+- Mount host auth state into the VM on boot and select a profile for `PI_CODING_AGENT_DIR`.
 - Support **multiple profiles** (personal / work).
 
 ## Storage
 
 - Host stores `auth.json` per profile (`app_data/auth/<profile>/auth.json`).
-- Runtime can bake credentials into the VM image at build time (`/opt/pi-agent/auth.json`) for dev bootstrap.
+- VM mounts host auth root at `/mnt/authstate` and prefers the selected profile directory (`/mnt/authstate/<profile>`).
+- Runtime can still bake credentials into the VM image at build time (`/opt/pi-agent/auth.json`) as fallback.
 - `auth.json` format matches pi’s standard file.
 - **No auth files are committed** (secrets remain local).
 
@@ -29,7 +30,8 @@ Let users authenticate once and reuse provider credentials across tasks. Support
 
 - Settings modal lets you save API keys to `app_data/auth/<profile>/auth.json` via Tauri commands.
 - Profiles are stored in localStorage (`piwork:auth-profile`, `piwork:auth-profiles`).
-- Recommended runtime bootstrap path is `mise run runtime-build-auth` (optionally `PIWORK_AUTH_PATH=/path/to/auth.json`).
+- Runtime reads mounted host auth profile on VM boot (restart runtime after auth/profile updates).
+- Recommended bootstrap fallback is `mise run runtime-build-auth` (optionally `PIWORK_AUTH_PATH=/path/to/auth.json`).
 - In-app auth/profile UI remains explicitly experimental.
 
 **Phase 2 (full login UI):**
@@ -71,7 +73,8 @@ Let users authenticate once and reuse provider credentials across tasks. Support
 ### Failure Handling
 
 - Display auth banner with the error message.
-- Dev shortcut: rebuild runtime with `mise run runtime-build-auth` (optionally set `PIWORK_AUTH_PATH=...`).
+- Primary fix path: import/set auth in Settings and restart runtime.
+- Fallback dev shortcut: rebuild runtime with `mise run runtime-build-auth` (optionally set `PIWORK_AUTH_PATH=...`).
 
 ## Subscription Login (OAuth)
 

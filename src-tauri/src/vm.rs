@@ -102,14 +102,17 @@ pub fn status(state: &VmState) -> VmStatusResponse {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn start(
     app: &AppHandle,
     state: &VmState,
     runtime_dir: &Path,
     working_folder: Option<&Path>,
     task_state_dir: Option<&Path>,
+    auth_state_dir: Option<&Path>,
     runtime_v2_taskd: bool,
     initial_task_id: Option<&str>,
+    auth_profile: Option<&str>,
 ) -> Result<VmStatusResponse, String> {
     eprintln!("[rust:vm] start called");
     let mut inner = state.inner.lock().unwrap();
@@ -141,8 +144,10 @@ pub fn start(
         &log_path,
         working_folder,
         task_state_dir,
+        auth_state_dir,
         runtime_v2_taskd,
         initial_task_id,
+        auth_profile,
     )?;
     eprintln!("[rust:vm] qemu spawned");
 
@@ -250,14 +255,17 @@ fn attach_9p_mount(command: &mut Command, id: &str, mount_tag: &str, path: &Path
         .arg(format!("virtio-9p-pci,fsdev={id},mount_tag={mount_tag}"));
 }
 
+#[allow(clippy::too_many_arguments)]
 fn spawn_qemu(
     manifest: &RuntimeManifest,
     runtime_dir: &Path,
     log_path: &Path,
     working_folder: Option<&Path>,
     task_state_dir: Option<&Path>,
+    auth_state_dir: Option<&Path>,
     runtime_v2_taskd: bool,
     initial_task_id: Option<&str>,
+    auth_profile: Option<&str>,
 ) -> Result<Child, String> {
     let qemu_binary = resolve_qemu_binary(manifest, runtime_dir)?;
 
@@ -284,6 +292,10 @@ fn spawn_qemu(
 
     if let Some(task_id) = initial_task_id {
         let _ = write!(&mut cmdline, " piwork.task_id={task_id}");
+    }
+
+    if let Some(profile) = auth_profile {
+        let _ = write!(&mut cmdline, " piwork.auth_profile={profile}");
     }
 
     // Open log file for serial output
@@ -322,6 +334,11 @@ fn spawn_qemu(
     // Task state mount via virtio-9p
     if let Some(task_state) = task_state_dir {
         attach_9p_mount(&mut command, "taskstate", "taskstate", task_state, "task state dir");
+    }
+
+    // Auth state mount via virtio-9p
+    if let Some(auth_state) = auth_state_dir {
+        attach_9p_mount(&mut command, "authstate", "authstate", auth_state, "auth state dir");
     }
 
     command

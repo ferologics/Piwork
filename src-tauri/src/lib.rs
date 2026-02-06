@@ -531,6 +531,10 @@ fn is_valid_task_id(task_id: &str) -> bool {
     !task_id.is_empty() && !task_id.contains('/') && !task_id.contains('\\') && !task_id.contains("..")
 }
 
+fn is_valid_auth_profile(profile: &str) -> bool {
+    !profile.is_empty() && !profile.contains('/') && !profile.contains('\\') && !profile.contains("..")
+}
+
 #[tauri::command]
 #[allow(clippy::needless_pass_by_value)]
 fn vm_start(
@@ -538,6 +542,7 @@ fn vm_start(
     state: tauri::State<vm::VmState>,
     working_folder: Option<String>,
     task_id: Option<String>,
+    auth_profile: Option<String>,
 ) -> Result<vm::VmStatusResponse, String> {
     let runtime_dir = runtime_dir(&app)?;
     let flags = current_runtime_flags();
@@ -558,6 +563,23 @@ fn vm_start(
         }
     }
 
+    let selected_auth_profile = auth_profile
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or("default");
+
+    if !is_valid_auth_profile(selected_auth_profile) {
+        return Err("Invalid auth profile".to_string());
+    }
+
+    let auth_state_path = app
+        .path()
+        .app_data_dir()
+        .map_err(|error| error.to_string())?
+        .join("auth");
+    std::fs::create_dir_all(auth_state_path.join(selected_auth_profile)).map_err(|error| error.to_string())?;
+
     let task_state_path = if flags.runtime_v2_taskd {
         let path = tasks_dir(&app)?;
         std::fs::create_dir_all(&path).map_err(|error| error.to_string())?;
@@ -576,8 +598,10 @@ fn vm_start(
         &runtime_dir,
         folder_path.as_deref(),
         task_state_path.as_deref(),
+        Some(auth_state_path.as_path()),
         flags.runtime_v2_taskd,
         task_id.as_deref(),
+        Some(selected_auth_profile),
     )
 }
 

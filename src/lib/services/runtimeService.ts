@@ -421,7 +421,23 @@ export class RuntimeService {
             folderForConnect = this.snapshot.workspaceRoot ?? this.snapshot.currentWorkingFolder;
         }
 
-        await client.connect(folderForConnect, this.snapshot.currentTaskId);
+        await client.connect(folderForConnect, this.snapshot.currentTaskId, this.getAuthProfileForVmStart());
+    }
+
+    private getAuthProfileForVmStart(): string {
+        const key = "piwork:auth-profile";
+
+        try {
+            const stored = localStorage.getItem(key);
+            const normalized = stored?.trim();
+            if (normalized) {
+                return normalized;
+            }
+        } catch {
+            // Ignore storage access issues and fall back to default profile.
+        }
+
+        return "default";
     }
 
     private async ensureWorkspaceRootInitialized() {

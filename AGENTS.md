@@ -89,7 +89,8 @@ These let the AI test changes without human interaction:
 
 Auth options (dev):
 
-- `PIWORK_COPY_AUTH=1` / `PIWORK_AUTH_PATH=...` to bake `auth.json`
+- Host auth profiles are mounted into VM at `/mnt/authstate` (selected via `piwork:auth-profile`, default `default`)
+- `PIWORK_COPY_AUTH=1` / `PIWORK_AUTH_PATH=...` to bake `auth.json` as fallback
 - `ANTHROPIC_OAUTH_TOKEN` baked into VM env; set `PIWORK_AUTH_MODE=env` to skip auth.json
 
 **Requires**: 2GB RAM (initramfs unpacks to tmpfs)

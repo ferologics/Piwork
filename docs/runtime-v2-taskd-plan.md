@@ -370,6 +370,7 @@ Recent completions:
 - ✅ UI copy aligned to scoped local mode messaging (Context panel).
 - ✅ VM ready-event ordering fixed to avoid early RPC race on task creation/switch (`src-tauri/src/vm.rs` now emits `ready` only after TCP RPC is connected).
   - Evidence captured with `test-dump-state`, `test-screenshot ready-event-race`, and log checks (no `VM not running` during task create/switch).
+- ✅ Host auth profile state is now mounted into VM (`/mnt/authstate`) and selected on boot (`piwork.auth_profile`), with baked auth as fallback.
 
 ## Immediate next actions
 
