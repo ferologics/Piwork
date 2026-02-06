@@ -748,6 +748,7 @@ fn sanitize_test_server_value(value: &serde_json::Value) -> serde_json::Value {
 /// - `{"cmd":"set_folder","folder":"/path"}` - changes working folder
 /// - `{"cmd":"set_task","taskId":"..."}` - selects active task
 /// - `{"cmd":"set_auth_profile","profile":"default"}` - switches auth profile and restarts runtime in UI
+/// - `{"cmd":"send_login"}` - triggers UI /login flow
 /// - `{"cmd":"auth_list","profile":"default"}` - returns auth store summary JSON
 /// - `{"cmd":"auth_set_api_key","provider":"anthropic","key":"...","profile":"default"}` - writes API key to auth store
 /// - `{"cmd":"auth_delete","provider":"anthropic","profile":"default"}` - deletes provider from auth store
@@ -823,6 +824,12 @@ fn start_test_server(app_handle: tauri::AppHandle) {
                             let profile = json.get("profile").and_then(|v| v.as_str());
                             eprintln!("[test-server] emitting test_set_auth_profile: {profile:?}");
                             let _ = app.emit("test_set_auth_profile", profile);
+                            let _ = stream.write_all(b"OK\n");
+                        }
+                        "send_login" => {
+                            // Emit event to frontend to trigger /login flow in UI
+                            eprintln!("[test-server] emitting test_send_login");
+                            let _ = app.emit("test_send_login", ());
                             let _ = stream.write_all(b"OK\n");
                         }
                         "auth_list" => {

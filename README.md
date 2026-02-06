@@ -43,6 +43,7 @@ mise run test-start
 mise run test-create-task "Title" /path/to/folder
 mise run test-set-task <task-id>
 mise run test-set-auth-profile <profile>  # waits until profile is applied (invalid names normalize to default)
+mise run test-send-login                 # trigger /login via UI path
 mise run test-auth-list [profile]
 mise run test-auth-set-key <provider> <key> [profile]
 mise run test-auth-delete <provider> [profile]

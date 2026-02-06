@@ -331,8 +331,7 @@ async function handleUiCancel() {
 }
 
 async function sendLogin() {
-    if (!runtimeService) return;
-    await runtimeService.send({ type: "prompt", message: "/login" });
+    await sendPrompt("/login");
     pushRpcMessage("[info] Sent /login");
 }
 
@@ -727,6 +726,7 @@ let testDeleteAllTasksUnlisten: (() => void) | null = null;
 let testDumpStateUnlisten: (() => void) | null = null;
 let testOpenPreviewUnlisten: (() => void) | null = null;
 let testSetAuthProfileUnlisten: (() => void) | null = null;
+let testSendLoginUnlisten: (() => void) | null = null;
 
 async function saveConversationForTask(taskId: string | null): Promise<void> {
     if (!taskId || messageAccumulator.getState().messages.length === 0) {
@@ -969,6 +969,13 @@ onMount(() => {
             testSetAuthProfileUnlisten = unlisten;
         });
 
+        listen("test_send_login", () => {
+            devLog("TestHarness", "received test_send_login");
+            void sendLogin();
+        }).then((unlisten) => {
+            testSendLoginUnlisten = unlisten;
+        });
+
         listen<{ title?: string | null; workingFolder?: string | null }>("test_create_task", (event) => {
             const title = event.payload?.title ?? "New Task";
             const folder = event.payload?.workingFolder ?? null;
@@ -1029,6 +1036,7 @@ onDestroy(() => {
     testFolderUnlisten?.();
     testTaskUnlisten?.();
     testSetAuthProfileUnlisten?.();
+    testSendLoginUnlisten?.();
     testCreateTaskUnlisten?.();
     testDeleteAllTasksUnlisten?.();
     testDumpStateUnlisten?.();

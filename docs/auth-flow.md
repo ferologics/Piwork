@@ -36,6 +36,7 @@ Let users authenticate once and reuse provider credentials across tasks. Support
 - Mount behavior smoke checks:
   - `scripts/harness/auth-profile-mount-smoke.sh`
   - `scripts/harness/auth-profile-switch-smoke.sh`
+- Harness primitive `mise run test-send-login` triggers the same UI `/login` path as the auth banner button.
 
 **Phase 2 (full login UI):**
 

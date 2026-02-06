@@ -38,6 +38,7 @@
 
 - [ ] **Login/auth**: Test OAuth flow + API key entry (host auth profiles are mounted into VM; end-to-end UX still unvalidated)
   - [x] Harness coverage for auth store primitives + profile switch/mount behavior
+  - [x] Added `test-send-login` primitive that triggers real UI `/login` path
   - [ ] OAuth `/login` end-to-end validation in Piwork UI
 - [ ] **Runtime download**: First-run pack download + updates (non-dev flow)
 - [ ] **Bundle pi**: Include pi in runtime pack instead of copying from global npm

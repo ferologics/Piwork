@@ -23,6 +23,7 @@ Primitive tasks (in `mise-tasks/`):
 - `test-set-folder`
 - `test-set-task`
 - `test-set-auth-profile` (waits until profile is applied; unsafe profile names normalize to `default`)
+- `test-send-login`
 - `test-auth-list`
 - `test-auth-set-key`
 - `test-auth-delete`
