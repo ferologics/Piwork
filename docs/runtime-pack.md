@@ -4,7 +4,7 @@
 
 This doc describes the **current dev/runtime-pack model** used by piwork.
 
-Authoritative runtime rollout status lives in `runtime-v2-taskd-plan.md`.
+Authoritative runtime rollout status lives in `runtime-taskd-plan.md`.
 
 ## Goal
 
@@ -38,7 +38,7 @@ Pack includes (current dev path):
    - `/mnt/taskstate` (task state mount)
    - `/mnt/authstate` (host auth profiles)
 4. Init selects auth profile (`PI_CODING_AGENT_DIR`) from mounted auth state when available, with baked auth as fallback.
-5. In `v2_taskd` mode, init starts `taskd`.
+5. Init starts `taskd`.
 6. Host waits for `READY`, then connects RPC on TCP `19384`.
 
 ## Transport (current)
@@ -48,7 +48,7 @@ Pack includes (current dev path):
 
 ## Mount reliability note
 
-The dev runtime now injects required 9p modules from `linux-virt` into initramfs (`netfs`, `9pnet`, `9pnet_virtio`, `9p`) and loads them during init before mount attempts.
+The dev runtime injects required 9p modules from `linux-virt` into initramfs (`netfs`, `9pnet`, `9pnet_virtio`, `9p`) and loads them during init before mount attempts.
 
 ## Auth bake-in (dev fallback)
 

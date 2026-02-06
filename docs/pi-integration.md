@@ -4,12 +4,10 @@
 
 pi runs inside the VM and is orchestrated by the host app over RPC.
 
-Current runtime has two modes (flag-gated):
+Runtime model is now single-path:
 
-- `v1` (legacy compatibility path)
-- `v2_taskd` (active path)
-
-`v2_taskd` is the primary implementation track.
+- taskd runtime (active baseline)
+- no legacy runtime mode split
 
 ## Process architecture (current)
 
@@ -23,37 +21,31 @@ Host (Tauri app):
 Guest (VM):
 
 - init script boots runtime
-- starts `taskd` in `v2_taskd` mode
+- starts `taskd`
 - `taskd` supervises one pi process per task
 
 Per task (guest):
 
 - session file: `/sessions/<taskId>/session.json` (canonical)
-- workspace dir: `/sessions/<taskId>/work` (internal task workspace)
+- workspace dir: `/sessions/<taskId>/work`
 
 ## RPC transport (current)
 
-- QEMU user-mode networking + `hostfwd` exposes TCP `19384`.
-- Host sends/receives JSONL RPC through `localhost:19384`.
-- In `v2_taskd`, host sends taskd command envelope:
+- QEMU user-mode networking + `hostfwd` exposes TCP `19384`
+- host sends/receives JSONL RPC through `localhost:19384`
+- host sends taskd command envelope:
   - request `{ id, type, payload }`
   - response `{ id, ok, result|error }`
 
-Normative command/event details: `runtime-v2-taskd-rpc-spec.md`.
+Normative command/event details: `runtime-taskd-rpc-spec.md`.
 
-## Runtime behavior by mode
-
-### v2_taskd (active)
+## Runtime behavior (current)
 
 - no normal-path VM restart on task switch
 - host switch flow: `switch_task` ACK (`status: switching`) + wait for `task_ready`
-- deterministic timeout/error handling in host service
+- deterministic timeout/error handling in host runtime service
 - no normal-path transcript hydration fallback
-
-### v1 (legacy path)
-
-- restart-heavy behavior retained during rollout
-- compatibility fallback behavior remains isolated to this mode
+- infra shell actions should use `system_bash` (taskd lane), not pi session flows
 
 ## Working folder and scope model (Path I-lite)
 
@@ -62,7 +54,7 @@ Current MVP direction is Path I-lite:
 - host validates working folder against workspace root (`realpath` + scope checks)
 - host passes validated relative path to guest task creation
 - guest enforces relative-path constraints for task cwd selection
-- mount reliability restored in dev runtime by injecting required 9p modules into initramfs
+- runtime mount reliability is maintained by loading required 9p modules before mount attempts
 
 ## Task persistence
 

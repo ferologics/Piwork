@@ -2,8 +2,8 @@
 
 ## Runtime (source of truth)
 
-- `runtime-v2-taskd-plan.md` — taskd rollout status and phases
-- `runtime-v2-taskd-rpc-spec.md` — taskd RPC contract
+- `runtime-taskd-plan.md` — taskd rollout status and phases
+- `runtime-taskd-rpc-spec.md` — taskd RPC contract
 - `runtime-pack.md` — VM runtime pack format and boot model
 - `pi-integration.md` — host↔VM↔pi integration overview
 - `testing-strategy.md` — test approach and harness primitives

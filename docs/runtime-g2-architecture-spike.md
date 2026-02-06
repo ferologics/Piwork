@@ -2,14 +2,14 @@
 
 Status: active (post-MVP research lane; non-blocking)
 Owner: runtime/platform
-Related: `docs/runtime-v2-taskd-plan.md`, `docs/permissions-model.md`, `docs/research/cowork-claude-runtime-intel-2026-02-06.md`, `docs/adr/0001-runtime-g2-decision.md`
+Related: `docs/runtime-taskd-plan.md`, `docs/permissions-model.md`, `docs/research/cowork-claude-runtime-intel-2026-02-06.md`, `docs/adr/0001-runtime-g2-decision.md`
 
 > MVP interim decision is already recorded in ADR 0001: **Path I-lite is selected for MVP shipment**.
 > This document remains the research checklist for post-MVP hardening/path validation.
 
 ## Why this exists
 
-We completed runtime v2 Phase 0–2 (taskd lifecycle/switch/prompt) and removed the restart-heavy path for normal v2 switching.
+We completed runtime Phase 0–2 (taskd lifecycle/switch/prompt) and removed the restart-heavy path for normal task switching.
 
 Next work (workspace + sandbox strategy) needs a reset:
 
@@ -44,7 +44,7 @@ Core ideas:
 
 Keep as fallback only.
 
-- retain `runtime_v2_sync` docs/protocol draft
+- retain sync docs/protocol draft as fallback
 - do not continue major implementation unless selected after G2
 
 ## Shared acceptance criteria

@@ -83,8 +83,8 @@ Rust builds use **sccache** via `.cargo/config.toml`.
 - `AGENTS.md` - AI-focused project context and architecture
 - `TODO.md` - roadmap and task tracking
 - `docs/README.md` - docs index + source-of-truth pointers
-- `docs/runtime-v2-taskd-plan.md` - runtime rollout status and active execution track
-- `docs/runtime-v2-taskd-rpc-spec.md` - v2 taskd RPC contract
+- `docs/runtime-taskd-plan.md` - runtime rollout status and active execution track
+- `docs/runtime-taskd-rpc-spec.md` - taskd RPC contract
 - `docs/pi-integration.md` - host↔VM↔taskd integration overview
 - `docs/runtime-pack.md` - runtime pack + VM boot model
 - `docs/auth-flow.md` - authentication flow

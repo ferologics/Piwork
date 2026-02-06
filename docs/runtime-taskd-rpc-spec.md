@@ -1,16 +1,17 @@
-# Runtime v2 `taskd` RPC Spec (P0 Normative)
+# Runtime `taskd` RPC Spec (P0 Normative)
 
 Status: draft (P0 normative)\
 Audience: host runtime service + guest `taskd` implementation\
-Related: `docs/runtime-v2-taskd-plan.md`
+Related: `docs/runtime-taskd-plan.md`
 
 ## 1) Scope
 
-This document defines the **normative** wire contract for early rollout (`runtime_v2_taskd`, sync off):
+This document defines the **normative** wire contract for the current taskd runtime:
 
 - task lifecycle operations
 - prompt routing
 - core events and errors
+- infrastructure shell commands that must not flow through pi session state (`system_bash`)
 
 Everything else (sync protocol details, capability negotiation, timeout tuning) is implementation guidance and may evolve later.
 
@@ -81,7 +82,7 @@ Everything else (sync protocol details, capability negotiation, timeout tuning) 
 - Duplicate request `id` with same payload must not produce duplicate side effects.
 - Duplicate request `id` with different payload returns `INVALID_REQUEST`.
 
-Applies to at least:
+Applies to:
 
 - `create_or_open_task`
 - `switch_task`
@@ -89,7 +90,7 @@ Applies to at least:
 
 ## 5) Command catalog (P0)
 
-## 5.1 `create_or_open_task`
+### 5.1 `create_or_open_task`
 
 Payload:
 
@@ -119,7 +120,7 @@ Result:
 - `resumed` (from `stopped`)
 - `recovered` (from `errored`)
 
-## 5.2 `switch_task`
+### 5.2 `switch_task`
 
 Payload:
 
@@ -133,9 +134,9 @@ Immediate result:
 { "status": "switching", "taskId": "task_abc123" }
 ```
 
-Completion is signaled by `task_ready` or `task_error` event.
+Completion is signaled by `task_ready` or `task_error`.
 
-## 5.3 `prompt`
+### 5.3 `prompt`
 
 Payload:
 
@@ -151,7 +152,7 @@ Result:
 
 Completion is signaled by `agent_end` or `task_error`.
 
-## 5.4 `get_state`
+### 5.4 `get_state`
 
 Payload: `{}`
 
@@ -171,7 +172,33 @@ Result shape:
 }
 ```
 
-## 5.5 `stop_task`
+### 5.5 `system_bash`
+
+Purpose: infra/system shell execution from host orchestration or harness paths that must bypass pi session semantics.
+
+Payload:
+
+```json
+{
+    "command": "pwd",
+    "cwd": "/sessions/task_abc123/work"
+}
+```
+
+`cwd` is optional. When omitted, taskd uses active task cwd when available.
+
+Result:
+
+```json
+{
+    "output": "/sessions/task_abc123/work\n",
+    "exitCode": 0,
+    "timedOut": false,
+    "cwd": "/sessions/task_abc123/work"
+}
+```
+
+### 5.6 `stop_task`
 
 Payload:
 
@@ -254,4 +281,4 @@ Deferred items:
 - capability negotiation fields (`protocolVersion`, `capabilities`)
 - detailed retry/timeout tuning tables
 
-These will be specified once Path M (live mount) vs Path S (sync) is decided.
+These will be specified if Path S (sync-first) is explicitly selected later.
