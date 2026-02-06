@@ -7,7 +7,7 @@
 - [x] **Extract init script** — move the heredoc out of `mise-tasks/runtime-build` into `runtime/init.sh`
 - [x] **Fix context pollution** — infrastructure bash commands (grep mount check, mkdir, session writes) go through pi's RPC and pollute the agent's conversation. Add `system_bash` to taskd that bypasses pi sessions, or do checks in taskd before spawning pi.
 - [x] **Simplify auth/settings** — strip Settings modal to: show current auth status + "Import from pi" button. Kill multi-profile UI. For MVP: baked auth or `~/.pi/agent/auth.json` import.
-- [ ] **Clarify folder-change semantics** — define expected behavior when changing a task’s working folder (especially for already-open tasks), then make runtime behavior match.
+- [x] **Clarify folder-change semantics** — define expected behavior when changing a task’s working folder (especially for already-open tasks), then make runtime behavior match.
 - [ ] **Define task artifact persistence contract** — document where task-created files live with/without a working folder, and what should persist across switch/restart.
 - [ ] **Untangle auth state from runtime artifacts** — keep auth storage purpose clear; avoid mixing credentials with unrelated pi/session artifacts.
 - [ ] **Fix sendLogin optimistic log** — logs `[info] Sent /login` even if not connected

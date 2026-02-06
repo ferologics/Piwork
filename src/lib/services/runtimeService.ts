@@ -363,16 +363,59 @@ export class RuntimeService {
     }
 
     private async handleFolderChangeRuntime(folder: string | null, deps: FolderChangeDeps) {
-        let nextFolder = folder;
+        const previousFolder = this.snapshot.currentWorkingFolder;
+        let nextFolder: string | null = folder;
+        let nextRelativePath: string | null = null;
+
         if (nextFolder) {
             const validated = await this.validateWorkingFolder(nextFolder);
             nextFolder = validated.folder;
+            nextRelativePath = validated.relativePath;
         }
 
-        devLog("RuntimeService", `Working folder changed (metadata only): ${nextFolder}`);
+        const taskId = this.snapshot.currentTaskId;
+        const folderChanged = nextFolder !== previousFolder;
 
         this.patch({ currentWorkingFolder: nextFolder });
         await deps.persistWorkingFolderForActiveTask(nextFolder);
+
+        if (!folderChanged || !taskId) {
+            devLog("RuntimeService", `Working folder updated in metadata only: ${nextFolder ?? "(scratch)"}`);
+            return;
+        }
+
+        if (!this.snapshot.rpcConnected) {
+            devLog(
+                "RuntimeService",
+                "Working folder changed while runtime disconnected; apply deferred until task resume",
+            );
+            return;
+        }
+
+        devLog(
+            "RuntimeService",
+            `Applying working folder change for active task ${taskId}: ${nextFolder ?? "(scratch)"}`,
+        );
+        this.patch({ taskSwitching: true, rpcError: null });
+
+        try {
+            await this.waitForRpcReady();
+            await this.stopTaskdTaskIfPresent(taskId);
+            await this.sendTaskdCommand("create_or_open_task", {
+                taskId,
+                workingFolder: nextFolder,
+                workingFolderRelative: nextRelativePath,
+            });
+            await this.switchTaskdTask(taskId);
+            this.callbacks.onStateRefreshRequested?.();
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            this.patch({ rpcError: message });
+            this.callbacks.onError?.(message);
+            throw error;
+        } finally {
+            this.patch({ taskSwitching: false });
+        }
     }
 
     private emitSnapshot() {
@@ -600,27 +643,7 @@ export class RuntimeService {
         return isRecord(response.result) ? response.result : {};
     }
 
-    private async ensureTaskdTaskReady(task: TaskMetadata) {
-        const stateResult = await this.sendTaskdCommand("get_state", {});
-        const taskEntries = Array.isArray(stateResult.tasks) ? stateResult.tasks : [];
-        const existing = taskEntries.find((entry) => {
-            if (!isRecord(entry)) {
-                return false;
-            }
-
-            return entry.taskId === task.id;
-        });
-
-        const existingState = isRecord(existing) && typeof existing.state === "string" ? existing.state : null;
-
-        if (existingState && ["ready", "idle", "active"].includes(existingState)) {
-            return;
-        }
-
-        if (existingState && !["missing", "stopped", "errored"].includes(existingState)) {
-            throw new TaskdError("TASK_NOT_READY", `task ${task.id} is ${existingState}`, true);
-        }
-
+    private async buildCreateOrOpenTaskPayload(task: TaskMetadata): Promise<Record<string, unknown>> {
         const model = typeof task.model === "string" ? task.model : null;
         const provider = inferProviderFromModel(model);
         const thinkingLevel = typeof task.thinkingLevel === "string" ? task.thinkingLevel : null;
@@ -637,6 +660,8 @@ export class RuntimeService {
 
         const payload: Record<string, unknown> = {
             taskId: task.id,
+            workingFolder,
+            workingFolderRelative,
         };
 
         if (provider) {
@@ -648,8 +673,63 @@ export class RuntimeService {
         if (thinkingLevel) {
             payload.thinkingLevel = thinkingLevel;
         }
-        payload.workingFolder = workingFolder;
-        payload.workingFolderRelative = workingFolderRelative;
+
+        return payload;
+    }
+
+    private async stopTaskdTaskIfPresent(taskId: string) {
+        try {
+            await this.sendTaskdCommand("stop_task", { taskId });
+        } catch (error) {
+            if (error instanceof TaskdError && error.code === "TASK_NOT_FOUND") {
+                return;
+            }
+
+            throw error;
+        }
+    }
+
+    private async ensureTaskdTaskReady(task: TaskMetadata) {
+        const payload = await this.buildCreateOrOpenTaskPayload(task);
+        const desiredWorkingFolderRelative =
+            typeof payload.workingFolderRelative === "string" ? payload.workingFolderRelative : null;
+
+        const stateResult = await this.sendTaskdCommand("get_state", {});
+        const taskEntries = Array.isArray(stateResult.tasks) ? stateResult.tasks : [];
+        const existing = taskEntries.find((entry) => {
+            if (!isRecord(entry)) {
+                return false;
+            }
+
+            return entry.taskId === task.id;
+        });
+
+        const existingState = isRecord(existing) && typeof existing.state === "string" ? existing.state : null;
+        const existingWorkingFolderRelative =
+            isRecord(existing) && typeof existing.workingFolderRelative === "string"
+                ? existing.workingFolderRelative
+                : null;
+
+        if (existingState && ["ready", "idle", "active"].includes(existingState)) {
+            if (existingWorkingFolderRelative === desiredWorkingFolderRelative) {
+                return;
+            }
+
+            devLog(
+                "RuntimeService",
+                `Task ${task.id} working folder changed (${existingWorkingFolderRelative ?? "(scratch)"} -> ${
+                    desiredWorkingFolderRelative ?? "(scratch)"
+                }); restarting task process`,
+            );
+
+            await this.stopTaskdTaskIfPresent(task.id);
+            await this.sendTaskdCommand("create_or_open_task", payload);
+            return;
+        }
+
+        if (existingState && !["missing", "stopped", "errored"].includes(existingState)) {
+            throw new TaskdError("TASK_NOT_READY", `task ${task.id} is ${existingState}`, true);
+        }
 
         await this.sendTaskdCommand("create_or_open_task", payload);
     }
