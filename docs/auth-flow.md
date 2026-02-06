@@ -1,4 +1,4 @@
-# Auth Flow (Draft)
+# Auth Flow (MVP Baseline)
 
 ## Goal
 
@@ -12,8 +12,8 @@ Let users authenticate once and reuse provider credentials across tasks. Support
 
 ## Storage
 
-- Host stores `auth.json` per profile.
-- VM reads credentials from a mounted config volume (e.g., `/home/piwork/.pi/agent/auth.json`).
+- Host stores `auth.json` per profile (`app_data/auth/<profile>/auth.json`).
+- Runtime can bake credentials into the VM image at build time (`/opt/pi-agent/auth.json`) for dev bootstrap.
 - `auth.json` format matches pi’s standard file.
 - **No auth files are committed** (secrets remain local).
 
@@ -29,7 +29,8 @@ Let users authenticate once and reuse provider credentials across tasks. Support
 
 - Settings modal lets you save API keys to `app_data/auth/<profile>/auth.json` via Tauri commands.
 - Profiles are stored in localStorage (`piwork:auth-profile`, `piwork:auth-profiles`).
-- Keys are stored on host only (VM mount/sync still pending).
+- Recommended runtime bootstrap path is `mise run runtime-build-auth` (optionally `PIWORK_AUTH_PATH=/path/to/auth.json`).
+- In-app auth/profile UI remains explicitly experimental.
 
 **Phase 2 (full login UI):**
 
@@ -70,7 +71,7 @@ Let users authenticate once and reuse provider credentials across tasks. Support
 ### Failure Handling
 
 - Display auth banner with the error message.
-- Dev shortcut: `PIWORK_COPY_AUTH=1` or `PIWORK_AUTH_PATH=~/.pi/agent/auth.json`.
+- Dev shortcut: rebuild runtime with `mise run runtime-build-auth` (optionally set `PIWORK_AUTH_PATH=...`).
 
 ## Subscription Login (OAuth)
 
