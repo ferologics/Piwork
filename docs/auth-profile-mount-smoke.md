@@ -16,6 +16,10 @@ Optional screenshot name:
 
 ## What it validates
 
+Preflight:
+
+- runs `mise run test-check-permissions` (fails early if screenshot capture is unavailable)
+
 1. Writes a temporary sentinel auth entry to `app_data/auth/default/auth.json`.
 2. Starts Piwork in `v2_taskd` mode.
 3. Confirms in `qemu.log`:

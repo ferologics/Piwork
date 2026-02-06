@@ -16,6 +16,10 @@ Optional screenshot name:
 
 ## What it validates
 
+Preflight:
+
+- runs `mise run test-check-permissions` (fails early if screenshot capture is unavailable)
+
 1. **Traversal blocked**
    - `preview_read` from task B using `../task-a/secret-a.txt` returns an error.
 2. **Symlink escape blocked**

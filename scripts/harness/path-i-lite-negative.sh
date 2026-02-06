@@ -20,6 +20,12 @@ printf "alpha-secret-%s\n" "$SUFFIX" > "$TASK_A_DIR/secret-a.txt"
 printf "beta-note-%s\n" "$SUFFIX" > "$TASK_B_DIR/public-b.txt"
 ln -sfn ../task-a/secret-a.txt "$TASK_B_DIR/link-to-a.txt"
 
+echo "[path-i-lite] checking screenshot permission"
+if ! mise run test-check-permissions; then
+    echo "[path-i-lite] screenshot preflight failed"
+    exit 1
+fi
+
 echo "[path-i-lite] starting app with scoped workspace root"
 PIWORK_RUNTIME_V2_TASKD=1 PIWORK_WORKSPACE_ROOT="$WORKSPACE_ROOT" mise run test-start >/dev/null
 

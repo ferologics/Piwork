@@ -38,6 +38,12 @@ cat > "$APP_AUTH_FILE" <<EOF
 }
 EOF
 
+echo "[auth-smoke] checking screenshot permission"
+if ! mise run test-check-permissions; then
+    echo "[auth-smoke] screenshot preflight failed"
+    exit 1
+fi
+
 echo "[auth-smoke] starting app"
 PIWORK_RUNTIME_V2_TASKD=1 PIWORK_WORKSPACE_ROOT="$ROOT_DIR" mise run test-start >/dev/null
 
