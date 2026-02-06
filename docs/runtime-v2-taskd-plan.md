@@ -353,17 +353,20 @@ Completed in code:
   - Boot init explicitly loads modules before mount attempts.
   - Harness/QEMU logs now show mounted workspace and taskstate paths (`Mounted working folder at /mnt/workdir`, `Mounted task state at /mnt/taskstate`).
   - Active task cwd resolves to mounted workspace path (example: `/mnt/workdir/src`).
+- ✅ Resume-semantics baseline check landed:
+  - Harness token-seed test confirms task-local memory continuity after switch-away/switch-back.
+  - Cross-task bleed check confirms second task returns `NONE` for first task token.
+  - Captured evidence: `test-dump-state`, `test-screenshot resume-semantics-i2`, supporting log lines.
 - ⚠️ Gate G1 decision documented as Path S, now reopened under Gate G2 reassessment.
 
 Still open:
 
-- ⏳ Phase 3I-lite I2: negative harness checks (escape attempts + cross-task bleed).
-- ⏳ Focused resume-semantics checks (task-local memory seed test, no cross-task bleed assertions).
+- ⏳ Phase 3I-lite I2: codify negative harness checks (escape attempts + cross-task bleed) as repeatable checklist/script flow.
 - ⏳ ADR defining MVP isolation guarantees and deferred hardening.
 - ⏳ Gate G2 research lane (Gondolin feasibility + deeper hardening path comparison).
 
 ## Immediate next actions
 
-1. Add negative harness tests for traversal/symlink/cross-task escape attempts
+1. Codify repeatable negative harness checks for traversal/symlink/cross-task escape attempts
 2. Capture MVP security contract in ADR and align UI copy with actual guarantees
-3. Run focused resume-semantics checks with task-local memory seeds
+3. Keep Gate G2 as non-blocking research lane while MVP path ships

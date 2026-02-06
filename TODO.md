@@ -21,7 +21,7 @@
 - [x] **Canonical session persistence**: Use `/sessions/<taskId>/session.json` for automatic resume
 - [x] **No-reboot switching**: Implement `switch_task` path; task switch should not reboot VM
 - [x] **Remove fallback hydration**: Delete transcript→session reconstruction from normal runtime path
-- [ ] **Task resume semantics**: Validate memory continuity + no cross-task context bleed
+- [x] **Task resume semantics**: Validate memory continuity + no cross-task context bleed (harness token-seed check in `v2_taskd` mode)
 - [x] **Task switch latency target**: Warm/cold switch loop validated in v2 harness (no long spinner, switch/ready within target budget)
 - [ ] **MVP isolation pass (Path I-lite)**: enforce scoped writes on current runtime without full sandbox rewrite
   - [x] I1: Host + guest scope checks (`realpath`, traversal/symlink/special-file guards) + workspace-root/relative-path plumbing
