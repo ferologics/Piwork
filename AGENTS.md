@@ -13,12 +13,23 @@ Cowork-style UI on top of **pi** using **Tauri**. File-scoped tasks, sandboxed V
 ## Commands
 
 ```bash
-mise run check              # format + lint + compile + test
+mise run setup              # install deps + git hooks
+mise run check              # fast local gate (format/lint/compile/fast tests)
+mise run check-full         # full gate (check + live regressions)
+mise run test-regressions   # live app regression suite
+mise run install-git-hooks  # reinstall pre-commit/pre-push hooks
 mise run tauri-dev          # run app
 mise run runtime-build      # build VM runtime pack
 mise run runtime-build-auth # rebuild with auth baked in
 mise run runtime-clean      # clean runtime artifacts
 ```
+
+## Testing gates & hooks
+
+- Git hooks are installed by `mise run setup` (or manually via `mise run install-git-hooks`).
+- `pre-commit` runs `mise run check`.
+- `pre-push` runs `mise run check-full`.
+- **Agent rule**: avoid running a redundant manual `mise run check` immediately before `git commit` when hooks are active; rely on pre-commit output unless explicit extra verification is requested.
 
 ## Architecture
 
@@ -65,6 +76,7 @@ mise run test-start / test-stop          # app lifecycle
 mise run test-prompt "hello"             # send prompt, wait for response
 mise run test-screenshot name            # capture to tmp/dev/name.png
 mise run test-dump-state                 # log task/session/message state
+mise run test-state-snapshot             # structured UI/runtime snapshot JSON
 mise run test-set-folder /path           # one-time bind working folder for active task
 mise run test-set-task <id>              # switch active task
 mise run test-create-task "Title" [folder]
@@ -79,6 +91,7 @@ mise run test-check-permissions          # verify screenshot capture works
 ### Rules
 
 - **Primitives only** — no monolithic E2E scripts. Compose primitives ad-hoc.
+- **Use structured snapshots for assertions** — prefer `test-state-snapshot` (or equivalent API calls) over log-grep assertions.
 - **Evidence for claims** — always capture: `test-dump-state` + `test-screenshot` + relevant logs
 - **Wait explicitly** — for async transitions, poll/wait; don't rely on fixed sleeps
 - **Clean up** — always `test-stop` after testing
