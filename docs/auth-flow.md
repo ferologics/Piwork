@@ -97,6 +97,7 @@ Use pi’s built‑in `/login` flow to avoid custom OAuth plumbing.
 
 - Default profile created at first login.
 - User can add/switch profiles in Settings.
+- Profile names are normalized to safe local identifiers; invalid values fall back to `default`.
 - Each profile has its own `auth.json` and model defaults.
 
 ## Open Questions

@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { TauriRpcClient } from "$lib/rpc";
 import { devLog } from "$lib/utils/devLog";
+import { normalizeAuthProfile } from "$lib/services/authProfile";
 import type { ContentBlock, ConversationMessage, ConversationState, RpcEvent } from "$lib/rpc";
 import type { TaskMetadata } from "$lib/types/task";
 
@@ -435,10 +436,7 @@ export class RuntimeService {
     private getAuthProfileForVmStart(): string {
         try {
             const stored = localStorage.getItem(AUTH_PROFILE_STORAGE_KEY);
-            const normalized = stored?.trim();
-            if (normalized) {
-                return normalized;
-            }
+            return normalizeAuthProfile(stored);
         } catch {
             // Ignore storage access issues and fall back to default profile.
         }

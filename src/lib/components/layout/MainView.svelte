@@ -15,6 +15,7 @@ import QuickStartTiles from "$lib/components/QuickStartTiles.svelte";
 import ExtensionUiDialog from "$lib/components/ExtensionUiDialog.svelte";
 import type { ExtensionUiRequest } from "$lib/components/ExtensionUiDialog.svelte";
 import { RuntimeService, type RuntimeMode, type RuntimeServiceSnapshot } from "$lib/services/runtimeService";
+import { normalizeAuthProfile } from "$lib/services/authProfile";
 import { previewStore, type PreviewSelection } from "$lib/stores/previewStore";
 
 let { previewOpen = false }: { previewOpen?: boolean } = $props();
@@ -815,11 +816,6 @@ async function handleFolderChange(folder: string | null): Promise<void> {
     } catch (error) {
         devLog("MainView", `Folder change failed: ${error}`);
     }
-}
-
-function normalizeAuthProfile(value: string | null | undefined): string {
-    const trimmed = value?.trim() ?? "";
-    return trimmed.length > 0 ? trimmed : "default";
 }
 
 async function applyAuthProfileForTest(profileValue: string | null | undefined): Promise<void> {
