@@ -231,6 +231,7 @@ mkdir -p "$WORKDIR"
 if mount -t 9p -o trans=virtio,version=9p2000.L workdir "$WORKDIR" 2>/dev/null; then
     echo "Mounted working folder at $WORKDIR"
     export PI_WORKING_DIR="$WORKDIR"
+    export PIWORK_WORKSPACE_ROOT="$WORKDIR"
     cd "$WORKDIR"
 else
     echo "No working folder mounted"

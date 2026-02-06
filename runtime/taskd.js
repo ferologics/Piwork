@@ -12,6 +12,7 @@ const RPC_PORT = Number.parseInt(process.env.PIWORK_RPC_PORT || "19384", 10);
 const NODE_BIN = process.env.PIWORK_NODE_BIN || "/usr/bin/node";
 const PI_CLI = process.env.PIWORK_PI_CLI || "/opt/pi/dist/cli.js";
 const SESSIONS_ROOT = process.env.PIWORK_TASKD_SESSIONS_ROOT || "/sessions";
+const WORKSPACE_ROOT = process.env.PIWORK_WORKSPACE_ROOT || "";
 const INITIAL_TASK_ID = process.env.PIWORK_INITIAL_TASK_ID || "";
 const DEFAULT_PROVIDER = process.env.PIWORK_DEFAULT_PROVIDER || "anthropic";
 const DEFAULT_MODEL = process.env.PIWORK_DEFAULT_MODEL || "claude-opus-4-5";
@@ -52,6 +53,8 @@ let defaults = {
     thinkingLevel: DEFAULT_THINKING_LEVEL,
 };
 
+let workspaceRootReal = undefined;
+
 function log(message) {
     console.log(`[taskd] ${message}`);
 }
@@ -72,6 +75,148 @@ function validateTaskId(taskId) {
         !taskId.includes("\\") &&
         !taskId.includes("..")
     );
+}
+
+function createWorkspacePolicyError(message, details = {}) {
+    const error = new Error(message);
+    error.code = "WORKSPACE_POLICY_VIOLATION";
+    error.details = details;
+    return error;
+}
+
+function normalizeRelativeWorkingFolder(value) {
+    if (value === null || value === undefined) {
+        return null;
+    }
+
+    if (typeof value !== "string") {
+        throw createWorkspacePolicyError("workingFolderRelative must be a string", {});
+    }
+
+    const trimmed = value.trim();
+    if (trimmed.length === 0 || trimmed === ".") {
+        return "";
+    }
+
+    if (trimmed.includes("\0") || trimmed.includes("\\") || trimmed.startsWith("/")) {
+        throw createWorkspacePolicyError("workingFolderRelative is invalid", {
+            reason: "invalid_path_format",
+        });
+    }
+
+    const normalized = path.posix.normalize(trimmed);
+    if (normalized === ".." || normalized.startsWith("../") || normalized.startsWith("/")) {
+        throw createWorkspacePolicyError("workingFolderRelative escapes workspace root", {
+            reason: "path_escape",
+        });
+    }
+
+    return normalized === "." ? "" : normalized;
+}
+
+function isPathWithin(root, candidate) {
+    const relative = path.relative(root, candidate);
+    return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+}
+
+function ensureNoSymlinkComponents(root, candidate) {
+    const relative = path.relative(root, candidate);
+    if (!relative || relative === ".") {
+        return;
+    }
+
+    let current = root;
+    for (const segment of relative.split(path.sep)) {
+        if (!segment || segment === ".") {
+            continue;
+        }
+
+        current = path.join(current, segment);
+        const stat = fs.lstatSync(current);
+        if (stat.isSymbolicLink()) {
+            throw createWorkspacePolicyError("working folder path must not include symlink components", {
+                path: current,
+            });
+        }
+    }
+}
+
+function getWorkspaceRootReal() {
+    if (workspaceRootReal !== undefined) {
+        return workspaceRootReal;
+    }
+
+    if (!WORKSPACE_ROOT) {
+        workspaceRootReal = null;
+        return workspaceRootReal;
+    }
+
+    try {
+        const stat = fs.lstatSync(WORKSPACE_ROOT);
+        if (stat.isSymbolicLink()) {
+            throw createWorkspacePolicyError("workspace root must not be a symlink", {
+                path: WORKSPACE_ROOT,
+            });
+        }
+
+        const resolved = fs.realpathSync(WORKSPACE_ROOT);
+        const resolvedStat = fs.statSync(resolved);
+        if (!resolvedStat.isDirectory()) {
+            throw createWorkspacePolicyError("workspace root must be a directory", {
+                path: resolved,
+            });
+        }
+
+        workspaceRootReal = resolved;
+    } catch (error) {
+        log(`workspace root unavailable (${WORKSPACE_ROOT}): ${String(error)}`);
+        workspaceRootReal = null;
+    }
+
+    return workspaceRootReal;
+}
+
+function resolveTaskCwd(task) {
+    const relativePath = normalizeRelativeWorkingFolder(task.requestedWorkingFolderRelative);
+    task.requestedWorkingFolderRelative = relativePath;
+
+    if (relativePath === null) {
+        return task.workDir;
+    }
+
+    const workspaceRoot = getWorkspaceRootReal();
+    if (!workspaceRoot) {
+        log(`task ${task.taskId} has scoped folder but workspace root is unavailable; falling back to ${task.workDir}`);
+        return task.workDir;
+    }
+
+    const relativeOsPath = relativePath.split("/").join(path.sep);
+    const candidate = relativeOsPath.length > 0 ? path.join(workspaceRoot, relativeOsPath) : workspaceRoot;
+
+    let candidateReal;
+    try {
+        candidateReal = fs.realpathSync(candidate);
+    } catch {
+        throw createWorkspacePolicyError("working folder does not exist in workspace root", {
+            relativePath,
+        });
+    }
+
+    if (!isPathWithin(workspaceRoot, candidateReal)) {
+        throw createWorkspacePolicyError("working folder escapes workspace root", {
+            relativePath,
+        });
+    }
+
+    const stat = fs.statSync(candidateReal);
+    if (!stat.isDirectory()) {
+        throw createWorkspacePolicyError("working folder must be a directory", {
+            relativePath,
+        });
+    }
+
+    ensureNoSymlinkComponents(workspaceRoot, candidateReal);
+    return candidateReal;
 }
 
 function normalizePayload(raw) {
@@ -108,6 +253,9 @@ function normalizePayload(raw) {
     }
     if (typeof raw.workingFolder === "string") {
         payload.workingFolder = raw.workingFolder;
+    }
+    if (typeof raw.workingFolderRelative === "string") {
+        payload.workingFolderRelative = raw.workingFolderRelative;
     }
 
     return payload;
@@ -241,8 +389,11 @@ function buildTask(taskId, options = {}) {
             typeof options.thinkingLevel === "string" ? options.thinkingLevel : defaults.thinkingLevel,
         requestedWorkingFolder:
             typeof options.workingFolder === "string" ? options.workingFolder : null,
+        requestedWorkingFolderRelative:
+            typeof options.workingFolderRelative === "string" ? options.workingFolderRelative : null,
         sessionFile,
         workDir,
+        currentCwd: workDir,
         child: null,
         pendingChildRequests: new Map(),
         stopping: false,
@@ -257,6 +408,8 @@ function serializeTask(task) {
         state: task.state,
         sessionFile: task.sessionFile,
         workDir: task.workDir,
+        currentCwd: task.currentCwd,
+        workingFolderRelative: task.requestedWorkingFolderRelative,
     };
 }
 
@@ -270,8 +423,12 @@ function updateTaskConfig(task, options = {}) {
     if (typeof options.thinkingLevel === "string") {
         task.thinkingLevel = options.thinkingLevel;
     }
-    if (typeof options.workingFolder === "string") {
-        task.requestedWorkingFolder = options.workingFolder;
+    if (Object.prototype.hasOwnProperty.call(options, "workingFolder")) {
+        task.requestedWorkingFolder = typeof options.workingFolder === "string" ? options.workingFolder : null;
+    }
+    if (Object.prototype.hasOwnProperty.call(options, "workingFolderRelative")) {
+        task.requestedWorkingFolderRelative =
+            typeof options.workingFolderRelative === "string" ? options.workingFolderRelative : null;
     }
 }
 
@@ -404,18 +561,20 @@ async function spawnTaskProcess(task) {
 
     fs.mkdirSync(task.workDir, { recursive: true });
 
+    const taskCwd = resolveTaskCwd(task);
     const args = [PI_CLI, "--mode", "rpc", "--session", task.sessionFile];
 
     const child = spawn(NODE_BIN, args, {
-        cwd: task.workDir,
+        cwd: taskCwd,
         env: {
             ...process.env,
-            PI_WORKING_DIR: task.workDir,
+            PI_WORKING_DIR: taskCwd,
         },
         stdio: ["pipe", "pipe", "pipe"],
     });
 
     task.child = child;
+    task.currentCwd = taskCwd;
     task.stopping = false;
     task.promptInFlight = false;
     task.promptCommandId = null;
@@ -733,7 +892,8 @@ async function handleV2CreateOrOpenTask(request) {
     } catch (error) {
         const code = typeof error?.code === "string" ? error.code : "INTERNAL_ERROR";
         const message = error instanceof Error ? error.message : String(error);
-        return sendV2Error(request, code, message, pickTaskNotReadyRetryable(code), {});
+        const details = isRecord(error?.details) ? error.details : {};
+        return sendV2Error(request, code, message, pickTaskNotReadyRetryable(code), details);
     }
 }
 

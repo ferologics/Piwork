@@ -46,6 +46,10 @@
 - **Anthropic Cowork (macOS)** appears to use **Apple Virtualization Framework** with a Linux rootfs (VM-based isolation).
 - We use a **VM on desktop** and **native app sandbox on mobile** to stay cross-platform while keeping strong desktop isolation.
 
+Reference intel (field notes, not official spec):
+
+- `docs/research/cowork-claude-runtime-intel-2026-02-06.md`
+
 ## Access Model (Common Across Platforms)
 
 - **Workspace-based access**: agent only sees explicitly selected folders.

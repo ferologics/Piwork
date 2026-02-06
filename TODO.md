@@ -23,7 +23,15 @@
 - [x] **Remove fallback hydration**: Delete transcript→session reconstruction from normal runtime path
 - [ ] **Task resume semantics**: Validate memory continuity + no cross-task context bleed
 - [x] **Task switch latency target**: Warm/cold switch loop validated in v2 harness (no long spinner, switch/ready within target budget)
-- [ ] **Task workspace model**: Ship sync-first workspace (`/sessions/<taskId>/work`) [Path S selected at Gate G1]
+- [ ] **MVP isolation pass (Path I-lite)**: enforce scoped writes on current runtime without full sandbox rewrite
+  - [x] I1: Host + guest scope checks (`realpath`, traversal/symlink/special-file guards) + workspace-root/relative-path plumbing
+  - [ ] I1b: Ensure workspace mount reliability in v2 taskd path (currently falls back to `/sessions/<task>/work` when mount is unavailable)
+  - [ ] I2: Negative harness tests (escape attempts + cross-task bleed)
+  - [ ] I3: ADR + UI copy for honest MVP guarantees (scoped local mode)
+- [ ] **Gate G2 research lane (non-blocking)**: Gondolin vs deeper hardening path
+  - [ ] G2-a: Gondolin feasibility spike (pi RPC, task switching, scoped writes, latency)
+  - [ ] G2-b: Post-MVP hardening spike on current runtime (per-task users + stronger sandbox)
+  - [ ] G2-c: Decision record update with selected post-MVP path
 
 ## P1: Production Ready
 
@@ -93,10 +101,13 @@
 - **Current (v1 temporary):** Shared VM, restart-heavy task switching, fallback hydration when task-state mount is missing
 - **Target (v2):** Shared persistent VM + in-VM task supervisor (`taskd`) + one pi process per task
 - **Canonical session target:** `/sessions/<taskId>/session.json` (no reconstruction)
-- **Workspace target:** `/sessions/<taskId>/work` with sync-first host integration
-- **Isolation target:** task-level process boundaries first; optional per-task Unix users in hardening
+- **Workspace target:** TBD by Gate G2 (`Path I` isolation-first, `Path G` Gondolin, `Path S` sync fallback)
+- **Isolation target:** move from process-only isolation toward enforceable scope (per-task users + sandbox boundary)
 
 ## See Also
 
-- `docs/runtime-v2-taskd-plan.md` - Full pivot plan for no-reboot task switching
+- `docs/runtime-v2-taskd-plan.md` - Runtime v2 baseline + Gate G2 reassessment
+- `docs/runtime-g2-architecture-spike.md` - Isolation-first vs Gondolin decision gate
+- `docs/adr/0001-runtime-g2-decision.md` - Decision record template for Gate G2
+- `docs/research/cowork-claude-runtime-intel-2026-02-06.md` - captured Cowork/Claude sandbox observations
 - `docs/ui-roadmap.md` - UI-specific roadmap with Cowork comparison

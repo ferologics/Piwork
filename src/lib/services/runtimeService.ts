@@ -30,6 +30,7 @@ export interface RuntimeServiceSnapshot {
     currentTaskId: string | null;
     currentWorkingFolder: string | null;
     currentSessionFile: string | null;
+    workspaceRoot: string | null;
     taskSwitching: boolean;
     mode: RuntimeMode;
     runtimeV2Taskd: boolean;
@@ -40,6 +41,12 @@ interface VmStatusResponse {
     status: "starting" | "ready" | "stopped";
     rpcPath: string | null;
     logPath: string | null;
+}
+
+interface WorkingFolderValidation {
+    folder: string;
+    workspaceRoot: string;
+    relativePath: string;
 }
 
 interface PendingRpcResponse {
@@ -240,6 +247,7 @@ export class RuntimeService {
     private pendingRpcResponses = new Map<string, PendingRpcResponse>();
     private pendingTaskSwitch: PendingTaskSwitch | null = null;
     private lastTaskReadyAt = new Map<string, number>();
+    private workspaceRootInitialized = false;
 
     constructor(flags: RuntimeFlags, callbacks: RuntimeServiceCallbacks = {}) {
         const normalized = normalizeFlags(flags);
@@ -251,6 +259,7 @@ export class RuntimeService {
             currentTaskId: null,
             currentWorkingFolder: null,
             currentSessionFile: null,
+            workspaceRoot: null,
             taskSwitching: false,
             mode: normalized.mode,
             runtimeV2Taskd: normalized.runtimeV2Taskd,
@@ -404,11 +413,64 @@ export class RuntimeService {
     }
 
     private async connectForMode(client: TauriRpcClient) {
+        let folderForConnect = this.snapshot.currentWorkingFolder;
+
         if (this.snapshot.mode === "v2_taskd") {
             devLog("RuntimeService", "runtime_v2_taskd enabled");
+            await this.ensureWorkspaceRootInitialized();
+            folderForConnect = this.snapshot.workspaceRoot ?? this.snapshot.currentWorkingFolder;
         }
 
-        await client.connect(this.snapshot.currentWorkingFolder, this.snapshot.currentTaskId);
+        await client.connect(folderForConnect, this.snapshot.currentTaskId);
+    }
+
+    private async ensureWorkspaceRootInitialized() {
+        if (this.workspaceRootInitialized) {
+            return;
+        }
+
+        this.workspaceRootInitialized = true;
+
+        try {
+            const workspaceRoot = await invoke<string | null>("runtime_workspace_root");
+            if (typeof workspaceRoot === "string" && workspaceRoot.trim().length > 0) {
+                this.patch({ workspaceRoot });
+            }
+        } catch (error) {
+            devLog("RuntimeService", `Failed to resolve workspace root: ${error}`);
+        }
+    }
+
+    private async validateWorkingFolder(folder: string): Promise<WorkingFolderValidation> {
+        const trimmed = folder.trim();
+        if (!trimmed) {
+            throw new Error("Working folder is required");
+        }
+
+        await this.ensureWorkspaceRootInitialized();
+
+        const result = await invoke<WorkingFolderValidation>("runtime_validate_working_folder", {
+            folder: trimmed,
+            workspaceRoot: this.snapshot.workspaceRoot,
+        });
+
+        const validatedFolder = typeof result?.folder === "string" ? result.folder : null;
+        const workspaceRoot = typeof result?.workspaceRoot === "string" ? result.workspaceRoot : null;
+        const relativePath = typeof result?.relativePath === "string" ? result.relativePath : null;
+
+        if (!validatedFolder || !workspaceRoot || relativePath === null) {
+            throw new Error("Invalid working folder validation response");
+        }
+
+        if (workspaceRoot !== this.snapshot.workspaceRoot) {
+            this.patch({ workspaceRoot });
+        }
+
+        return {
+            folder: validatedFolder,
+            workspaceRoot,
+            relativePath,
+        };
     }
 
     private async handleTaskSwitchV1(newTask: TaskMetadata | null, deps: TaskSwitchDeps) {
@@ -492,14 +554,20 @@ export class RuntimeService {
     }
 
     private async handleFolderChangeV1(folder: string | null, deps: FolderChangeDeps) {
+        let nextFolder = folder;
+        if (nextFolder) {
+            const validated = await this.validateWorkingFolder(nextFolder);
+            nextFolder = validated.folder;
+        }
+
         this.patch({
-            currentWorkingFolder: folder,
+            currentWorkingFolder: nextFolder,
             taskSwitching: true,
         });
-        devLog("RuntimeService", `Working folder changed: ${folder}`);
+        devLog("RuntimeService", `Working folder changed: ${nextFolder}`);
 
         try {
-            await deps.persistWorkingFolderForActiveTask(folder);
+            await deps.persistWorkingFolderForActiveTask(nextFolder);
             await this.restartVm("Restarting VM with new folder...");
 
             if (this.snapshot.currentTaskId) {
@@ -515,10 +583,16 @@ export class RuntimeService {
     }
 
     private async handleFolderChangeV2Taskd(folder: string | null, deps: FolderChangeDeps) {
-        devLog("RuntimeService", `Working folder changed (v2 metadata only): ${folder}`);
+        let nextFolder = folder;
+        if (nextFolder) {
+            const validated = await this.validateWorkingFolder(nextFolder);
+            nextFolder = validated.folder;
+        }
 
-        this.patch({ currentWorkingFolder: folder });
-        await deps.persistWorkingFolderForActiveTask(folder);
+        devLog("RuntimeService", `Working folder changed (v2 metadata only): ${nextFolder}`);
+
+        this.patch({ currentWorkingFolder: nextFolder });
+        await deps.persistWorkingFolderForActiveTask(nextFolder);
     }
 
     private emitSnapshot() {
@@ -770,7 +844,16 @@ export class RuntimeService {
         const model = typeof task.model === "string" ? task.model : null;
         const provider = inferProviderFromModel(model);
         const thinkingLevel = typeof task.thinkingLevel === "string" ? task.thinkingLevel : null;
-        const workingFolder = typeof task.workingFolder === "string" ? task.workingFolder : null;
+        const configuredWorkingFolder = typeof task.workingFolder === "string" ? task.workingFolder : null;
+
+        let workingFolder: string | null = null;
+        let workingFolderRelative: string | null = null;
+
+        if (configuredWorkingFolder) {
+            const validated = await this.validateWorkingFolder(configuredWorkingFolder);
+            workingFolder = validated.folder;
+            workingFolderRelative = validated.relativePath;
+        }
 
         const payload: Record<string, unknown> = {
             taskId: task.id,
@@ -785,9 +868,8 @@ export class RuntimeService {
         if (thinkingLevel) {
             payload.thinkingLevel = thinkingLevel;
         }
-        if (workingFolder) {
-            payload.workingFolder = workingFolder;
-        }
+        payload.workingFolder = workingFolder;
+        payload.workingFolderRelative = workingFolderRelative;
 
         await this.sendTaskdCommand("create_or_open_task", payload);
     }

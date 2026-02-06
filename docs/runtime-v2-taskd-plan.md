@@ -1,5 +1,7 @@
 # Runtime v2 Plan — Task Supervisor (`taskd`) + Staged Workspace Strategy
 
+> **Status update (2026-02-06):** Phase 0–2 remains the active baseline and is complete in code. Execution is now on **Path I-lite** for MVP (strict scope enforcement on current runtime, no sync expansion). Path G (Gondolin) stays as research lane via Gate G2. Path S (sync-first) is draft fallback only.
+
 ## Why this pivot
 
 The current runtime flow mixes multiple models:
@@ -29,11 +31,12 @@ This causes race conditions, spinner hangs, and unclear ownership of task state.
 
 - Runtime rollout is split by feature flags:
   - `runtime_v2_taskd` (task lifecycle/switch/prompt)
-  - `runtime_v2_sync` (workspace sync)
+  - `runtime_v2_sync` (reserved for experimental sync path; not currently the default direction)
 - `stop_task` is **required early** (not optional)
 - Extract host orchestration out of `MainView.svelte` **before** taskd integration
-- Defer per-task Linux users to hardening; start with process isolation
-- Add explicit workspace decision gate after host+taskd warm switch works
+- Execute Path I-lite for MVP before deeper sandbox rewrites
+- Add explicit workspace/sandbox decision gate for post-MVP hardening (Gate G2)
+- No further sync-heavy implementation unless Path S is explicitly re-selected
 
 ## Target architecture
 
@@ -43,7 +46,7 @@ This causes race conditions, spinner hangs, and unclear ownership of task state.
 - New host runtime service handles:
   - task switch orchestration
   - timeout handling
-  - (later) sync orchestration
+  - (later) workspace/sandbox orchestration (path TBD by Gate G2)
 - UI renders typed runtime state/events and sends intents
 
 ### Guest (VM)
@@ -52,7 +55,7 @@ This causes race conditions, spinner hangs, and unclear ownership of task state.
 - `init` launches long-lived **`taskd`** process (Node.js first pass)
 - `taskd` supervises one pi process per task
 - Baseline isolation: per-task process + per-task session/work directories
-- Per-task OS user isolation is deferred to hardening
+- Per-task OS user + sandbox boundary is under active evaluation (Gate G2)
 
 Per task in guest:
 
@@ -123,51 +126,44 @@ Response includes mode to avoid ambiguity:
 - If pi crashes mid-turn before flush, last in-flight turn may be lost (accepted in v2)
 - `taskd` detects child exit, marks task `errored`, emits `task_error` (`PI_PROCESS_DEAD`)
 
-## Workspace strategy (decision gate)
+## Workspace + sandbox strategy (decision gates)
 
-### Gate G1 (after host+taskd warm switch is stable)
+### Gate G1 (historical)
 
-Run a focused spike and choose one path:
+Original Gate G1 compared live-mount vs sync-first and recorded **Path S**.
+That outcome is now treated as **provisional**: subsequent review concluded the evidence was not sufficient to reject mount-based approaches (the v2 mount path had not been fully wired at the time).
 
-- **Path M (live mount path):** if stable and deterministic with harness evidence
-- **Path S (sync path / Option A):** if live mount remains fragile or operationally complex
+### Gate G2 (active): architecture reassessment
 
-### Gate G1 outcome (2026-02-06): **Path S selected**
+Detailed spike checklist: `docs/runtime-g2-architecture-spike.md`.
 
-Spike evidence:
+Before shipping more Phase 3 work, choose one direction:
 
-- VM boot log shows no active working-folder mount in v2 taskd test boots (`No working folder mounted`).
-- v2 folder changes are metadata-only in host path (no remount/restart on change).
-- In-guest mount check after folder changes (`grep ' /mnt/workdir ' /proc/mounts`) remained negative.
-- Task switch path is stable without VM restarts, so sync can be layered without reintroducing restart coupling.
+- **Path I (isolation-first on current runtime):**
+  - scoped workspace-root mount (no broad home mount)
+  - strict task-folder scope checks
+  - per-task Linux user and staged sandbox hardening
+- **Path G (Gondolin-based runtime):**
+  - evaluate adopting Gondolin for programmable VFS/network controls and isolation primitives
+  - integrate with pi RPC + current task model
+- **Path S (sync-first):**
+  - keep as fallback draft only
+  - not the default path while G2 is unresolved
 
-Decision: proceed with **Path S** and defer Path M.
+Decision criteria:
 
-Decision criteria (for reference):
+- No VM restart on task/folder switching
+- Enforceable task file scope (not just convention via cwd)
+- No cross-task data bleed
+- Acceptable latency/UX for prompt + task switching
+- Integration complexity is feasible for current team/stage
 
-- No VM restart required for folder/task switching
-- No mount/switch spinner hangs in repeated loops
-- Resume correctness remains intact after restart
-- Warm switch p95 stays within target (`< 1s`)
-- Cold resume p95 stays within target (`< 3s`)
+Required G2 evidence:
 
-### Path S — Option A sync (selected)
-
-Protocol details are tracked in `docs/runtime-v2-taskd-sync-spec.md`.
-
-Sync moments:
-
-1. Before prompt: host → guest
-2. After turn: guest → host
-3. On switch away: best-effort guest → host flush
-4. On switch to task: host → guest refresh
-
-Conflict behavior (first pass):
-
-- file-level divergence detection
-- preserve both versions (suffix)
-- emit `SYNC_CONFLICT`
-- keep task usable
+1. `test-dump-state`
+2. `test-screenshot <name>`
+3. supporting runtime logs
+4. short ADR documenting chosen path + deferred hardening
 
 ## Security invariants (scope now vs later)
 
@@ -175,19 +171,19 @@ Conflict behavior (first pass):
 
 - Host-authoritative workspace root per task
 - Reject absolute paths / `..` traversal / invalid path bytes
-- No symlink follow
+- No symlink follow for scoped writes
 - Reject special files (device/socket/fifo/hardlink cases)
 
-### Later (only when sync apply is enabled)
+### Next hardening tranche (after G2 direction is chosen)
 
-- Operation budgets (files/bytes/max file size)
-- Content hash verification for sync writes/reads
-- Full sync audit trail and conflict telemetry
+- Per-task Linux users with strict ownership on task state dirs
+- Sandbox boundary for task process (filesystem allowlist and privilege drop)
+- Operation budgets and audit telemetry for potentially destructive flows
 
 Policy violation behavior:
 
-- emit `SYNC_POLICY_VIOLATION`
-- abort affected sync unit
+- emit deterministic policy error event
+- abort affected operation
 - keep task alive and recoverable
 
 ## Network policy roadmap
@@ -232,27 +228,45 @@ Policy violation behavior:
 
 **Exit criteria:** no spinner hangs in normal task switching.
 
-### Gate G1 — Workspace strategy decision
+### Gate G1 — Workspace strategy decision (historical)
 
-- ✅ Mount viability spike run with harness evidence
-- ✅ Path S selected (live-mount path deferred)
+- ✅ Initial spike and documentation completed
+- ⚠️ Outcome (Path S) is now provisional and reopened under Gate G2
 
-### Phase 3M — Live mount path (deferred)
+### Phase 3I-lite — MVP isolation execution track (active)
 
-- Deferred by Gate G1 outcome.
+- Enforce scoped folder access with host+guest path checks (`realpath`, traversal/symlink/special-file guards)
+- Add negative tests for escape attempts + cross-task bleed checks
+- Keep current no-restart switching and taskd lifecycle behavior
+- Keep security copy honest: scoped local mode, not fully hardened hostile-code sandbox
 
-### Phase 3S — Sync path (active)
+**Exit criteria:** enforceable scoped writes in normal flows without regressions in switch/prompt UX.
 
-- `runtime_v2_sync` dry-run first (manifest + conflict reporting)
-- then enable sync apply
+### Gate G2 — Runtime/sandbox architecture decision (research, non-blocking)
 
-**Exit criteria:** stable sync around prompts/switches with conflict recovery.
+- Run focused spikes:
+  - deeper isolation hardening on current runtime (per-task users + stronger sandbox)
+  - Gondolin feasibility path (pi RPC + scoped filesystem + switch UX)
+- Compare using shared acceptance criteria (scope enforcement, latency, implementation cost)
+
+**Exit criteria:** explicit architecture decision record with selected post-MVP path and deferred items.
+
+### Phase 3G — Gondolin integration (if Path G selected)
+
+- Bridge Tauri host to Gondolin VM lifecycle
+- Run pi RPC inside Gondolin guest
+- Map task model/session semantics to existing UI/runtime service
+
+### Phase 3S — Sync path (on hold fallback)
+
+- Keep draft protocol/docs
+- No additional implementation unless explicitly re-selected
 
 ### Phase 4 — Hardening
 
 - Reaping policy (max warm tasks + LRU)
 - Better observability (`taskd` + host service metrics/logs)
-- Optional per-task Linux users (`0700` homes) if still needed
+- Stronger isolation boundary based on selected path
 
 **Exit criteria:** predictable long-session behavior and bounded resource growth.
 
@@ -275,11 +289,12 @@ Core checks:
 - `task_switch_started -> task_ready` within timeout budget
 - Resume remains correct after app restart
 
-Security checks (when sync path is active):
+Security checks (for selected path):
 
-- Path-escape attempt blocked (`SYNC_POLICY_VIOLATION`)
-- Symlink-escape attempt blocked (`SYNC_POLICY_VIOLATION`)
-- Conflict case preserves both versions
+- Path-escape attempt blocked (deterministic policy error)
+- Symlink-escape attempt blocked
+- Cross-task file visibility/write denied
+- If sync path is selected later: conflict handling preserves both versions
 
 Resource/reaping checks:
 
@@ -296,10 +311,10 @@ Evidence requirement for claims:
 ## Risks / open questions
 
 1. `taskd` process supervision edge cases (child lifecycle under load)
-2. Sync cost for large workspaces (Path S)
-3. Conflict UX quality when apply mode lands (`SYNC_CONFLICT` ergonomics)
+2. Integration complexity if Gondolin is adopted (Tauri bridge + pi RPC semantics)
+3. Scope-enforcement correctness across mount/user/sandbox layers
 4. Network-control scope creep vs core v2 delivery
-5. Whether per-task Linux users are worth complexity after baseline stabilizes
+5. How far to push hardening before MVP learning loops
 
 ## Progress snapshot (2026-02-06)
 
@@ -328,17 +343,25 @@ Completed in code:
     - cold resume: ~0.60ms
   - Captured required evidence: `test-dump-state`, `test-screenshot phase2-latency`, supporting log lines.
   - Verified no VM restart during switch loops (`[rust:vm] start called` count remained 1).
-- ✅ Gate G1 decision: Path S selected.
-  - Harness spike showed v2 folder changes are metadata-only and `/mnt/workdir` is not dynamically mounted/switched.
-  - Proceeding with sync-first workspace path (Phase 3S).
+- ✅ Path I-lite I1 baseline landed:
+  - Host validates working folders with canonicalization + workspace-root enforcement (`runtime_validate_working_folder`).
+  - Host threads validated `workingFolderRelative` into `create_or_open_task` payload.
+  - Guest validates relative subpaths and rejects traversal/symlink escapes (`WORKSPACE_POLICY_VIOLATION`).
+  - Runtime state now exposes workspace root in harness dump-state output.
+- ⚠️ v2 workspace mount reliability still incomplete:
+  - In current test boots, `/mnt/workdir` may still be unavailable and taskd falls back to `/sessions/<taskId>/work`.
+- ⚠️ Gate G1 decision documented as Path S, now reopened under Gate G2 reassessment.
 
 Still open:
 
-- ⏳ Phase 3S sync protocol + dry-run/apply implementation.
+- ⏳ Phase 3I-lite I1b: workspace mount reliability in v2 taskd path.
+- ⏳ Phase 3I-lite I2: negative harness checks (escape attempts + cross-task bleed).
 - ⏳ Focused resume-semantics checks (task-local memory seed test, no cross-task bleed assertions).
+- ⏳ ADR defining MVP isolation guarantees and deferred hardening.
+- ⏳ Gate G2 research lane (Gondolin feasibility + deeper hardening path comparison).
 
 ## Immediate next actions
 
-1. Implement `runtime_v2_sync` dry-run plumbing (manifest + conflict reporting, no apply)
-2. Add focused resume-semantics checks (task-local memory seed test, no cross-task bleed assertions)
-3. Add sync observability in harness (`test-dump-state` + sync event capture)
+1. Fix/verify v2 workspace mount availability (`/mnt/workdir`) in taskd boots
+2. Add negative harness tests for traversal/symlink/cross-task escape attempts
+3. Capture MVP security contract in ADR and align UI copy with actual guarantees

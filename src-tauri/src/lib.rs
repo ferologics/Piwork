@@ -10,6 +10,7 @@ mod vm;
 
 const RUNTIME_MANIFEST: &str = "manifest.json";
 const RUNTIME_ENV_VAR: &str = "PIWORK_RUNTIME_DIR";
+const WORKSPACE_ROOT_ENV_VAR: &str = "PIWORK_WORKSPACE_ROOT";
 
 #[derive(Debug, serde::Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -35,6 +36,14 @@ struct RuntimeFlags {
     runtime_v2_taskd: bool,
     runtime_v2_sync: bool,
     mode: String,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct WorkingFolderValidation {
+    folder: String,
+    workspace_root: String,
+    relative_path: String,
 }
 
 #[tauri::command]
@@ -130,6 +139,98 @@ fn runtime_flags() -> RuntimeFlags {
     current_runtime_flags()
 }
 
+fn canonicalize_directory(path: &Path, label: &str) -> Result<PathBuf, String> {
+    let metadata = std::fs::symlink_metadata(path).map_err(|error| format!("{label} not found: {error}"))?;
+    if metadata.file_type().is_symlink() {
+        return Err(format!("{label} must not be a symlink"));
+    }
+
+    let canonical = std::fs::canonicalize(path).map_err(|error| format!("Failed to resolve {label}: {error}"))?;
+    let canonical_metadata =
+        std::fs::metadata(&canonical).map_err(|error| format!("Failed to stat {label}: {error}"))?;
+
+    if !canonical_metadata.is_dir() {
+        return Err(format!("{label} must be a directory"));
+    }
+
+    Ok(canonical)
+}
+
+fn resolve_workspace_root_from_env() -> Result<Option<PathBuf>, String> {
+    let Ok(raw_root) = std::env::var(WORKSPACE_ROOT_ENV_VAR) else {
+        return Ok(None);
+    };
+
+    let trimmed = raw_root.trim();
+    if trimmed.is_empty() {
+        return Ok(None);
+    }
+
+    let canonical = canonicalize_directory(Path::new(trimmed), "workspace root")?;
+    Ok(Some(canonical))
+}
+
+fn relative_path_string(root: &Path, candidate: &Path) -> Result<String, String> {
+    let relative = candidate
+        .strip_prefix(root)
+        .map_err(|_| "Working folder is outside workspace root".to_string())?;
+
+    let parts: Vec<String> = relative
+        .components()
+        .filter_map(|component| match component {
+            std::path::Component::Normal(value) => Some(value.to_string_lossy().to_string()),
+            _ => None,
+        })
+        .collect();
+
+    Ok(parts.join("/"))
+}
+
+#[tauri::command]
+fn runtime_workspace_root() -> Result<Option<String>, String> {
+    let root = resolve_workspace_root_from_env()?;
+    Ok(root.map(|path| path.to_string_lossy().to_string()))
+}
+
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
+fn runtime_validate_working_folder(
+    folder: String,
+    workspace_root: Option<String>,
+) -> Result<WorkingFolderValidation, String> {
+    let trimmed_folder = folder.trim();
+    if trimmed_folder.is_empty() {
+        return Err("Working folder is required".to_string());
+    }
+
+    let canonical_folder = canonicalize_directory(Path::new(trimmed_folder), "working folder")?;
+
+    let canonical_root = if let Some(root) = workspace_root.as_deref() {
+        let trimmed_root = root.trim();
+        if trimmed_root.is_empty() {
+            canonical_folder.clone()
+        } else {
+            canonicalize_directory(Path::new(trimmed_root), "workspace root")?
+        }
+    } else if let Some(env_root) = resolve_workspace_root_from_env()? {
+        env_root
+    } else {
+        canonical_folder.clone()
+    };
+
+    if !canonical_folder.starts_with(&canonical_root) {
+        return Err("Working folder must be within workspace root".to_string());
+    }
+
+    let relative_path = relative_path_string(&canonical_root, &canonical_folder)?;
+
+    Ok(WorkingFolderValidation {
+        folder: canonical_folder.to_string_lossy().to_string(),
+        workspace_root: canonical_root.to_string_lossy().to_string(),
+        relative_path,
+    })
+}
+
 fn runtime_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     if let Ok(override_dir) = std::env::var(RUNTIME_ENV_VAR) {
         return Ok(PathBuf::from(override_dir));
@@ -174,8 +275,17 @@ fn vm_start(
     task_id: Option<String>,
 ) -> Result<vm::VmStatusResponse, String> {
     let runtime_dir = runtime_dir(&app)?;
-    let folder_path = working_folder.as_ref().map(std::path::PathBuf::from);
     let flags = current_runtime_flags();
+
+    let folder_path = if flags.runtime_v2_taskd {
+        if let Some(workspace_root) = resolve_workspace_root_from_env()? {
+            Some(workspace_root)
+        } else {
+            working_folder.as_ref().map(std::path::PathBuf::from)
+        }
+    } else {
+        working_folder.as_ref().map(std::path::PathBuf::from)
+    };
 
     if let Some(task_id) = task_id.as_deref() {
         if !is_valid_task_id(task_id) {
@@ -432,6 +542,8 @@ pub fn run() {
             dev_log,
             runtime_status,
             runtime_flags,
+            runtime_workspace_root,
+            runtime_validate_working_folder,
             task_store_list,
             task_store_upsert,
             task_store_delete,

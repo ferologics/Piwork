@@ -48,6 +48,7 @@ let openingLog = $state(false);
 let currentTaskId = $state<string | null>(null);
 let currentWorkingFolder = $state<string | null>(null);
 let currentSessionFile = $state<string | null>(null);
+let workspaceRoot = $state<string | null>(null);
 let taskSwitching = $state(false);
 let runtimeMode = $state<RuntimeMode>("v1");
 let runtimeV2Taskd = $state(false);
@@ -245,6 +246,7 @@ function applyRuntimeSnapshot(snapshot: RuntimeServiceSnapshot) {
     currentTaskId = snapshot.currentTaskId;
     currentWorkingFolder = snapshot.currentWorkingFolder;
     currentSessionFile = snapshot.currentSessionFile;
+    workspaceRoot = snapshot.workspaceRoot;
     taskSwitching = snapshot.taskSwitching;
     runtimeMode = snapshot.mode;
     runtimeV2Taskd = snapshot.runtimeV2Taskd;
@@ -866,7 +868,7 @@ onMount(() => {
                 "TestHarness",
                 `state: task=${currentTaskId ?? "none"} session=${currentSessionFile ?? "none"} folder=${
                     currentWorkingFolder ?? "none"
-                } messages=${messageCount} streaming=${hasStreaming} switching=${taskSwitching} mode=${runtimeMode} taskd=${runtimeV2Taskd} sync=${runtimeV2Sync}`,
+                } root=${workspaceRoot ?? "none"} messages=${messageCount} streaming=${hasStreaming} switching=${taskSwitching} mode=${runtimeMode} taskd=${runtimeV2Taskd} sync=${runtimeV2Sync}`,
             );
         }).then((unlisten) => {
             testDumpStateUnlisten = unlisten;

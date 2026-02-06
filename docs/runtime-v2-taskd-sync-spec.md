@@ -1,8 +1,10 @@
 # Runtime v2 `taskd` Sync Spec (Path S)
 
-Status: draft (Path S selected at Gate G1)
+Status: draft/on-hold (fallback path pending Gate G2)
 Audience: host runtime service + guest `taskd` implementation
-Related: `docs/runtime-v2-taskd-plan.md`, `docs/runtime-v2-taskd-rpc-spec.md`
+Related: `docs/runtime-v2-taskd-plan.md`, `docs/runtime-g2-architecture-spike.md`, `docs/runtime-v2-taskd-rpc-spec.md`
+
+> **Status note (2026-02-06):** Keep this as reference only. Do not expand implementation unless Path S is selected at Gate G2.
 
 ## 1) Scope
 
