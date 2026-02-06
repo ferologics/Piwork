@@ -8,8 +8,6 @@ import type {
     ToolExecutionStartEvent,
     ToolExecutionUpdateEvent,
     ToolExecutionEndEvent,
-    AgentMessage,
-    ToolResult,
 } from "./types";
 
 export interface TextBlock {
