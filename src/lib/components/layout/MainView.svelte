@@ -222,7 +222,7 @@ function updateAuthHint(message: string) {
     if (!needsAuth) return;
 
     rpcAuthHint =
-        "Auth required. Import/set credentials in Settings (default profile), then restart runtime. Fallback: `mise run runtime-build-auth` (optional `PIWORK_AUTH_PATH=...`).";
+        "Auth required. Import credentials from pi in Settings, then restart runtime. Fallback: `mise run runtime-build-auth` (optional `PIWORK_AUTH_PATH=...`).";
 
     maybeCaptureLoginUrl(message);
 }

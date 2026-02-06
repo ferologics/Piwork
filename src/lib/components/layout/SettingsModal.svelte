@@ -3,7 +3,6 @@ import { onDestroy } from "svelte";
 import { invoke } from "@tauri-apps/api/core";
 import { openPath } from "@tauri-apps/plugin-opener";
 import { X } from "@lucide/svelte";
-import ProviderList from "$lib/components/ProviderList.svelte";
 
 const { open = false, onClose = null } = $props<{
     open?: boolean;
@@ -20,66 +19,18 @@ interface AuthStoreSummary {
     entries: AuthStoreEntry[];
 }
 
-const providerOptions = [
-    { id: "anthropic", label: "Anthropic" },
-    { id: "openai", label: "OpenAI" },
-    { id: "google", label: "Google" },
-    { id: "mistral", label: "Mistral" },
-    { id: "groq", label: "Groq" },
-    { id: "cerebras", label: "Cerebras" },
-    { id: "xai", label: "xAI" },
-    { id: "openrouter", label: "OpenRouter" },
-    { id: "ai_gateway", label: "Vercel AI Gateway" },
-    { id: "zai", label: "ZAI" },
-    { id: "opencode", label: "OpenCode Zen" },
-    { id: "huggingface", label: "Hugging Face" },
-    { id: "kimi", label: "Kimi" },
-    { id: "minimax", label: "MiniMax" },
-    { id: "minimax_cn", label: "MiniMax (China)" },
-];
+const DEFAULT_PROFILE = "default";
+const RUNTIME_BUILD_AUTH_COMMAND = "PIWORK_COPY_AUTH=1 mise run runtime-build-auth";
 
-let profile = $state("default");
-let provider = $state("");
-let apiKey = $state("");
 let entries = $state<AuthStoreEntry[]>([]);
 let storePath = $state<string | null>(null);
 let loading = $state(false);
-let saving = $state(false);
+let importingAuth = $state(false);
+let openingStorePath = $state(false);
 let error = $state<string | null>(null);
 let notice = $state<string | null>(null);
-let commandNotice = $state<string | null>(null);
-let copyingCommand = $state(false);
-let commandCopied = $state(false);
-let openingStorePath = $state(false);
-let importingAuth = $state(false);
-let newProfile = $state("");
-let profileNotice = $state<string | null>(null);
-let profileError = $state<string | null>(null);
-let profileTimer: ReturnType<typeof setTimeout> | null = null;
-let profileSetTimer: ReturnType<typeof setTimeout> | null = null;
-let profileOptions = $state<string[]>(["default"]);
-
-const PROFILE_STORAGE_KEY = "piwork:auth-profile";
-const PROFILE_LIST_KEY = "piwork:auth-profiles";
-
 let noticeTimer: ReturnType<typeof setTimeout> | null = null;
-let commandTimer: ReturnType<typeof setTimeout> | null = null;
 let wasOpen = $state(false);
-
-async function loadEntries() {
-    loading = true;
-    error = null;
-
-    try {
-        const summary = await invoke<AuthStoreSummary>("auth_store_list", { profile });
-        entries = summary.entries;
-        storePath = summary.path;
-    } catch (err) {
-        error = err instanceof Error ? err.message : String(err);
-    } finally {
-        loading = false;
-    }
-}
 
 function clearNotice() {
     notice = null;
@@ -99,48 +50,37 @@ function setNotice(message: string) {
     }, 3000);
 }
 
-function clearCommandNotice() {
-    commandNotice = null;
-    if (commandTimer) {
-        clearTimeout(commandTimer);
-        commandTimer = null;
-    }
+function formatEntryType(entryType: string) {
+    return entryType === "api_key" ? "API key" : entryType;
 }
 
-function setCommandNotice(message: string) {
-    commandNotice = message;
-    if (commandTimer) {
-        clearTimeout(commandTimer);
-    }
-    commandTimer = setTimeout(() => {
-        commandNotice = null;
-    }, 3000);
-}
-
-function resetCommandCopy() {
-    copyingCommand = false;
-    commandCopied = false;
-    clearCommandNotice();
-}
-
-async function openStorePath() {
-    if (!storePath || openingStorePath) return;
-    openingStorePath = true;
+async function loadAuthStatus() {
+    loading = true;
+    error = null;
 
     try {
-        await openPath(storePath);
+        const summary = await invoke<AuthStoreSummary>("auth_store_list", {
+            profile: DEFAULT_PROFILE,
+        });
+        entries = summary.entries;
+        storePath = summary.path;
+    } catch (err) {
+        error = err instanceof Error ? err.message : String(err);
     } finally {
-        openingStorePath = false;
+        loading = false;
     }
 }
 
 async function importPiAuth() {
     if (importingAuth) return;
+
     importingAuth = true;
     error = null;
 
     try {
-        const summary = await invoke<AuthStoreSummary>("auth_store_import_pi", { profile });
+        const summary = await invoke<AuthStoreSummary>("auth_store_import_pi", {
+            profile: DEFAULT_PROFILE,
+        });
         entries = summary.entries;
         storePath = summary.path;
         setNotice("Imported ~/.pi/agent/auth.json");
@@ -151,247 +91,29 @@ async function importPiAuth() {
     }
 }
 
-function clearProfileNotice() {
-    profileNotice = null;
-    if (profileTimer) {
-        clearTimeout(profileTimer);
-        profileTimer = null;
-    }
-}
+async function openAuthStorePath() {
+    if (!storePath || openingStorePath) return;
 
-function setProfileNotice(message: string) {
-    profileNotice = message;
-    if (profileTimer) {
-        clearTimeout(profileTimer);
-    }
-    profileTimer = setTimeout(() => {
-        profileNotice = null;
-    }, 3000);
-}
-
-function clearProfileSetNotice() {
-    profileError = null;
-    if (profileSetTimer) {
-        clearTimeout(profileSetTimer);
-        profileSetTimer = null;
-    }
-}
-
-function setProfileError(message: string) {
-    profileError = message;
-    if (profileSetTimer) {
-        clearTimeout(profileSetTimer);
-    }
-    profileSetTimer = setTimeout(() => {
-        profileError = null;
-    }, 3000);
-}
-
-function normalizeProfile(value: string) {
-    const trimmed = value.trim();
-    return trimmed || "default";
-}
-
-function persistProfileOptions(options: string[]) {
+    openingStorePath = true;
     try {
-        localStorage.setItem(PROFILE_LIST_KEY, JSON.stringify(options));
-    } catch {
-        // Ignore storage errors.
-    }
-}
-
-function loadProfileOptions() {
-    let stored: string[] = [];
-
-    try {
-        const raw = localStorage.getItem(PROFILE_LIST_KEY);
-        if (raw) {
-            const parsed = JSON.parse(raw);
-            if (Array.isArray(parsed)) {
-                stored = parsed
-                    .filter((value) => typeof value === "string")
-                    .map((value) => value.trim())
-                    .filter((value) => value.length > 0);
-            }
-        }
-    } catch {
-        // Ignore storage errors.
-    }
-
-    const normalized = normalizeProfile(profile);
-    const merged = [normalized, "default", ...stored];
-    const unique = Array.from(new Set(merged));
-
-    profileOptions = unique;
-    persistProfileOptions(unique);
-}
-
-function updateProfileOptions(nextProfile: string) {
-    const normalized = normalizeProfile(nextProfile);
-    profileOptions = [normalized, ...profileOptions.filter((value) => value !== normalized)];
-    persistProfileOptions(profileOptions);
-}
-
-function shellQuote(value: string) {
-    return `'${value.replace(/'/g, `'\\''`)}'`;
-}
-
-function buildAuthCommand() {
-    const commandPrefix = "PIWORK_COPY_AUTH=1";
-
-    if (storePath && storePath.trim().length > 0) {
-        return `${commandPrefix} PIWORK_AUTH_PATH=${shellQuote(storePath)} mise run runtime-build-auth`;
-    }
-
-    return `${commandPrefix} mise run runtime-build-auth`;
-}
-
-function persistProfile() {
-    try {
-        localStorage.setItem(PROFILE_STORAGE_KEY, profile);
-    } catch {
-        // Ignore storage errors.
-    }
-}
-
-function applyProfile(nextProfile: string, showNotice: boolean) {
-    clearProfileSetNotice();
-
-    if (nextProfile !== profile) {
-        profile = nextProfile;
-    }
-
-    if (showNotice) {
-        setProfileNotice(`Switched to ${nextProfile}`);
-    }
-
-    updateProfileOptions(nextProfile);
-    persistProfile();
-    void loadEntries();
-}
-
-function handleProfileChange() {
-    clearProfileNotice();
-
-    const normalized = normalizeProfile(profile);
-    const showNotice = normalized !== profile;
-    applyProfile(normalized, showNotice);
-}
-
-function selectProfile(option: string) {
-    if (option === profile) return;
-    clearProfileNotice();
-    applyProfile(option, true);
-}
-
-async function addProfile() {
-    const trimmed = newProfile.trim();
-    if (!trimmed) {
-        setProfileError("Profile name required.");
-        return;
-    }
-
-    const normalized = normalizeProfile(trimmed);
-    newProfile = "";
-    clearProfileNotice();
-    applyProfile(normalized, true);
-}
-
-async function copyAuthCommand() {
-    if (copyingCommand) return;
-
-    if (!navigator?.clipboard) {
-        setCommandNotice("Clipboard unavailable");
-        return;
-    }
-
-    copyingCommand = true;
-    commandCopied = false;
-
-    try {
-        await navigator.clipboard.writeText(buildAuthCommand());
-        commandCopied = true;
-        setCommandNotice("Command copied.");
-    } catch {
-        setCommandNotice("Failed to copy command.");
+        await openPath(storePath);
     } finally {
-        copyingCommand = false;
-    }
-}
-
-async function saveApiKey() {
-    const trimmedProvider = provider.trim();
-    const trimmedKey = apiKey.trim();
-
-    if (!trimmedProvider || !trimmedKey) {
-        error = "Provider and API key are required.";
-        return;
-    }
-
-    saving = true;
-    error = null;
-
-    try {
-        const summary = await invoke<AuthStoreSummary>("auth_store_set_api_key", {
-            profile,
-            provider: trimmedProvider,
-            key: trimmedKey,
-        });
-        entries = summary.entries;
-        storePath = summary.path;
-        apiKey = "";
-        provider = trimmedProvider;
-        setNotice("API key saved.");
-    } catch (err) {
-        error = err instanceof Error ? err.message : String(err);
-    } finally {
-        saving = false;
-    }
-}
-
-async function deleteProvider(target: string) {
-    saving = true;
-    error = null;
-
-    try {
-        const summary = await invoke<AuthStoreSummary>("auth_store_delete", {
-            profile,
-            provider: target,
-        });
-        entries = summary.entries;
-        storePath = summary.path;
-        setNotice("Provider removed.");
-    } catch (err) {
-        error = err instanceof Error ? err.message : String(err);
-    } finally {
-        saving = false;
+        openingStorePath = false;
     }
 }
 
 function initializeOpen() {
-    try {
-        const stored = localStorage.getItem(PROFILE_STORAGE_KEY);
-        if (stored) {
-            profile = stored;
-        }
-    } catch {
-        // Ignore storage errors.
-    }
-
-    loadProfileOptions();
-    void loadEntries();
+    clearNotice();
+    error = null;
+    void loadAuthStatus();
 }
 
 function resetOnClose() {
-    error = null;
     clearNotice();
-    resetCommandCopy();
-    clearProfileNotice();
-    clearProfileSetNotice();
-    openingStorePath = false;
+    error = null;
+    loading = false;
     importingAuth = false;
-    apiKey = "";
-    newProfile = "";
+    openingStorePath = false;
 }
 
 $effect(() => {
@@ -411,15 +133,6 @@ onDestroy(() => {
     if (noticeTimer) {
         clearTimeout(noticeTimer);
     }
-    if (commandTimer) {
-        clearTimeout(commandTimer);
-    }
-    if (profileTimer) {
-        clearTimeout(profileTimer);
-    }
-    if (profileSetTimer) {
-        clearTimeout(profileSetTimer);
-    }
 });
 </script>
 
@@ -431,178 +144,110 @@ onDestroy(() => {
             aria-label="Close settings"
             onclick={() => onClose?.()}
         ></button>
+
         <div class="relative max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-lg border border-border bg-card p-6 shadow-lg">
             <div class="flex items-center justify-between">
                 <div>
                     <h2 class="text-lg font-semibold">Settings</h2>
-                    <p class="text-sm text-muted-foreground">Manage auth providers and API keys.</p>
+                    <p class="text-sm text-muted-foreground">Authentication (MVP)</p>
                 </div>
                 <button class="rounded-md p-2 hover:bg-accent" aria-label="Close" onclick={() => onClose?.()}>
                     <X class="h-4 w-4" />
                 </button>
             </div>
 
-            <div class="mt-3 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
-                Settings/auth UI is experimental. Changes are stored on host and mounted into the VM by profile;
-                restart runtime after updates. Fallback path: <span class="font-mono">mise run runtime-build-auth</span>
-                (optionally with <span class="font-mono">PIWORK_AUTH_PATH=/path/to/auth.json</span>).
+            <div class="mt-3 rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+                For MVP, auth comes from either imported host credentials (<span class="font-mono">~/.pi/agent/auth.json</span>)
+                or baked runtime auth (<span class="font-mono">{RUNTIME_BUILD_AUTH_COMMAND}</span>).
             </div>
 
-            <div class="mt-6 space-y-4">
-                <div class="rounded-lg border border-border bg-muted/30 p-4">
-                    <div class="text-sm font-medium">API Keys</div>
-                    <div class="mt-1 text-xs text-muted-foreground">Profile: {profile}</div>
-                    <div class="mt-3 grid gap-2 text-xs">
-                        <label class="grid gap-1">
-                            <span class="text-muted-foreground">Profile</span>
-                            <input
-                                class="rounded-md border border-border bg-background px-3 py-2 text-sm"
-                                list="profile-options"
-                                placeholder="default"
-                                bind:value={profile}
-                                onblur={handleProfileChange}
-                                onkeydown={(event) => {
-                                    if (event.key === "Enter") {
-                                        event.preventDefault();
-                                        handleProfileChange();
-                                    }
-                                }}
-                            />
-                        </label>
-                        <datalist id="profile-options">
-                            {#each profileOptions as option}
-                                <option value={option}></option>
-                            {/each}
-                        </datalist>
-                        <div class="flex flex-wrap items-center gap-2">
-                            <input
-                                class="rounded-md border border-border bg-background px-3 py-2 text-sm"
-                                placeholder="New profile"
-                                bind:value={newProfile}
-                            />
-                            <button
-                                class="rounded-md bg-secondary px-3 py-2 text-xs hover:bg-secondary/80 disabled:opacity-60"
-                                onclick={addProfile}
-                                disabled={!newProfile.trim()}
-                            >
-                                Add profile
-                            </button>
-                        </div>
-                        {#if profileOptions.length > 0}
-                            <div class="flex flex-wrap gap-2">
-                                {#each profileOptions.slice(0, 6) as option}
-                                    <button
-                                        class="rounded-md px-2 py-1 text-[11px] {option === profile
-                                            ? 'bg-accent text-foreground'
-                                            : 'bg-secondary text-muted-foreground hover:bg-secondary/80'} disabled:opacity-60"
-                                        onclick={() => selectProfile(option)}
-                                        disabled={option === profile}
-                                    >
-                                        {option}
-                                    </button>
-                                {/each}
-                            </div>
+            <div class="mt-6 rounded-lg border border-border bg-muted/30 p-4">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                    <div class="text-sm font-medium">Current auth status</div>
+                    <span
+                        class="rounded-full px-2 py-1 text-[11px] font-medium {loading
+                            ? 'bg-secondary text-muted-foreground'
+                            : entries.length > 0
+                                ? 'bg-emerald-500/15 text-emerald-300'
+                                : 'bg-amber-500/15 text-amber-300'}"
+                    >
+                        {#if loading}
+                            Checking…
+                        {:else if entries.length > 0}
+                            Configured
+                        {:else}
+                            Not configured
                         {/if}
-                        {#if profileNotice}
-                            <div class="text-[11px] text-emerald-400">{profileNotice}</div>
-                        {/if}
-                        {#if profileError}
-                            <div class="text-[11px] text-destructive">{profileError}</div>
-                        {/if}
-                    </div>
-                    {#if storePath}
-                        <div class="mt-2 text-[11px] text-muted-foreground">
-                            <span class="uppercase tracking-wide">Storage</span>
-                            <code class="mt-1 block rounded-md bg-muted px-2 py-1">{storePath}</code>
-                            <div class="mt-2 flex flex-wrap gap-2">
-                                <button
-                                    class="rounded-md bg-secondary px-2 py-1 text-[11px] hover:bg-secondary/80 disabled:opacity-60"
-                                    onclick={openStorePath}
-                                    disabled={openingStorePath}
-                                >
-                                    {openingStorePath ? "Opening…" : "Open auth file"}
-                                </button>
-                                <button
-                                    class="rounded-md bg-secondary px-2 py-1 text-[11px] hover:bg-secondary/80 disabled:opacity-60"
-                                    onclick={importPiAuth}
-                                    disabled={importingAuth}
-                                >
-                                    {importingAuth ? "Importing…" : "Import ~/.pi auth"}
-                                </button>
-                            </div>
-                        </div>
-                    {/if}
-                    <div class="mt-3 rounded-md border border-border bg-background px-3 py-2 text-xs text-muted-foreground">
-                        <div class="text-[11px] uppercase tracking-wide">Dev runtime auth</div>
-                        <code class="mt-2 block rounded-md bg-muted px-2 py-1">{buildAuthCommand()}</code>
-                        <div class="mt-2 flex flex-wrap items-center gap-2">
-                            <button
-                                class="rounded-md bg-secondary px-2 py-1 text-[11px] hover:bg-secondary/80 disabled:opacity-60"
-                                onclick={copyAuthCommand}
-                                disabled={copyingCommand}
-                            >
-                                {commandCopied
-                                    ? "Copied"
-                                    : copyingCommand
-                                        ? "Copying…"
-                                        : "Copy command"}
-                            </button>
-                            {#if commandNotice}
-                                <span class="text-[11px] text-muted-foreground">{commandNotice}</span>
-                            {/if}
-                        </div>
-                    </div>
-
-                    <div class="mt-4 grid gap-3">
-                        <label class="grid gap-1 text-xs">
-                            <span class="text-muted-foreground">Provider</span>
-                            <input
-                                class="rounded-md border border-border bg-background px-3 py-2 text-sm"
-                                list="provider-options"
-                                placeholder="anthropic"
-                                bind:value={provider}
-                            />
-                        </label>
-                        <datalist id="provider-options">
-                            {#each providerOptions as option}
-                                <option value={option.id}>{option.label}</option>
-                            {/each}
-                        </datalist>
-                        <label class="grid gap-1 text-xs">
-                            <span class="text-muted-foreground">API key</span>
-                            <input
-                                class="rounded-md border border-border bg-background px-3 py-2 text-sm"
-                                type="password"
-                                placeholder="sk-..."
-                                bind:value={apiKey}
-                            />
-                        </label>
-                        <div class="flex items-center gap-2">
-                            <button
-                                class="rounded-md bg-primary px-3 py-2 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
-                                onclick={saveApiKey}
-                                disabled={saving || !provider.trim() || !apiKey.trim()}
-                            >
-                                {saving ? "Saving…" : "Save API key"}
-                            </button>
-                            {#if notice}
-                                <span class="text-xs text-emerald-400">{notice}</span>
-                            {/if}
-                        </div>
-                        {#if error}
-                            <div class="rounded-md border border-destructive/40 bg-destructive/10 px-2 py-1 text-xs text-destructive">
-                                {error}
-                            </div>
-                        {/if}
-                    </div>
+                    </span>
                 </div>
 
-                <ProviderList
-                    {entries}
-                    {loading}
-                    disabled={saving}
-                    ondelete={deleteProvider}
-                />
+                <div class="mt-3 text-xs text-muted-foreground">
+                    {#if loading}
+                        Checking stored providers…
+                    {:else if entries.length === 0}
+                        No providers found in the default auth store yet.
+                    {:else}
+                        Found {entries.length} provider{entries.length === 1 ? "" : "s"} in default auth store.
+                    {/if}
+                </div>
+
+                {#if entries.length > 0}
+                    <div class="mt-3 space-y-2">
+                        {#each entries as entry}
+                            <div class="flex items-center justify-between rounded-md border border-border bg-background px-3 py-2">
+                                <div class="text-sm font-medium text-foreground">{entry.provider}</div>
+                                <div class="text-xs text-muted-foreground">{formatEntryType(entry.entryType)}</div>
+                            </div>
+                        {/each}
+                    </div>
+                {/if}
+
+                {#if storePath}
+                    <div class="mt-3 text-[11px] text-muted-foreground">
+                        <span class="uppercase tracking-wide">Storage</span>
+                        <code class="mt-1 block rounded-md bg-muted px-2 py-1">{storePath}</code>
+                    </div>
+                {/if}
+
+                <div class="mt-4 flex flex-wrap items-center gap-2">
+                    <button
+                        class="rounded-md bg-primary px-3 py-2 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
+                        onclick={importPiAuth}
+                        disabled={importingAuth}
+                    >
+                        {importingAuth ? "Importing…" : "Import from pi"}
+                    </button>
+
+                    <button
+                        class="rounded-md bg-secondary px-3 py-2 text-xs hover:bg-secondary/80 disabled:opacity-60"
+                        onclick={loadAuthStatus}
+                        disabled={loading}
+                    >
+                        {loading ? "Refreshing…" : "Refresh"}
+                    </button>
+
+                    <button
+                        class="rounded-md bg-secondary px-3 py-2 text-xs hover:bg-secondary/80 disabled:opacity-60"
+                        onclick={openAuthStorePath}
+                        disabled={!storePath || openingStorePath}
+                    >
+                        {openingStorePath ? "Opening…" : "Open auth file"}
+                    </button>
+                </div>
+
+                {#if notice}
+                    <div class="mt-3 text-xs text-emerald-400">{notice}</div>
+                {/if}
+
+                {#if error}
+                    <div class="mt-3 rounded-md border border-destructive/40 bg-destructive/10 px-2 py-1 text-xs text-destructive">
+                        {error}
+                    </div>
+                {/if}
+            </div>
+
+            <div class="mt-3 text-xs text-muted-foreground">
+                After auth changes, restart runtime if the current task session is already running.
             </div>
         </div>
     </div>
