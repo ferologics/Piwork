@@ -94,4 +94,5 @@ mise run test-check-permissions          # verify screenshot capture works
 - 4-space indentation
 - Use mise tasks, not direct pnpm/cargo
 - Keep configs sorted
+- Capture deferred work immediately: when decisions/ideas are parked, update `TODO.md` (and relevant docs if needed) in the same pass with a short rationale and revisit trigger
 - Pre-alpha policy: breaking changes are acceptable; do not add migration/fallback/compat shims unless explicitly requested
