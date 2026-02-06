@@ -828,6 +828,19 @@ function buildTestStateSnapshot() {
             runtimeDebug.activeTaskId !== activeTask.id,
     );
 
+    const workingFolderFileRowCount =
+        typeof document === "undefined"
+            ? 0
+            : document.querySelectorAll('[data-test-id="working-folder-file-row"]').length;
+    const workingFolderLoadingVisible =
+        typeof document === "undefined"
+            ? false
+            : Boolean(document.querySelector('[data-test-id="working-folder-loading"]'));
+    const workingFolderEmptyVisible =
+        typeof document === "undefined"
+            ? false
+            : Boolean(document.querySelector('[data-test-id="working-folder-empty"]'));
+
     return {
         schemaVersion: 1,
         timestamp: new Date().toISOString(),
@@ -869,6 +882,11 @@ function buildTestStateSnapshot() {
             currentCwd: runtimeDebug.currentCwd,
             workingFolderRelative: runtimeDebug.workingFolderRelative,
             mismatchVisible: runtimeMismatchVisible,
+        },
+        panels: {
+            workingFolderFileRowCount,
+            workingFolderLoadingVisible,
+            workingFolderEmptyVisible,
         },
     };
 }

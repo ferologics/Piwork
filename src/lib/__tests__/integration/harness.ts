@@ -20,6 +20,10 @@ interface TaskSummary {
     workingFolder: string | null;
 }
 
+function isOkResponse(response: string): boolean {
+    return response === "OK";
+}
+
 export interface StateSnapshot {
     schemaVersion: number;
     timestamp: string;
@@ -61,6 +65,11 @@ export interface StateSnapshot {
         currentCwd: string | null;
         workingFolderRelative: string | null;
         mismatchVisible: boolean;
+    };
+    panels: {
+        workingFolderFileRowCount: number;
+        workingFolderLoadingVisible: boolean;
+        workingFolderEmptyVisible: boolean;
     };
 }
 
@@ -271,12 +280,14 @@ export class IntegrationHarness {
     ): Promise<T> {
         return await waitFor(
             async () => {
+                let snapshot: StateSnapshot;
                 try {
-                    const snapshot = await this.snapshot();
-                    return predicate(snapshot);
+                    snapshot = await this.snapshot();
                 } catch {
                     return null;
                 }
+
+                return predicate(snapshot);
             },
             timeoutMs,
             250,
@@ -291,8 +302,22 @@ export class IntegrationHarness {
             workingFolder,
         });
 
-        if (response !== "OK") {
+        if (!isOkResponse(response)) {
             throw new Error(`create_task failed: ${response}`);
+        }
+    }
+
+    async prompt(message: string): Promise<void> {
+        const response = await this.sendCommand({ cmd: "prompt", message });
+        if (!isOkResponse(response)) {
+            throw new Error(`prompt failed: ${response}`);
+        }
+    }
+
+    async setFolder(folder: string): Promise<void> {
+        const response = await this.sendCommand({ cmd: "set_folder", folder });
+        if (!isOkResponse(response)) {
+            throw new Error(`set_folder failed: ${response}`);
         }
     }
 
@@ -319,14 +344,14 @@ export class IntegrationHarness {
 
     async setTask(taskId: string): Promise<void> {
         const response = await this.sendCommand({ cmd: "set_task", taskId });
-        if (response !== "OK") {
+        if (!isOkResponse(response)) {
             throw new Error(`set_task failed: ${response}`);
         }
     }
 
     async deleteTask(taskId: string): Promise<void> {
         const response = await this.sendCommand({ cmd: "delete_task", taskId });
-        if (response !== "OK") {
+        if (!isOkResponse(response)) {
             throw new Error(`delete_task failed: ${response}`);
         }
     }
@@ -338,6 +363,20 @@ export class IntegrationHarness {
         for (const task of stale) {
             await this.deleteTask(task.id);
         }
+    }
+
+    async waitForTaskSettled(taskId: string, timeoutMs = 120_000): Promise<StateSnapshot> {
+        return await this.waitForSnapshot((snapshot) => {
+            if (!snapshot.runtime.rpcConnected || snapshot.runtime.taskSwitching) {
+                return null;
+            }
+
+            if (snapshot.task.currentTaskId !== taskId) {
+                return null;
+            }
+
+            return snapshot;
+        }, timeoutMs);
     }
 
     logPath(): string {

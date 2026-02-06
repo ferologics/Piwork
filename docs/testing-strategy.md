@@ -59,6 +59,13 @@ The regression gate should make these guarantees explicit:
 4. **Runtime mismatch badge semantics**
    - Badge only appears for real mismatches, not transient boot/reconfigure or legacy sentinel state.
 
+Implemented live canaries (integration):
+
+- `reopen-cwd.integration.test.ts`
+- `folder-bind-continuity.integration.test.ts`
+- `working-folder-panel-refresh.integration.test.ts`
+- `runtime-mismatch-badge.integration.test.ts`
+
 ## Live integration strategy (hybrid)
 
 - Keep **one sequential journey canary** that covers a realistic end-to-end flow (messages, models, working folder, artifacts, reopen).

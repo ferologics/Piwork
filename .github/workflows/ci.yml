@@ -33,6 +33,9 @@ jobs:
       - name: Setup mise
         uses: jdx/mise-action@v2
 
+      - name: Install sccache
+        run: brew install sccache
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
@@ -66,8 +69,8 @@ jobs:
       - name: Setup mise
         uses: jdx/mise-action@v2
 
-      - name: Install qemu
-        run: brew install qemu
+      - name: Install runtime deps
+        run: brew install qemu sccache
 
       - name: Install pi CLI for runtime build
         run: npm install -g @mariozechner/pi-coding-agent

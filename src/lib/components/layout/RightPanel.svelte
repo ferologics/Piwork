@@ -377,12 +377,13 @@ onDestroy(() => {
 
                                             <div class="max-h-48 overflow-y-auto rounded-md border border-border">
                                                 {#if workingFilesLoading && workingFiles.length === 0}
-                                                    <div class="px-2 py-2 text-xs text-muted-foreground">Loading files…</div>
+                                                    <div data-test-id="working-folder-loading" class="px-2 py-2 text-xs text-muted-foreground">Loading files…</div>
                                                 {:else if workingFiles.length === 0}
-                                                    <div class="px-2 py-2 text-xs text-muted-foreground">No files in working folder yet.</div>
+                                                    <div data-test-id="working-folder-empty" class="px-2 py-2 text-xs text-muted-foreground">No files in working folder yet.</div>
                                                 {:else}
                                                     {#each workingFiles as file}
                                                         <button
+                                                            data-test-id="working-folder-file-row"
                                                             class="flex w-full items-center gap-2 border-b border-border px-2 py-1.5 text-left text-xs hover:bg-accent last:border-b-0"
                                                             onclick={() => openWorkingPreview(file)}
                                                         >
