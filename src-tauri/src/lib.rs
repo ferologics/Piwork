@@ -1,8 +1,14 @@
 use base64::{engine::general_purpose::STANDARD as BASE64_STANDARD, Engine as _};
+use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Write};
 use std::net::TcpListener;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+#[cfg(debug_assertions)]
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{mpsc, Mutex};
+#[cfg(debug_assertions)]
+use std::time::Duration;
 use std::time::UNIX_EPOCH;
 use tauri::{Emitter, Manager};
 
@@ -904,6 +910,39 @@ fn auth_store_import_pi(
     auth_store::summary(&auth_path)
 }
 
+#[derive(Default)]
+struct TestStateSnapshotBridge {
+    pending: Mutex<HashMap<String, mpsc::Sender<serde_json::Value>>>,
+}
+
+#[cfg(debug_assertions)]
+static TEST_STATE_SNAPSHOT_COUNTER: AtomicU64 = AtomicU64::new(1);
+
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
+fn test_state_snapshot_reply(
+    request_id: String,
+    snapshot: serde_json::Value,
+    bridge: tauri::State<TestStateSnapshotBridge>,
+) -> Result<(), String> {
+    let sender = {
+        let mut pending = bridge
+            .pending
+            .lock()
+            .map_err(|_| "Failed to acquire snapshot bridge lock".to_string())?;
+
+        pending.remove(&request_id)
+    };
+
+    let Some(sender) = sender else {
+        return Err("Unknown snapshot request".to_string());
+    };
+
+    sender
+        .send(snapshot)
+        .map_err(|_| "Snapshot receiver unavailable".to_string())
+}
+
 #[cfg(debug_assertions)]
 fn sanitize_test_server_value(value: &serde_json::Value) -> serde_json::Value {
     match value {
@@ -945,8 +984,11 @@ fn sanitize_test_server_value(value: &serde_json::Value) -> serde_json::Value {
 /// - `{"cmd":"auth_delete","provider":"anthropic","profile":"default"}` - deletes provider from auth store
 /// - `{"cmd":"auth_import_pi","profile":"default"}` - imports ~/.pi/agent/auth.json into auth store
 /// - `{"cmd":"create_task","title":"...","workingFolder":"/path"}` - creates task
+/// - `{"cmd":"task_list"}` - returns task metadata JSON array
+/// - `{"cmd":"delete_task","taskId":"..."}` - deletes one task
 /// - `{"cmd":"delete_all_tasks"}` - wipes all tasks
 /// - `{"cmd":"dump_state"}` - logs UI state
+/// - `{"cmd":"state_snapshot"}` - returns structured UI/runtime snapshot JSON
 /// - `{"cmd":"preview_list","taskId":"..."}` - returns preview file list JSON
 /// - `{"cmd":"preview_read","taskId":"...","relativePath":"..."}` - returns preview file content JSON
 /// - `{"cmd":"artifact_list","taskId":"..."}` - returns scratchpad artifact list JSON (`outputs` + `uploads`)
@@ -1092,6 +1134,31 @@ fn start_test_server(app_handle: tauri::AppHandle) {
                             let _ = app.emit("test_create_task", payload);
                             let _ = stream.write_all(b"OK\n");
                         }
+                        "task_list" => match task_store_list(app.clone()) {
+                            Ok(tasks) => {
+                                let payload = serde_json::to_string(&tasks).unwrap_or_else(|_| "[]".to_string());
+                                let _ = stream.write_all(format!("{payload}\n").as_bytes());
+                            }
+                            Err(error) => {
+                                let _ = stream.write_all(format!("ERR: {error}\n").as_bytes());
+                            }
+                        },
+                        "delete_task" => {
+                            let task_id = json.get("taskId").and_then(|v| v.as_str()).unwrap_or("");
+
+                            if task_id.trim().is_empty() {
+                                let _ = stream.write_all(b"ERR: taskId is required\n");
+                            } else {
+                                match task_store_delete(app.clone(), task_id.to_string()) {
+                                    Ok(()) => {
+                                        let _ = stream.write_all(b"OK\n");
+                                    }
+                                    Err(error) => {
+                                        let _ = stream.write_all(format!("ERR: {error}\n").as_bytes());
+                                    }
+                                }
+                            }
+                        }
                         "delete_all_tasks" => {
                             // Emit event to frontend to wipe all tasks
                             eprintln!("[test-server] emitting test_delete_all_tasks");
@@ -1103,6 +1170,43 @@ fn start_test_server(app_handle: tauri::AppHandle) {
                             eprintln!("[test-server] emitting test_dump_state");
                             let _ = app.emit("test_dump_state", ());
                             let _ = stream.write_all(b"OK\n");
+                        }
+                        "state_snapshot" => {
+                            let request_id = format!(
+                                "state_snapshot_{}",
+                                TEST_STATE_SNAPSHOT_COUNTER.fetch_add(1, Ordering::Relaxed)
+                            );
+                            let bridge: tauri::State<TestStateSnapshotBridge> = app.state();
+                            let (sender, receiver) = mpsc::channel();
+
+                            if let Ok(mut pending) = bridge.pending.lock() {
+                                pending.insert(request_id.clone(), sender);
+                            } else {
+                                let _ = stream.write_all(b"ERR: Failed to acquire snapshot bridge lock\n");
+                                continue;
+                            }
+
+                            let payload = serde_json::json!({
+                                "requestId": request_id,
+                            });
+
+                            if app.emit("test_state_snapshot_request", payload).is_err() {
+                                if let Ok(mut pending) = bridge.pending.lock() {
+                                    pending.remove(&request_id);
+                                }
+                                let _ = stream.write_all(b"ERR: Failed to request state snapshot\n");
+                                continue;
+                            }
+
+                            if let Ok(snapshot) = receiver.recv_timeout(Duration::from_secs(5)) {
+                                let payload = serde_json::to_string(&snapshot).unwrap_or_else(|_| "{}".to_string());
+                                let _ = stream.write_all(format!("{payload}\n").as_bytes());
+                            } else {
+                                if let Ok(mut pending) = bridge.pending.lock() {
+                                    pending.remove(&request_id);
+                                }
+                                let _ = stream.write_all(b"ERR: Timed out waiting for state snapshot\n");
+                            }
                         }
                         "preview_list" => {
                             let task_id = json.get("taskId").and_then(|v| v.as_str()).unwrap_or("");
@@ -1198,6 +1302,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .manage(vm::VmState::default())
+        .manage(TestStateSnapshotBridge::default())
         .setup(|app| {
             #[cfg(debug_assertions)]
             start_test_server(app.handle().clone());
@@ -1227,6 +1332,7 @@ pub fn run() {
             vm_start,
             vm_stop,
             rpc_send,
+            test_state_snapshot_reply,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

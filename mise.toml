@@ -63,6 +63,10 @@ run = "pnpm exec tauri dev"
 description = "Run all tests"
 run = "mise run test-vite && mise run test-rust"
 
+[tasks.test-regressions]
+description = "Run runtime regression integration tests"
+run = "pnpm exec vitest run src/lib/__tests__/integration/*.integration.test.ts"
+
 [tasks.test-rust]
 description = "Run Rust tests"
 run = "cargo test --manifest-path src-tauri/Cargo.toml"

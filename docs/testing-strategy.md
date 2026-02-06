@@ -7,13 +7,14 @@
 - Vitest for frontend/state logic and runtime contract behavior.
 - Rust unit tests for backend stores/validation.
 - Regression tests must assert against a machine-readable `state_snapshot` payload (not terminal log text).
+- Use `mise run test-regressions` for runtime contract regressions (live app process).
 - These are the **primary merge gate** and should run under `mise run check`.
 
 ### 2) Harness primitives (integration support)
 
 Primitives in `mise-tasks/test-*` remain useful for fast integration probes and evidence capture, but they are **not a substitute** for automated assertions in Vitest/Rust.
 
-Core: `test-start`, `test-stop`, `test-prompt`, `test-screenshot`, `test-dump-state`
+Core: `test-start`, `test-stop`, `test-prompt`, `test-screenshot`, `test-dump-state`, `test-state-snapshot`
 Tasks: `test-create-task`, `test-delete-tasks`, `test-set-task`
 Folders: `test-set-folder` (one-time bind; existing bound task rejects changes)
 Auth: `test-auth-list`, `test-auth-set-key`, `test-auth-delete`, `test-auth-import-pi`, `test-set-auth-profile`, `test-send-login`

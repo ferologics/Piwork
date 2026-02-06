@@ -808,9 +808,70 @@ let testTaskUnlisten: (() => void) | null = null;
 let testCreateTaskUnlisten: (() => void) | null = null;
 let testDeleteAllTasksUnlisten: (() => void) | null = null;
 let testDumpStateUnlisten: (() => void) | null = null;
+let testStateSnapshotUnlisten: (() => void) | null = null;
 let testOpenPreviewUnlisten: (() => void) | null = null;
 let testSetAuthProfileUnlisten: (() => void) | null = null;
 let testSendLoginUnlisten: (() => void) | null = null;
+
+function buildTestStateSnapshot() {
+    const runtimeDebug = get(runtimeDebugStore);
+
+    const bootScreenVisible = !rpcConnected && !hasConnectedOnce;
+    const reconfigureBannerVisible = !rpcConnected && hasConnectedOnce;
+    const quickStartVisible = conversation.messages.length === 0 && !conversation.isAgentRunning;
+
+    const runtimeMismatchVisible = Boolean(
+        activeTask &&
+            runtimeDebug.activeTaskId &&
+            runtimeDebug.currentCwd &&
+            runtimeDebug.activeTaskId !== "__legacy__" &&
+            runtimeDebug.activeTaskId !== activeTask.id,
+    );
+
+    return {
+        schemaVersion: 1,
+        timestamp: new Date().toISOString(),
+        task: {
+            currentTaskId,
+            activeTaskId: activeTask?.id ?? null,
+            currentWorkingFolder,
+            currentSessionFile,
+            workspaceRoot,
+        },
+        runtime: {
+            rpcConnected,
+            rpcConnecting,
+            rpcError,
+            hasConnectedOnce,
+            taskSwitching,
+            authProfile,
+        },
+        conversation: {
+            messageCount: conversation.messages.length,
+            isAgentRunning: conversation.isAgentRunning,
+            hasError: Boolean(conversation.error),
+        },
+        ui: {
+            bootScreenVisible,
+            reconfigureBannerVisible,
+            quickStartVisible,
+            loginPromptVisible,
+            pendingUiRequest: Boolean(pendingUiRequest),
+        },
+        models: {
+            count: availableModels.length,
+            loading: modelsLoading,
+            error: modelsError,
+            selectedModelId,
+        },
+        runtimeDebug: {
+            activeTaskId: runtimeDebug.activeTaskId,
+            currentCwd: runtimeDebug.currentCwd,
+            workingFolderRelative: runtimeDebug.workingFolderRelative,
+            mismatchVisible: runtimeMismatchVisible,
+        },
+    };
+}
 
 async function saveConversationForTask(taskId: string | null): Promise<void> {
     if (!taskId || messageAccumulator.getState().messages.length === 0) {
@@ -1110,6 +1171,23 @@ onMount(() => {
             testDumpStateUnlisten = unlisten;
         });
 
+        listen<{ requestId?: string | null }>("test_state_snapshot_request", (event) => {
+            const requestId = event.payload?.requestId;
+            if (!requestId) {
+                return;
+            }
+
+            const snapshot = buildTestStateSnapshot();
+            void invoke("test_state_snapshot_reply", {
+                requestId,
+                snapshot,
+            }).catch((error) => {
+                devLog("TestHarness", `failed to send state snapshot: ${error}`);
+            });
+        }).then((unlisten) => {
+            testStateSnapshotUnlisten = unlisten;
+        });
+
         listen<{ taskId?: string | null; relativePath?: string | null }>("test_open_preview", (event) => {
             const taskId = event.payload?.taskId ?? null;
             const relativePath = event.payload?.relativePath ?? null;
@@ -1141,6 +1219,7 @@ onDestroy(() => {
     testCreateTaskUnlisten?.();
     testDeleteAllTasksUnlisten?.();
     testDumpStateUnlisten?.();
+    testStateSnapshotUnlisten?.();
     testOpenPreviewUnlisten?.();
 });
 </script>
