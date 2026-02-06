@@ -60,9 +60,19 @@ mise run test-auth-set-key anthropic work-profile-smoke work >/dev/null
 sleep 1
 mise run test-set-auth-profile work >/dev/null
 
+qemu_log_contains() {
+    local pattern="$1"
+
+    if [[ ! -f "$QEMU_LOG" ]]; then
+        return 1
+    fi
+
+    tr -d '\000' < "$QEMU_LOG" | rg -q "$pattern"
+}
+
 FOUND_PROFILE=0
 for _ in $(seq 1 40); do
-    if rg -q "Using mounted auth profile: work" "$QEMU_LOG"; then
+    if qemu_log_contains "Using mounted auth profile: work"; then
         FOUND_PROFILE=1
         break
     fi
@@ -71,7 +81,9 @@ done
 
 if [[ "$FOUND_PROFILE" -ne 1 ]]; then
     echo "[auth-switch] did not observe work profile mount in qemu log"
-    tail -n 80 "$QEMU_LOG" || true
+    if [[ -f "$QEMU_LOG" ]]; then
+        tr -d '\000' < "$QEMU_LOG" | tail -n 100 || true
+    fi
     exit 1
 fi
 

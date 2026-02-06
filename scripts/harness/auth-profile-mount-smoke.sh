@@ -47,15 +47,25 @@ fi
 echo "[auth-smoke] starting app"
 PIWORK_RUNTIME_V2_TASKD=1 PIWORK_WORKSPACE_ROOT="$ROOT_DIR" mise run test-start >/dev/null
 
+qemu_log_contains() {
+    local pattern="$1"
+
+    if [[ ! -f "$QEMU_LOG" ]]; then
+        return 1
+    fi
+
+    tr -d '\000' < "$QEMU_LOG" | rg -q "$pattern"
+}
+
 FOUND_MOUNT=0
 FOUND_PROFILE=0
 
 for _ in $(seq 1 40); do
-    if rg -q "Mounted auth state at /mnt/authstate" "$QEMU_LOG"; then
+    if qemu_log_contains "Mounted auth state at /mnt/authstate"; then
         FOUND_MOUNT=1
     fi
 
-    if rg -q "Using mounted auth profile: default" "$QEMU_LOG"; then
+    if qemu_log_contains "Using mounted auth profile: default"; then
         FOUND_PROFILE=1
     fi
 
@@ -68,8 +78,10 @@ done
 
 if [[ "$FOUND_MOUNT" -ne 1 || "$FOUND_PROFILE" -ne 1 ]]; then
     echo "[auth-smoke] expected auth mount/profile lines missing"
-    echo "--- qemu.log ---"
-    tail -n 60 "$QEMU_LOG" || true
+    echo "--- qemu.log (sanitized) ---"
+    if [[ -f "$QEMU_LOG" ]]; then
+        tr -d '\000' < "$QEMU_LOG" | tail -n 80 || true
+    fi
     exit 1
 fi
 
