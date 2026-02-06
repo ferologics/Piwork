@@ -1,5 +1,7 @@
 # TODO
 
+> Execution sequencing for cleanup work lives in `docs/cleanup-execution-plan.md` (final plan).
+
 ## Now: Foundation cleanup
 
 - [x] **Kill v1 runtime** — remove `PIWORK_RUNTIME_V2_TASKD` flag, v1 code paths in runtimeService (`handleTaskSwitchV1`, `handleFolderChangeV1`, `ensureTaskSessionReady`), v1 `nc -l` loop in init script, `RuntimeMode` type. taskd is the only runtime.
@@ -17,6 +19,8 @@
 - [x] **Fix first `/mnt/workdir` write reliability (race mitigation)** — task-bound folder changes now mark `taskSwitching` before validation, and prompt send is blocked until runtime is ready.
 - [ ] **Add harness regression for working-folder writes** — set folder → write file immediately → assert host path has file.
 - [ ] **Add harness check for open-folder action** — validate Working-folder header icon opens Finder path successfully.
+- [ ] **Inject minimal FS runtime hint into prompts** — include working-folder host path + `/mnt/workdir` alias + scratchpad path, and refresh when folder is bound later (not just at startup).
+- [ ] **Fix dev cwd chip staleness on task reopen** — top-bar runtime cwd can remain at `/mnt/taskstate/.../outputs` even after task runtime moves to `/mnt/workdir`.
 - [ ] **Delete remaining slop** — review docs for stale references to v1, v2 flags, sync protocol, smoke suites
 - [ ] **Dev watch scope** — avoid restarting `tauri dev` for non-runtime docs/content edits (e.g. Markdown), keep hot reload scoped to relevant source/config files.
 - [x] **Roadmap sync hygiene** — synced `docs/ui-roadmap.md` with current `TODO.md` execution state (2026-02-06).

@@ -10,6 +10,7 @@ import { MessageAccumulator } from "$lib/rpc";
 import type { RpcPayload, ConversationState } from "$lib/rpc";
 import { taskStore } from "$lib/stores/taskStore";
 import { artifactRefreshStore } from "$lib/stores/artifactRefreshStore";
+import { runtimeDebugStore } from "$lib/stores/runtimeDebugStore";
 import type { TaskMetadata } from "$lib/types/task";
 import FolderSelector from "$lib/components/FolderSelector.svelte";
 import QuickStartTiles from "$lib/components/QuickStartTiles.svelte";
@@ -499,6 +500,10 @@ function handleRpcPayload(payload: Record<string, unknown>) {
         artifactRefreshStore.request(currentTaskId, type);
     }
 
+    if (type === "turn_end" || type === "agent_end") {
+        void requestState();
+    }
+
     if (type === "response") {
         const command = typeof payload.command === "string" ? payload.command : null;
 
@@ -509,6 +514,7 @@ function handleRpcPayload(payload: Record<string, unknown>) {
                 const data = payload.data as Record<string, unknown> | undefined;
                 const info = formatStateInfo(data);
                 rpcStateInfo = info;
+                runtimeDebugStore.updateFromGetState(data);
 
                 const model =
                     typeof data?.model === "object" && data.model !== null
@@ -528,6 +534,7 @@ function handleRpcPayload(payload: Record<string, unknown>) {
                     pushRpcMessage("[error] get_state failed");
                 }
                 rpcStateInfo = null;
+                runtimeDebugStore.clear();
             }
 
             return;
@@ -661,6 +668,7 @@ async function initializeRuntimeService() {
             rpcStateInfo = null;
             rpcStateRequested = false;
             rpcModelsRequested = false;
+            runtimeDebugStore.clear();
             pushDevToast(message);
             void refreshVmLogPath();
         },
@@ -686,6 +694,7 @@ async function connectRpc() {
     rpcStateInfo = null;
     rpcStateRequested = false;
     rpcModelsRequested = false;
+    runtimeDebugStore.clear();
     pendingUiRequest = null;
     pendingUiQueue = [];
     pendingUiSending = false;
@@ -705,6 +714,7 @@ async function disconnectRpc() {
     rpcStateInfo = null;
     rpcStateRequested = false;
     rpcModelsRequested = false;
+    runtimeDebugStore.clear();
     pendingUiRequest = null;
     pendingUiQueue = [];
     pendingUiSending = false;

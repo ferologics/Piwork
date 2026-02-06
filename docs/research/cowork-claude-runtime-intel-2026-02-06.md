@@ -120,3 +120,29 @@ For MVP, this intel supports **Path I-lite**:
 - enforce strict workspace scope checks now
 - keep no-restart task switching
 - defer full hostile-code hardening stack (bwrap/seccomp/proxy) to later tranche
+
+## 12) Prompt-context pattern (user-supplied Cowork prompt reconstruction)
+
+Additional field intel from a user-provided reconstruction of Cowork's system prompt suggests they explicitly pass **filesystem role hints** to the model each session, including:
+
+- scratch/runtime path (internal, user-invisible)
+- workspace path (user-visible folder)
+- uploads path
+- clear instruction on where deliverables should go
+
+Why this matters for piwork:
+
+- model responses about "where files are" can drift to stale path memory if cwd changed earlier in the task
+- explicit per-turn/per-session FS context likely reduces this class of error
+
+Practical inspiration for piwork (MVP-safe):
+
+1. Provide stable path-role hints in runtime context:
+   - working folder mount (`/mnt/workdir`)
+   - scratchpad outputs (`/mnt/taskstate/<task>/outputs`)
+   - uploads (`/mnt/taskstate/<task>/uploads`, read-only)
+2. Add a behavior rule for path-sensitive replies:
+   - when user asks copy/move/location questions, verify current cwd (`pwd`) before claiming location
+3. Keep this narrowly scoped to filesystem correctness (do not mirror Cowork's broader product-specific prompt policy yet)
+
+Note: this section is based on user reconstruction, not official Anthropic documentation.
