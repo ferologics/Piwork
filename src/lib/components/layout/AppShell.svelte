@@ -21,7 +21,7 @@ interface RuntimeStatus {
 }
 
 let showLeftRail = $state(true);
-let showRightPanel = $state(false);
+let showRightPanel = $state(import.meta.env.DEV);
 let showSettings = $state(false);
 let previewOpen = $state(false);
 let runtimeStatus = $state<RuntimeStatus | null>(null);
