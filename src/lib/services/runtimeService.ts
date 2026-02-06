@@ -48,6 +48,25 @@ interface PendingRpcResponse {
     timeout: ReturnType<typeof setTimeout>;
 }
 
+interface PendingTaskSwitch {
+    taskId: string;
+    resolve: () => void;
+    reject: (error: Error) => void;
+    timeout: ReturnType<typeof setTimeout>;
+}
+
+class TaskdError extends Error {
+    code: string;
+    retryable: boolean;
+
+    constructor(code: string, message: string, retryable = false) {
+        super(message);
+        this.name = "TaskdError";
+        this.code = code;
+        this.retryable = retryable;
+    }
+}
+
 interface RuntimeServiceCallbacks {
     onRpcPayload?: (payload: Record<string, unknown>) => void;
     onRawRpcMessage?: (message: string) => void;
@@ -76,6 +95,34 @@ function normalizeFlags(flags: Partial<RuntimeFlags> | null | undefined): Runtim
         runtimeV2Sync,
         mode: runtimeV2Taskd ? "v2_taskd" : "v1",
     };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function taskdSessionFileForTask(taskId: string): string {
+    return `/sessions/${taskId}/session.json`;
+}
+
+function inferProviderFromModel(modelId: string | null | undefined): string | null {
+    if (!modelId) {
+        return null;
+    }
+
+    if (modelId.startsWith("claude")) {
+        return "anthropic";
+    }
+
+    if (modelId.startsWith("gpt")) {
+        return "openai-codex";
+    }
+
+    if (modelId.startsWith("gemini")) {
+        return "google-gemini-cli";
+    }
+
+    return null;
 }
 
 function shellQuote(value: string): string {
@@ -191,6 +238,8 @@ export class RuntimeService {
     private listeners = new Set<(snapshot: RuntimeServiceSnapshot) => void>();
     private rpcClient: TauriRpcClient | null = null;
     private pendingRpcResponses = new Map<string, PendingRpcResponse>();
+    private pendingTaskSwitch: PendingTaskSwitch | null = null;
+    private lastTaskReadyAt = new Map<string, number>();
 
     constructor(flags: RuntimeFlags, callbacks: RuntimeServiceCallbacks = {}) {
         const normalized = normalizeFlags(flags);
@@ -249,6 +298,34 @@ export class RuntimeService {
         }
 
         await this.rpcClient.send(command);
+    }
+
+    async sendPrompt(message: string) {
+        const content = message.trim();
+        if (!content) {
+            throw new Error("Prompt message is empty");
+        }
+
+        if (this.snapshot.mode === "v2_taskd") {
+            await this.waitForRpcReady();
+            const promptId = crypto.randomUUID();
+            const result = await this.sendTaskdCommand(
+                "prompt",
+                {
+                    message: content,
+                    promptId,
+                },
+                RPC_COMMAND_TIMEOUT_MS,
+            );
+
+            if (result.accepted !== true) {
+                throw new TaskdError("TASK_NOT_READY", "Prompt was not accepted", true);
+            }
+
+            return;
+        }
+
+        await this.send({ type: "prompt", message: content });
     }
 
     async connectRpc() {
@@ -328,9 +405,7 @@ export class RuntimeService {
 
     private async connectForMode(client: TauriRpcClient) {
         if (this.snapshot.mode === "v2_taskd") {
-            devLog("RuntimeService", "runtime_v2_taskd enabled; using v2 compatibility adapter");
-            await client.connect(this.snapshot.currentWorkingFolder, this.snapshot.currentTaskId);
-            return;
+            devLog("RuntimeService", "runtime_v2_taskd enabled");
         }
 
         await client.connect(this.snapshot.currentWorkingFolder, this.snapshot.currentTaskId);
@@ -377,8 +452,43 @@ export class RuntimeService {
     }
 
     private async handleTaskSwitchV2Taskd(newTask: TaskMetadata | null, deps: TaskSwitchDeps) {
-        devLog("RuntimeService", "runtime_v2_taskd task switch requested; using v1 compatibility path");
-        await this.handleTaskSwitchV1(newTask, deps);
+        const newTaskId = newTask?.id ?? null;
+        const oldTaskId = this.snapshot.currentTaskId;
+
+        if (newTaskId === oldTaskId) {
+            return;
+        }
+
+        devLog("RuntimeService", `Task switch (v2): ${oldTaskId} -> ${newTaskId}`);
+        this.patch({ taskSwitching: true, rpcError: null });
+
+        try {
+            await deps.saveConversationForTask(oldTaskId);
+            await deps.loadConversationForTask(newTaskId);
+
+            const nextFolder = newTask?.workingFolder ?? null;
+            this.patch({
+                currentTaskId: newTaskId,
+                currentWorkingFolder: nextFolder,
+                currentSessionFile: newTaskId ? taskdSessionFileForTask(newTaskId) : null,
+            });
+
+            if (!newTaskId || !newTask) {
+                return;
+            }
+
+            await this.waitForRpcReady();
+            await this.ensureTaskdTaskReady(newTask);
+            await this.switchTaskdTask(newTaskId);
+            this.callbacks.onStateRefreshRequested?.();
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            this.patch({ rpcError: message });
+            this.callbacks.onError?.(message);
+            throw error;
+        } finally {
+            this.patch({ taskSwitching: false });
+        }
     }
 
     private async handleFolderChangeV1(folder: string | null, deps: FolderChangeDeps) {
@@ -405,8 +515,10 @@ export class RuntimeService {
     }
 
     private async handleFolderChangeV2Taskd(folder: string | null, deps: FolderChangeDeps) {
-        devLog("RuntimeService", "runtime_v2_taskd folder change requested; using v1 compatibility path");
-        await this.handleFolderChangeV1(folder, deps);
+        devLog("RuntimeService", `Working folder changed (v2 metadata only): ${folder}`);
+
+        this.patch({ currentWorkingFolder: folder });
+        await deps.persistWorkingFolderForActiveTask(folder);
     }
 
     private emitSnapshot() {
@@ -455,6 +567,7 @@ export class RuntimeService {
             try {
                 const parsed = JSON.parse(event.message) as Record<string, unknown>;
                 this.resolvePendingRpcResponse(parsed);
+                this.handleTaskdEvent(parsed);
                 this.callbacks.onRpcPayload?.(parsed);
             } catch {
                 this.callbacks.onRawRpcMessage?.(event.message);
@@ -468,15 +581,20 @@ export class RuntimeService {
             pending.reject(new Error(reason));
             this.pendingRpcResponses.delete(id);
         }
+
+        this.rejectPendingTaskSwitch(new Error(reason));
     }
 
     private resolvePendingRpcResponse(payload: Record<string, unknown>) {
-        if (payload.type !== "response") {
+        const responseId = typeof payload.id === "string" ? payload.id : null;
+        if (!responseId) {
             return;
         }
 
-        const responseId = typeof payload.id === "string" ? payload.id : null;
-        if (!responseId) {
+        const isLegacyResponse = payload.type === "response";
+        const isTaskdResponse = typeof payload.ok === "boolean";
+
+        if (!isLegacyResponse && !isTaskdResponse) {
             return;
         }
 
@@ -515,6 +633,187 @@ export class RuntimeService {
                 reject(error instanceof Error ? error : new Error(String(error)));
             });
         });
+    }
+
+    private rejectPendingTaskSwitch(error: Error) {
+        if (!this.pendingTaskSwitch) {
+            return;
+        }
+
+        const pending = this.pendingTaskSwitch;
+        pending.reject(error);
+    }
+
+    private waitForTaskReadyEvent(taskId: string, startedAt: number, timeoutMs = TASK_SWITCH_TIMEOUT_MS) {
+        const readyAt = this.lastTaskReadyAt.get(taskId);
+        if (typeof readyAt === "number" && readyAt >= startedAt) {
+            return Promise.resolve();
+        }
+
+        this.rejectPendingTaskSwitch(new TaskdError("SWITCH_TIMEOUT", "Task switch superseded", true));
+
+        return new Promise<void>((resolve, reject) => {
+            const pending: PendingTaskSwitch = {
+                taskId,
+                timeout: setTimeout(() => {
+                    if (this.pendingTaskSwitch === pending) {
+                        this.pendingTaskSwitch = null;
+                    }
+                    reject(new TaskdError("SWITCH_TIMEOUT", `Timed out waiting for task_ready (${taskId})`, true));
+                }, timeoutMs),
+                resolve: () => {
+                    if (this.pendingTaskSwitch === pending) {
+                        this.pendingTaskSwitch = null;
+                    }
+                    clearTimeout(pending.timeout);
+                    resolve();
+                },
+                reject: (error: Error) => {
+                    if (this.pendingTaskSwitch === pending) {
+                        this.pendingTaskSwitch = null;
+                    }
+                    clearTimeout(pending.timeout);
+                    reject(error);
+                },
+            };
+
+            this.pendingTaskSwitch = pending;
+        });
+    }
+
+    private handleTaskdEvent(payload: Record<string, unknown>) {
+        if (payload.type !== "event") {
+            return;
+        }
+
+        const eventName = typeof payload.event === "string" ? payload.event : null;
+        const taskId = typeof payload.taskId === "string" ? payload.taskId : null;
+
+        if (!eventName || !taskId) {
+            return;
+        }
+
+        if (eventName === "task_ready") {
+            this.lastTaskReadyAt.set(taskId, Date.now());
+            if (this.pendingTaskSwitch?.taskId === taskId) {
+                this.pendingTaskSwitch.resolve();
+            }
+            return;
+        }
+
+        if (eventName !== "task_error") {
+            return;
+        }
+
+        if (this.pendingTaskSwitch?.taskId !== taskId) {
+            return;
+        }
+
+        const errorPayload = isRecord(payload.payload) ? payload.payload : {};
+        const code = typeof errorPayload.code === "string" ? errorPayload.code : "INTERNAL_ERROR";
+        const message =
+            typeof errorPayload.message === "string" ? errorPayload.message : `Task switch failed for ${taskId}`;
+        const retryable = code === "TASK_NOT_READY" || code === "SWITCH_TIMEOUT";
+
+        this.pendingTaskSwitch.reject(new TaskdError(code, message, retryable));
+    }
+
+    private async sendTaskdCommand(
+        type: string,
+        payload: Record<string, unknown>,
+        timeoutMs = RPC_COMMAND_TIMEOUT_MS,
+    ): Promise<Record<string, unknown>> {
+        const response = await this.sendRpcCommandWithResponse(
+            {
+                type,
+                payload,
+            },
+            timeoutMs,
+        );
+
+        if (!isRecord(response) || typeof response.ok !== "boolean") {
+            throw new TaskdError("INTERNAL_ERROR", `Invalid taskd response for ${type}`);
+        }
+
+        if (!response.ok) {
+            const errorPayload = isRecord(response.error) ? response.error : {};
+            const code = typeof errorPayload.code === "string" ? errorPayload.code : "INTERNAL_ERROR";
+            const message = typeof errorPayload.message === "string" ? errorPayload.message : `${type} failed`;
+            const retryable = errorPayload.retryable === true;
+            throw new TaskdError(code, message, retryable);
+        }
+
+        return isRecord(response.result) ? response.result : {};
+    }
+
+    private async ensureTaskdTaskReady(task: TaskMetadata) {
+        const stateResult = await this.sendTaskdCommand("get_state", {});
+        const taskEntries = Array.isArray(stateResult.tasks) ? stateResult.tasks : [];
+        const existing = taskEntries.find((entry) => {
+            if (!isRecord(entry)) {
+                return false;
+            }
+
+            return entry.taskId === task.id;
+        });
+
+        const existingState = isRecord(existing) && typeof existing.state === "string" ? existing.state : null;
+
+        if (existingState && ["ready", "idle", "active"].includes(existingState)) {
+            return;
+        }
+
+        if (existingState && !["missing", "stopped", "errored"].includes(existingState)) {
+            throw new TaskdError("TASK_NOT_READY", `task ${task.id} is ${existingState}`, true);
+        }
+
+        const model = typeof task.model === "string" ? task.model : null;
+        const provider = inferProviderFromModel(model);
+        const thinkingLevel = typeof task.thinkingLevel === "string" ? task.thinkingLevel : null;
+        const workingFolder = typeof task.workingFolder === "string" ? task.workingFolder : null;
+
+        const payload: Record<string, unknown> = {
+            taskId: task.id,
+        };
+
+        if (provider) {
+            payload.provider = provider;
+        }
+        if (model) {
+            payload.model = model;
+        }
+        if (thinkingLevel) {
+            payload.thinkingLevel = thinkingLevel;
+        }
+        if (workingFolder) {
+            payload.workingFolder = workingFolder;
+        }
+
+        await this.sendTaskdCommand("create_or_open_task", payload);
+    }
+
+    private async switchTaskdTask(taskId: string) {
+        const switchStartedAt = Date.now();
+        const waitForReady = this.waitForTaskReadyEvent(taskId, switchStartedAt, TASK_SWITCH_TIMEOUT_MS);
+
+        let switchAck: Record<string, unknown>;
+        try {
+            switchAck = await this.sendTaskdCommand("switch_task", { taskId });
+        } catch (error) {
+            this.rejectPendingTaskSwitch(error instanceof Error ? error : new Error(String(error)));
+            await waitForReady.catch(() => undefined);
+            throw error;
+        }
+
+        const status = typeof switchAck.status === "string" ? switchAck.status : null;
+        if (status !== "switching") {
+            const invalidAckError = new TaskdError("INTERNAL_ERROR", "switch_task returned invalid status");
+            this.rejectPendingTaskSwitch(invalidAckError);
+            await waitForReady.catch(() => undefined);
+            throw invalidAckError;
+        }
+
+        await waitForReady;
     }
 
     private async isTaskStateMounted() {

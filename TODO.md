@@ -11,14 +11,16 @@
 
 - [x] **Tasks**: Auto-create on first message, conversation persistence per task ✓
 - [x] **Working folder UI**: Selection UI, recent folders dropdown, Tauri dialog ✓
-- [ ] **Runtime v2 pivot**: Replace restart-per-task-switch flow with persistent VM + task supervisor (`taskd`)
+- [x] **Runtime v2 pivot**: Replace restart-per-task-switch flow with persistent VM + task supervisor (`taskd`)
   - [x] Phase 0a: host runtime orchestration extracted from `MainView.svelte` into `runtimeService`
   - [x] Phase 0: feature flags + guardrails (`runtime_v2_taskd`, `runtime_v2_sync`)
   - [x] Harness visibility: `test-dump-state` includes runtime mode/flags
-- [ ] **Per-task process isolation**: One pi process per task (`/sessions/<taskId>`, per-task Linux user deferred to hardening)
-- [ ] **Canonical session persistence**: Use `/sessions/<taskId>/session.json` for automatic resume
-- [ ] **No-reboot switching**: Implement `switch_task` path; task switch should not reboot VM
-- [ ] **Remove fallback hydration**: Delete transcript→session reconstruction from normal runtime path
+  - [x] Phase 1: guest `taskd` core with per-task processes and P0 RPC
+  - [x] Phase 2: host v2 switch/prompt integration (ACK + `task_ready`, timeout, no v2 VM restart path)
+- [x] **Per-task process isolation**: One pi process per task (`/sessions/<taskId>`, per-task Linux user deferred to hardening)
+- [x] **Canonical session persistence**: Use `/sessions/<taskId>/session.json` for automatic resume
+- [x] **No-reboot switching**: Implement `switch_task` path; task switch should not reboot VM
+- [x] **Remove fallback hydration**: Delete transcript→session reconstruction from normal runtime path
 - [ ] **Task resume semantics**: Validate memory continuity + no cross-task context bleed
 - [ ] **Task switch latency target**: Warm switch completes in a few seconds, no long spinner
 - [ ] **Task workspace model**: Ship sync-first workspace (`/sessions/<taskId>/work`), evaluate live mount later

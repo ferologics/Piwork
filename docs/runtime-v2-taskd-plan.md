@@ -302,7 +302,7 @@ Completed in code:
 - ✅ Phase 0a extraction: runtime orchestration moved from `MainView.svelte` into `src/lib/services/runtimeService.ts`.
 - ✅ Phase 0 flags/guardrails:
   - Added host runtime flags (`runtime_v2_taskd`, `runtime_v2_sync`) via `runtime_flags` command.
-  - v1/v2-taskd mode is selectable (currently v2 uses a compatibility adapter to v1 behavior).
+  - v1/v2-taskd mode is selectable.
   - `runtime_v2_sync` is guarded behind `runtime_v2_taskd`.
 - ✅ Harness observability update: `test-dump-state` now logs `mode`, `taskd`, and `sync`.
 - ✅ Phase 1 guest `taskd` core (no sync):
@@ -310,15 +310,19 @@ Completed in code:
   - Implemented P0 task RPCs in guest: `create_or_open_task`, `switch_task`, `prompt`, `get_state`, `stop_task`.
   - Added baseline task events (`task_switch_started`, `task_ready`, `task_error`, `task_stopped`, `agent_output`, `agent_end`).
   - Added runtime boot mode switch via kernel cmdline (`piwork.runtime_mode=taskd`) behind `runtime_v2_taskd`.
+- ✅ Phase 2 host integration (no sync):
+  - Replaced v2 compatibility adapter with real taskd RPC routing for switch/prompt.
+  - Implemented host-side switch handshake (`switch_task` ACK + wait for `task_ready` event with timeout handling).
+  - Removed normal-path v2 dependence on VM restart + transcript hydration fallback.
+  - Kept v1 restart/hydration path intact behind `mode=v1`.
 
 Still open:
 
-- ⏳ Phase 2 host integration against `taskd` ACK/ready semantics and removal of normal-path hydration fallback.
 - ⏳ Harness proof for warm-switch/cold-resume latency targets under true v2 host routing.
 - ⏳ Gate G1 workspace decision and follow-up path work.
 
 ## Immediate next actions
 
-1. Wire host integration and prove warm-switch stability with harness evidence
-2. Remove normal-path hydration fallback in v2 host path
-3. Run Gate G1 spike and choose Path M vs Path S before building sync apply
+1. Run warm-switch/cold-resume benchmark loop and capture latency evidence (`test-dump-state`, screenshots, logs)
+2. Run Gate G1 spike and choose Path M vs Path S before building sync apply
+3. If Path S is chosen, freeze/apply `runtime-v2-taskd-sync-spec.md` and start dry-run sync phase

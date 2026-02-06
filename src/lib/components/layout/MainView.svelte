@@ -682,8 +682,12 @@ async function sendPrompt(message?: string) {
     messageAccumulator.addUserMessage(content);
     conversation = messageAccumulator.getState();
 
-    await runtimeService.send({ type: "prompt", message: content });
-    prompt = "";
+    try {
+        await runtimeService.sendPrompt(content);
+        prompt = "";
+    } catch (error) {
+        devLog("MainView", `Prompt send failed: ${error}`);
+    }
 }
 
 let testPromptUnlisten: (() => void) | null = null;
@@ -757,11 +761,15 @@ async function handleTaskSwitch(newTask: TaskMetadata | null): Promise<void> {
         return;
     }
 
-    await runtimeService.handleTaskSwitch(newTask, {
-        saveConversationForTask,
-        loadConversationForTask,
-        getConversationState: () => conversation,
-    });
+    try {
+        await runtimeService.handleTaskSwitch(newTask, {
+            saveConversationForTask,
+            loadConversationForTask,
+            getConversationState: () => conversation,
+        });
+    } catch (error) {
+        devLog("MainView", `Task switch failed: ${error}`);
+    }
 }
 
 async function handleFolderChange(folder: string | null): Promise<void> {
@@ -769,10 +777,14 @@ async function handleFolderChange(folder: string | null): Promise<void> {
         return;
     }
 
-    await runtimeService.handleFolderChange(folder, {
-        persistWorkingFolderForActiveTask,
-        getConversationState: () => conversation,
-    });
+    try {
+        await runtimeService.handleFolderChange(folder, {
+            persistWorkingFolderForActiveTask,
+            getConversationState: () => conversation,
+        });
+    } catch (error) {
+        devLog("MainView", `Folder change failed: ${error}`);
+    }
 }
 
 onMount(() => {
