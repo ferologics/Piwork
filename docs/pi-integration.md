@@ -1,113 +1,91 @@
-# pi Integration (RPC + Permission Gate)
+# pi Integration (Host ↔ VM ↔ taskd)
 
 ## Overview
 
-pi runs **inside the VM** and is controlled by the host app via **RPC mode**. The host UI renders all events (streaming output, tool calls, permission prompts) and stores task state.
+pi runs inside the VM and is orchestrated by the host app over RPC.
 
-## Process Architecture
+Current runtime has two modes (flag-gated):
 
-```
-Host UI (Tauri)
-  ├─ runtime pack manager
-  ├─ QEMU launcher
-  ├─ RPC bridge (virtio‑serial)
-  ├─ policy store (permissions)
-  └─ task store (UI state)
+- `v1` (legacy compatibility path)
+- `v2_taskd` (active path)
 
-VM (Linux)
-  ├─ pi CLI (RPC mode)
-  ├─ permission‑gate extension
-  └─ skills/tools
-```
+`v2_taskd` is the primary implementation track.
 
-## RPC Transport (current)
+## Process architecture (current)
 
-- QEMU uses **user-mode NAT** with `hostfwd` to expose TCP port `19384`.
-- pi runs `--mode rpc`, wired via `nc -l -p 19384 -e node pi --mode rpc` inside the VM.
-- Host reads/writes **JSONL** over TCP `localhost:19384`.
-- Dev runtime prebakes Node + pi into the initramfs (no boot-time installs).
-- Host logs QEMU stderr to `app_data/vm/qemu.log` for debugging failed boots.
-- If `PIWORK_AUTH_PATH` was provided at pack install time, the initramfs sets `PI_CODING_AGENT_DIR=/opt/pi-agent` to use the baked `auth.json`.
+Host (Tauri app):
 
-> **Future**: move to virtio‑serial once stable.
+- launches QEMU
+- manages VM lifecycle and RPC transport
+- persists task metadata + conversation cache
+- orchestrates task switch and prompt routing via `RuntimeService`
 
-## Task Model (current)
+Guest (VM):
 
-- **Single shared VM** across tasks (restarted on task/folder switch).
-- Host starts pi → sends `prompt` commands.
-- Host stores task metadata + transcript and mounts the active task directory for pi session persistence.
+- init script boots runtime
+- starts `taskd` in `v2_taskd` mode
+- `taskd` supervises one pi process per task
 
-## Event Mapping (RPC → UI)
+Per task (guest):
 
-- `message_update` → streaming transcript
-- `tool_execution_*` → progress steps + logs
-- `extension_ui_request` → permission prompts
-- `agent_end` → mark task complete + highlight artifacts
+- session file: `/sessions/<taskId>/session.json` (canonical)
+- workspace dir: `/sessions/<taskId>/work` (internal task workspace)
 
-## Task Persistence / Resume (current)
+## RPC transport (current)
 
-**Task metadata stored on host:**
+- QEMU user-mode networking + `hostfwd` exposes TCP `19384`.
+- Host sends/receives JSONL RPC through `localhost:19384`.
+- In `v2_taskd`, host sends taskd command envelope:
+  - request `{ id, type, payload }`
+  - response `{ id, ok, result|error }`
 
-- `task.json`:
-  - `taskId`, `title`, `status`, `createdAt`, `updatedAt`
-  - `workingFolder` (optional)
-  - `model` (selected)
+Normative command/event details: `runtime-v2-taskd-rpc-spec.md`.
 
-**Resume flow (current):**
+## Runtime behavior by mode
 
-1. UI loads `conversation.json` from task folder.
-2. VM is restarted with the active task directory mounted at `/mnt/taskstate`.
-3. Host passes `piwork.session_file=/mnt/taskstate/session.json` via kernel cmdline.
-4. Init script starts pi with `--session /mnt/taskstate/session.json`.
-5. If the file exists, pi resumes automatically; otherwise it creates a new session file in the task folder.
+### v2_taskd (active)
 
-**Session isolation (current):**
+- no normal-path VM restart on task switch
+- host switch flow: `switch_task` ACK (`status: switching`) + wait for `task_ready`
+- deterministic timeout/error handling in host service
+- no normal-path transcript hydration fallback
 
-- VM only mounts the **active task state directory** (not the whole tasks root).
-- pi session file is canonical per task: `/mnt/taskstate/session.json`.
-- Task switching remounts paths by restarting the shared VM.
+### v1 (legacy path)
 
-## Permission Gate Extension
+- restart-heavy behavior retained during rollout
+- compatibility fallback behavior remains isolated to this mode
 
-A pi extension inside the VM enforces action prompts using `tool_call` interception.
+## Working folder and scope model (Path I-lite)
 
-### Flow
+Current MVP direction is Path I-lite:
 
-1. pi emits `tool_call` event.
-2. Extension checks action type (write/edit/delete/network/connector).
-3. Extension calls `ctx.ui.select/confirm`.
-4. In RPC mode, this emits `extension_ui_request` to host.
-5. Host shows modal **or auto‑responds** if policy says “Always allow”.
-6. Extension receives response and returns `{ block: true }` if denied.
+- host validates working folder against workspace root (`realpath` + scope checks)
+- host passes validated relative path to guest task creation
+- guest enforces relative-path constraints for task cwd selection
+- mount reliability restored in dev runtime by injecting required 9p modules into initramfs
 
-### Why host‑side policy
+## Task persistence
 
-- VM is ephemeral; policy must persist on host.
-- Host can **auto‑respond** to `extension_ui_request` without showing UI.
+Host persists:
 
-## Permission Types (v1)
+- `task.json` (metadata)
+- `conversation.json` (UI cache)
 
-- **Write/Edit** → no prompt inside scope; track changes list
-- **Delete/Move/Rename** → prompt (always)
-- **Web search** → no prompt, but visible connector badge + drill‑in
-- **Other connectors** → prompt on first use
+Guest canonical semantic state:
 
-## Skills / Tools
+- `/sessions/<taskId>/session.json`
 
-- Built‑ins: `read`, `write`, `edit`, `bash`, `ls`, `find`, `grep`
-- Web search: include a **search skill** in runtime pack
-- Custom tools/extensions can be bundled in runtime pack
+## Testing hooks
 
-## Settings in VM
+Automated harness drives UI state via dev test server (`127.0.0.1:19385`) commands:
 
-- Provide a minimal `settings.json` that:
-  - Loads the permission‑gate extension
-  - Enables default tools/skills
-  - Sets model defaults (if needed)
-- Mount host `~/.pi/agent/auth.json` into the VM during dev
+- set folder/task
+- create/delete tasks
+- send prompt
+- dump state
 
-## Open Questions
+Evidence requirement for runtime claims:
 
-- Should we **cache model auth** inside the VM or proxy from host?
-- Do we want a **read‑only mode** toggle for tasks?
-- Should tasks be resumable via replayed transcript?
+1. `test-dump-state`
+2. `test-screenshot <name>`
+3. supporting logs

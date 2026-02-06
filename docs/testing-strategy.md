@@ -1,45 +1,49 @@
-# Testing Strategy (Draft)
+# Testing Strategy
 
-## Goals
+## Current priorities
 
-- Fast feedback for UI state changes.
-- Ability to **mock full agent conversations** without a VM.
-- Confidence in core flows (task creation, progress, artifacts, permissions).
+1. Fast local feedback for runtime/UI regressions
+2. Deterministic validation for task switching and prompt flows
+3. Evidence-backed runtime claims (state + screenshot + logs)
 
-## Tooling
+## Test layers
 
-- **Unit / component / flow**: Vitest + @testing-library/svelte
-- **Type checks**: svelte-check
-- **E2E**: deferred (optional later)
+### 1) Unit tests (fast)
 
-## RPC Mock Harness
+- Vitest for frontend/state logic
+- Rust unit tests for backend stores/validation
+- Run via `mise run test` / `mise run check`
 
-Create a **mock RPC server** that replays JSONL fixtures into the UI.
+### 2) Harness-driven runtime checks (integration)
 
-- `src/lib/__tests__/fixtures/rpc/*.jsonl`
-- Each fixture is a full transcript (prompt → tool calls → events)
+Primitive tasks (in `mise-tasks/`):
 
-The UI subscribes to a `RpcClient` interface. Tests swap in a **MockRpcClient**.
+- `test-start`
+- `test-prompt`
+- `test-set-folder`
+- `test-set-task`
+- `test-create-task`
+- `test-delete-tasks`
+- `test-dump-state`
+- `test-screenshot`
+- `test-stop`
 
-### MockRpcClient (concept)
+Use these primitives for focused checks instead of large brittle end-to-end scripts.
 
-- `connect()` → no‑op
-- `send(command)` → returns canned responses
-- `subscribe(listener)` → streams fixture events with controlled timing
+## Evidence rule for runtime behavior claims
 
-## Suggested Test Cases
+Always capture all three:
 
-1. **Happy path**: task runs, steps update, artifacts appear.
-2. **Permission prompt**: delete/move request blocked/allowed.
-3. **Web search**: connector badge + drill‑in results.
-4. **Resume task**: load `task.json`, call `switch_session`, rebuild UI.
+1. `test-dump-state`
+2. `test-screenshot <name>`
+3. supporting log lines (`tmp/dev/piwork.log`, VM log)
 
-## Where Tests Live
+## Active validation focus
 
-- `src/lib/__tests__/` for store + component tests
-- `src/lib/__tests__/fixtures/` for RPC fixtures
+- v2 task switching stability (`switch_task` ACK + `task_ready` flow)
+- scoped folder behavior (Path I-lite)
+- task resume semantics / no cross-task bleed
 
-## Notes
+## Deferred
 
-- We keep tests **VM‑free** by using the mock RPC harness.
-- If we ever need true E2E, we can add Playwright later.
+- Playwright/driver-based full E2E is deferred until runtime model stabilizes.
