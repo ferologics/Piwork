@@ -23,24 +23,6 @@ const CHILD_COMMAND_TIMEOUT_MS = 10_000;
 const SYSTEM_BASH_TIMEOUT_MS = 10_000;
 const STOP_GRACE_PERIOD_MS = 1_200;
 
-const FALLBACK_MODELS = [
-    {
-        id: "claude-opus-4-5",
-        name: "Opus 4.5",
-        provider: "anthropic",
-    },
-    {
-        id: "gpt-5.2-codex",
-        name: "GPT 5.2",
-        provider: "openai-codex",
-    },
-    {
-        id: "gemini-3-pro-preview",
-        name: "Gemini 3 Pro",
-        provider: "google-gemini-cli",
-    },
-];
-
 const IDEMPOTENT_REQUESTS = new Set(["create_or_open_task", "switch_task", "stop_task"]);
 
 const tasks = new Map();
@@ -413,6 +395,10 @@ function serializeTask(task) {
     return {
         taskId: task.taskId,
         state: task.state,
+        provider: task.provider,
+        model: task.model,
+        thinkingLevel: task.thinkingLevel,
+        promptInFlight: task.promptInFlight,
         sessionFile: task.sessionFile,
         taskDir: task.taskDir,
         outputsDir: task.outputsDir,
@@ -1086,13 +1072,185 @@ async function handleV2Prompt(request) {
     return response;
 }
 
-function handleV2GetState(request) {
-    const payload = {
+function taskdStatePayload() {
+    return {
         activeTaskId,
         tasks: Array.from(tasks.values()).map(serializeTask),
     };
+}
 
-    return sendV2Success(request, payload);
+async function ensureActiveTaskForPiCommand() {
+    let task = activeTaskId ? tasks.get(activeTaskId) : null;
+
+    if (!task) {
+        task = await ensureLegacyActiveTask();
+    }
+
+    if (!task) {
+        const error = new Error("no active task");
+        error.code = "TASK_NOT_READY";
+        throw error;
+    }
+
+    if (!task.child || !task.child.stdin || task.child.stdin.destroyed) {
+        const error = new Error("active task process unavailable");
+        error.code = "TASK_NOT_READY";
+        throw error;
+    }
+
+    return task;
+}
+
+function parsePiResponseError(response, fallback) {
+    if (isRecord(response) && typeof response.error === "string" && response.error.trim().length > 0) {
+        return response.error;
+    }
+
+    return fallback;
+}
+
+async function fetchAvailableModelsFromPi() {
+    const task = await ensureActiveTaskForPiCommand();
+    const response = await sendToTask(task, {
+        type: "get_available_models",
+    });
+
+    if (!isRecord(response) || response.success !== true) {
+        const error = new Error(parsePiResponseError(response, "get_available_models failed"));
+        error.code = "INTERNAL_ERROR";
+        throw error;
+    }
+
+    const data = isRecord(response.data) ? response.data : {};
+    return Array.isArray(data.models) ? data.models : [];
+}
+
+async function setModelOnActiveTask(provider, modelId) {
+    const task = await ensureActiveTaskForPiCommand();
+    const response = await sendToTask(task, {
+        type: "set_model",
+        provider,
+        modelId,
+    });
+
+    if (!isRecord(response) || response.success !== true) {
+        const error = new Error(parsePiResponseError(response, "set_model failed"));
+        error.code = "INTERNAL_ERROR";
+        throw error;
+    }
+
+    const data = isRecord(response.data) ? response.data : {};
+    const resolvedProvider = typeof data.provider === "string" ? data.provider : provider;
+    const resolvedModelId = typeof data.id === "string" ? data.id : modelId;
+    const resolvedModelName = typeof data.name === "string" ? data.name : resolvedModelId;
+
+    defaults = {
+        ...defaults,
+        provider: resolvedProvider,
+        model: resolvedModelId,
+    };
+
+    task.provider = resolvedProvider;
+    task.model = resolvedModelId;
+
+    return {
+        id: resolvedModelId,
+        name: resolvedModelName,
+        provider: resolvedProvider,
+    };
+}
+
+async function forwardExtensionUiResponseToPi(payload) {
+    if (!isRecord(payload)) {
+        const error = new Error("payload is required");
+        error.code = "INVALID_REQUEST";
+        throw error;
+    }
+
+    if (typeof payload.id !== "string" || payload.id.trim().length === 0) {
+        const error = new Error("extension UI response id is required");
+        error.code = "INVALID_REQUEST";
+        throw error;
+    }
+
+    const task = await ensureActiveTaskForPiCommand();
+    const response = await sendToTask(task, {
+        ...payload,
+        type: "extension_ui_response",
+    });
+
+    if (!isRecord(response) || response.success !== true) {
+        const error = new Error(parsePiResponseError(response, "extension_ui_response failed"));
+        error.code = "INTERNAL_ERROR";
+        throw error;
+    }
+
+    return isRecord(response.data) ? response.data : {};
+}
+
+function parseSetModelRequest(request) {
+    const provider = typeof request.payload.provider === "string" ? request.payload.provider.trim() : "";
+    const modelValue =
+        typeof request.payload.modelId === "string"
+            ? request.payload.modelId
+            : typeof request.payload.model === "string"
+              ? request.payload.model
+              : null;
+    const modelId = typeof modelValue === "string" ? modelValue.trim() : "";
+
+    if (!provider || !modelId) {
+        return null;
+    }
+
+    return {
+        provider,
+        modelId,
+    };
+}
+
+function handleV2GetState(request) {
+    return sendV2Success(request, taskdStatePayload());
+}
+
+async function handleV2GetAvailableModels(request) {
+    try {
+        const models = await fetchAvailableModelsFromPi();
+        return sendV2Success(request, { models });
+    } catch (error) {
+        const code = typeof error?.code === "string" ? error.code : "INTERNAL_ERROR";
+        const message = error instanceof Error ? error.message : String(error);
+        const retryable = code === "TASK_NOT_READY";
+        return sendV2Error(request, code, message, retryable, {});
+    }
+}
+
+async function handleV2SetModel(request) {
+    const parsed = parseSetModelRequest(request);
+    if (!parsed) {
+        return sendV2Error(request, "INVALID_REQUEST", "provider and modelId are required", false, {});
+    }
+
+    try {
+        const selected = await setModelOnActiveTask(parsed.provider, parsed.modelId);
+        return sendV2Success(request, selected);
+    } catch (error) {
+        const code = typeof error?.code === "string" ? error.code : "INTERNAL_ERROR";
+        const message = error instanceof Error ? error.message : String(error);
+        const retryable = code === "TASK_NOT_READY";
+        return sendV2Error(request, code, message, retryable, {});
+    }
+}
+
+async function handleV2ExtensionUiResponse(request) {
+    try {
+        const data = await forwardExtensionUiResponseToPi(request.payload);
+        return sendV2Success(request, data);
+    } catch (error) {
+        const code = typeof error?.code === "string" ? error.code : "INTERNAL_ERROR";
+        const message = error instanceof Error ? error.message : String(error);
+        const retryable = code === "TASK_NOT_READY";
+        return sendV2Error(request, code, message, retryable, {});
+    }
 }
 
 async function handleV2SystemBash(request) {
@@ -1165,8 +1323,18 @@ async function handleV2Request(request) {
         case "prompt":
             await handleV2Prompt(request);
             return;
+        case "runtime_get_state":
         case "get_state":
             handleV2GetState(request);
+            return;
+        case "pi_get_available_models":
+            await handleV2GetAvailableModels(request);
+            return;
+        case "pi_set_model":
+            await handleV2SetModel(request);
+            return;
+        case "extension_ui_response":
+            await handleV2ExtensionUiResponse(request);
             return;
         case "system_bash":
             await handleV2SystemBash(request);
@@ -1201,15 +1369,21 @@ async function handleLegacyGetState(request) {
 }
 
 async function handleLegacyGetAvailableModels(request) {
-    sendLegacyResponse(
-        "get_available_models",
-        true,
-        {
-            models: FALLBACK_MODELS,
-        },
-        null,
-        request.id || undefined,
-    );
+    try {
+        const models = await fetchAvailableModelsFromPi();
+        sendLegacyResponse(
+            "get_available_models",
+            true,
+            {
+                models,
+            },
+            null,
+            request.id || undefined,
+        );
+    } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        sendLegacyResponse("get_available_models", false, null, message, request.id || undefined);
+    }
 }
 
 async function handleLegacySetModel(request) {
@@ -1221,40 +1395,13 @@ async function handleLegacySetModel(request) {
               ? request.raw.modelId
               : defaults.model;
 
-    defaults = {
-        ...defaults,
-        provider,
-        model,
-    };
-
-    if (activeTaskId) {
-        const activeTask = tasks.get(activeTaskId);
-        if (activeTask) {
-            activeTask.provider = provider;
-            activeTask.model = model;
-            if (activeTask.child) {
-                void sendToTask(activeTask, {
-                    type: "set_model",
-                    provider,
-                    modelId: model,
-                }).catch((error) => {
-                    log(`legacy set_model passthrough failed: ${String(error)}`);
-                });
-            }
-        }
+    try {
+        const selected = await setModelOnActiveTask(provider, model);
+        sendLegacyResponse("set_model", true, selected, null, request.id || undefined);
+    } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        sendLegacyResponse("set_model", false, null, message, request.id || undefined);
     }
-
-    sendLegacyResponse(
-        "set_model",
-        true,
-        {
-            id: model,
-            name: model,
-            provider,
-        },
-        null,
-        request.id || undefined,
-    );
 }
 
 async function handleLegacyPrompt(request) {
@@ -1284,31 +1431,13 @@ async function handleLegacyPrompt(request) {
 }
 
 async function handleLegacyExtensionUiResponse(request) {
-    if (!activeTaskId) {
-        sendLegacyResponse(
-            "extension_ui_response",
-            false,
-            null,
-            "No active task",
-            request.id || undefined,
-        );
-        return;
+    try {
+        const data = await forwardExtensionUiResponseToPi(request.raw);
+        sendLegacyResponse("extension_ui_response", true, data, null, request.id || undefined);
+    } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        sendLegacyResponse("extension_ui_response", false, null, message, request.id || undefined);
     }
-
-    const task = tasks.get(activeTaskId);
-    if (!task || !task.child || task.child.stdin.destroyed) {
-        sendLegacyResponse(
-            "extension_ui_response",
-            false,
-            null,
-            "No active task process",
-            request.id || undefined,
-        );
-        return;
-    }
-
-    task.child.stdin.write(`${JSON.stringify(request.raw)}\n`);
-    sendLegacyResponse("extension_ui_response", true, {}, null, request.id || undefined);
 }
 
 async function handleLegacySystemBash(request, commandName) {

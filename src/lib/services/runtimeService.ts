@@ -23,6 +23,33 @@ export interface RuntimeServiceSnapshot {
     taskSwitching: boolean;
 }
 
+export interface RuntimeTaskState {
+    taskId: string;
+    state: string;
+    provider: string | null;
+    model: string | null;
+    thinkingLevel: string | null;
+    promptInFlight: boolean;
+    sessionFile: string | null;
+    taskDir: string | null;
+    outputsDir: string | null;
+    uploadsDir: string | null;
+    workDir: string | null;
+    currentCwd: string | null;
+    workingFolderRelative: string | null;
+}
+
+export interface RuntimeGetStateResult {
+    activeTaskId: string | null;
+    tasks: RuntimeTaskState[];
+}
+
+export interface PiModelOption {
+    id: string;
+    name: string;
+    provider: string | null;
+}
+
 interface VmStatusResponse {
     status: "starting" | "ready" | "stopped";
     rpcPath: string | null;
@@ -105,6 +132,61 @@ function inferProviderFromModel(modelId: string | null | undefined): string | nu
     return null;
 }
 
+function parseString(value: unknown): string | null {
+    if (typeof value !== "string") {
+        return null;
+    }
+
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : null;
+}
+
+function parseRuntimeTaskState(entry: unknown): RuntimeTaskState | null {
+    if (!isRecord(entry)) {
+        return null;
+    }
+
+    const taskId = parseString(entry.taskId);
+    const state = parseString(entry.state);
+
+    if (!taskId || !state) {
+        return null;
+    }
+
+    return {
+        taskId,
+        state,
+        provider: parseString(entry.provider),
+        model: parseString(entry.model),
+        thinkingLevel: parseString(entry.thinkingLevel),
+        promptInFlight: entry.promptInFlight === true,
+        sessionFile: parseString(entry.sessionFile),
+        taskDir: parseString(entry.taskDir),
+        outputsDir: parseString(entry.outputsDir),
+        uploadsDir: parseString(entry.uploadsDir),
+        workDir: parseString(entry.workDir),
+        currentCwd: parseString(entry.currentCwd),
+        workingFolderRelative: parseString(entry.workingFolderRelative),
+    };
+}
+
+function parsePiModelOption(entry: unknown): PiModelOption | null {
+    if (!isRecord(entry)) {
+        return null;
+    }
+
+    const id = parseString(entry.id);
+    if (!id) {
+        return null;
+    }
+
+    return {
+        id,
+        name: parseString(entry.name) ?? id,
+        provider: parseString(entry.provider),
+    };
+}
+
 export class RuntimeService {
     private callbacks: RuntimeServiceCallbacks;
     private snapshot: RuntimeServiceSnapshot;
@@ -163,6 +245,60 @@ export class RuntimeService {
         }
 
         await this.rpcClient.send(command);
+    }
+
+    async runtimeGetState(): Promise<RuntimeGetStateResult> {
+        await this.waitForRpcReady();
+        const result = await this.sendTaskdCommand("runtime_get_state", {});
+        const tasks = Array.isArray(result.tasks)
+            ? result.tasks.map(parseRuntimeTaskState).filter((task): task is RuntimeTaskState => Boolean(task))
+            : [];
+
+        return {
+            activeTaskId: parseString(result.activeTaskId),
+            tasks,
+        };
+    }
+
+    async piGetAvailableModels(): Promise<{ models: PiModelOption[] }> {
+        await this.waitForRpcReady();
+        const result = await this.sendTaskdCommand("pi_get_available_models", {});
+        const models = Array.isArray(result.models)
+            ? result.models.map(parsePiModelOption).filter((model): model is PiModelOption => Boolean(model))
+            : [];
+
+        return { models };
+    }
+
+    async piSetModel(provider: string, modelId: string): Promise<PiModelOption> {
+        const normalizedProvider = provider.trim();
+        const normalizedModelId = modelId.trim();
+
+        if (!normalizedProvider || !normalizedModelId) {
+            throw new Error("provider and modelId are required");
+        }
+
+        await this.waitForRpcReady();
+        const result = await this.sendTaskdCommand("pi_set_model", {
+            provider: normalizedProvider,
+            modelId: normalizedModelId,
+        });
+
+        const selected = parsePiModelOption(result);
+        if (!selected) {
+            return {
+                id: normalizedModelId,
+                name: normalizedModelId,
+                provider: normalizedProvider,
+            };
+        }
+
+        return selected;
+    }
+
+    async sendExtensionUiResponse(payload: Record<string, unknown>): Promise<void> {
+        await this.waitForRpcReady();
+        await this.sendTaskdCommand("extension_ui_response", payload);
     }
 
     async sendPrompt(message: string) {
@@ -752,7 +888,7 @@ export class RuntimeService {
         const desiredWorkingFolderRelative =
             typeof payload.workingFolderRelative === "string" ? payload.workingFolderRelative : null;
 
-        const stateResult = await this.sendTaskdCommand("get_state", {});
+        const stateResult = await this.sendTaskdCommand("runtime_get_state", {});
         const taskEntries = Array.isArray(stateResult.tasks) ? stateResult.tasks : [];
         const existing = taskEntries.find((entry) => {
             if (!isRecord(entry)) {

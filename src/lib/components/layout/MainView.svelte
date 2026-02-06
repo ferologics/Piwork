@@ -16,7 +16,12 @@ import FolderSelector from "$lib/components/FolderSelector.svelte";
 import QuickStartTiles from "$lib/components/QuickStartTiles.svelte";
 import ExtensionUiDialog from "$lib/components/ExtensionUiDialog.svelte";
 import type { ExtensionUiRequest } from "$lib/components/ExtensionUiDialog.svelte";
-import { RuntimeService, type RuntimeServiceSnapshot } from "$lib/services/runtimeService";
+import {
+    RuntimeService,
+    type RuntimeServiceSnapshot,
+    type RuntimeGetStateResult,
+    type RuntimeTaskState,
+} from "$lib/services/runtimeService";
 import { normalizeAuthProfile } from "$lib/services/authProfile";
 import { previewStore, type PreviewSelection } from "$lib/stores/previewStore";
 
@@ -98,21 +103,10 @@ interface ModelOption {
     provider: string | null;
 }
 
-// Preferred model patterns - filter to just these
-const PREFERRED_MODEL_PATTERNS = ["claude-opus-4-5", "gpt-5.2-codex", "gemini-3-pro"];
-
-const fallbackModels: ModelOption[] = [
-    { id: "claude-opus-4-5", label: "Opus 4.5", provider: "anthropic" },
-    { id: "gpt-5.2-codex", label: "GPT 5.2", provider: "openai-codex" },
-    { id: "gemini-3-pro-preview", label: "Gemini 3 Pro", provider: "google-gemini-cli" },
-];
-
-function isPreferredModel(id: string): boolean {
-    return PREFERRED_MODEL_PATTERNS.some((pattern) => id.includes(pattern) || id.startsWith(pattern.split("-")[0]));
-}
-
-let availableModels = $state<ModelOption[]>([...fallbackModels]);
-let selectedModelId = $state(fallbackModels[0]?.id ?? "");
+let availableModels = $state<ModelOption[]>([]);
+let selectedModelId = $state("");
+let modelsLoading = $state(false);
+let modelsError = $state<string | null>(null);
 
 const MAX_HEIGHT = 200;
 const LOGIN_PROMPT_SECONDS = 5;
@@ -259,14 +253,15 @@ function updateAuthHint(message: string) {
     maybeCaptureLoginUrl(message);
 }
 
-function resolveModelOption(model: Record<string, unknown> | undefined) {
-    if (!model) return null;
+function resolveModelOption(model: unknown) {
+    if (!model || typeof model !== "object") return null;
 
-    const id = typeof model.id === "string" ? model.id : null;
+    const entry = model as Record<string, unknown>;
+    const id = typeof entry.id === "string" ? entry.id : typeof entry.model === "string" ? entry.model : null;
     if (!id) return null;
 
-    const label = typeof model.name === "string" ? model.name : id;
-    const provider = typeof model.provider === "string" ? model.provider : null;
+    const label = typeof entry.name === "string" ? entry.name : id;
+    const provider = typeof entry.provider === "string" ? entry.provider : null;
 
     return { id, label, provider } satisfies ModelOption;
 }
@@ -334,7 +329,10 @@ async function sendUiResponse(response: Record<string, unknown>) {
     pendingUiSending = true;
 
     try {
-        await runtimeService.send({ type: "extension_ui_response", id: pendingUiRequest.id, ...response });
+        await runtimeService.sendExtensionUiResponse({
+            id: pendingUiRequest.id,
+            ...response,
+        });
     } finally {
         clearUiRequest();
     }
@@ -426,77 +424,153 @@ async function copyLoginUrl() {
     }
 }
 
+function getActiveRuntimeTask(state: RuntimeGetStateResult): RuntimeTaskState | null {
+    if (state.activeTaskId) {
+        const active = state.tasks.find((task) => task.taskId === state.activeTaskId) ?? null;
+        if (active) {
+            return active;
+        }
+    }
+
+    return state.tasks.find((task) => task.state === "active") ?? null;
+}
+
 async function requestState() {
     if (!runtimeService || rpcStateRequested) return;
+
     rpcStateRequested = true;
-    await runtimeService.send({ type: "get_state" });
+
+    try {
+        const state = await runtimeService.runtimeGetState();
+        rpcStateInfo = formatStateInfo(state);
+        runtimeDebugStore.updateFromRuntimeState(state);
+
+        const activeTaskState = getActiveRuntimeTask(state);
+        const activeOption = activeTaskState ? resolveModelOption(activeTaskState) : null;
+
+        if (activeOption) {
+            ensureModelOption(activeOption);
+            selectedModelId = activeOption.id;
+        } else if (!availableModels.some((model) => model.id === selectedModelId)) {
+            selectedModelId = availableModels[0]?.id ?? "";
+        }
+    } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        pushRpcMessage(`[error] ${message}`);
+        updateAuthHint(message);
+        rpcStateInfo = null;
+        runtimeDebugStore.clear();
+    } finally {
+        rpcStateRequested = false;
+    }
 }
 
 async function requestAvailableModels() {
     if (!runtimeService || rpcModelsRequested) return;
+
     rpcModelsRequested = true;
-    await runtimeService.send({ type: "get_available_models" });
+    modelsLoading = true;
+    modelsError = null;
+
+    try {
+        const result = await runtimeService.piGetAvailableModels();
+        const mapped = result.models
+            .map((model) => resolveModelOption(model))
+            .filter((model): model is ModelOption => Boolean(model));
+
+        availableModels = mapped;
+
+        if (mapped.length === 0) {
+            selectedModelId = "";
+            return;
+        }
+
+        if (!mapped.some((model) => model.id === selectedModelId)) {
+            selectedModelId = mapped[0].id;
+        }
+    } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        modelsError = message;
+        availableModels = [];
+        selectedModelId = "";
+        pushRpcMessage(`[error] ${message}`);
+        updateAuthHint(message);
+    } finally {
+        rpcModelsRequested = false;
+        modelsLoading = false;
+    }
 }
 
 async function handleModelChange() {
-    if (!runtimeService) return;
+    if (!runtimeService || modelsLoading) return;
 
     const selected = availableModels.find((model) => model.id === selectedModelId) ?? null;
-    if (!selected?.provider) {
-        pushRpcMessage("[info] Model provider unknown; waiting for available models.");
+    if (!selected) {
         return;
     }
 
-    await runtimeService.send({ type: "set_model", provider: selected.provider, modelId: selected.id });
+    if (!selected.provider) {
+        modelsError = "Selected model provider is unknown.";
+        pushRpcMessage("[error] Selected model provider is unknown.");
+        return;
+    }
+
+    try {
+        const updated = await runtimeService.piSetModel(selected.provider, selected.id);
+        const option = resolveModelOption(updated);
+
+        if (option) {
+            ensureModelOption(option);
+            selectedModelId = option.id;
+        }
+
+        modelsError = null;
+        void requestState();
+    } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        modelsError = message;
+        pushRpcMessage(`[error] ${message}`);
+        updateAuthHint(message);
+    }
 }
 
-function formatStateInfo(data: Record<string, unknown> | undefined) {
-    if (!data) return null;
+function formatStateInfo(state: RuntimeGetStateResult | null) {
+    if (!state) return null;
 
-    let modelName: string | null = null;
-    if (typeof data.model === "object" && data.model !== null) {
-        const model = data.model as Record<string, unknown>;
-        if (typeof model.name === "string") {
-            modelName = model.name;
-        } else if (typeof model.id === "string") {
-            modelName = model.id;
-        }
-    }
-
-    const sessionName = typeof data.sessionName === "string" ? data.sessionName : null;
-    const sessionId = typeof data.sessionId === "string" ? data.sessionId : null;
-    const isStreaming = typeof data.isStreaming === "boolean" ? data.isStreaming : null;
-
+    const activeTaskState = getActiveRuntimeTask(state);
     const parts: string[] = [];
-    if (modelName) {
-        parts.push(`Model: ${modelName}`);
+
+    if (activeTaskState?.model) {
+        parts.push(`Model: ${activeTaskState.model}`);
     }
-    if (sessionName) {
-        parts.push(`Session: ${sessionName}`);
-    } else if (sessionId) {
-        parts.push(`Session: ${sessionId.slice(0, 8)}`);
+
+    if (activeTaskState?.taskId) {
+        parts.push(`Task: ${activeTaskState.taskId.slice(0, 8)}`);
+    } else if (state.activeTaskId) {
+        parts.push(`Task: ${state.activeTaskId.slice(0, 8)}`);
     }
-    if (isStreaming !== null) {
-        parts.push(`Streaming: ${isStreaming ? "yes" : "no"}`);
+
+    if (activeTaskState) {
+        parts.push(`Streaming: ${activeTaskState.promptInFlight ? "yes" : "no"}`);
     }
 
     return parts.length > 0 ? parts.join(" · ") : null;
 }
 
 function handleRpcPayload(payload: Record<string, unknown>) {
-    // Feed to message accumulator for proper conversation tracking
-    messageAccumulator.processEvent(payload as RpcPayload);
-    conversation = messageAccumulator.getState();
+    const type = typeof payload.type === "string" ? payload.type : null;
 
-    // Auto-save conversation when agent completes a turn
-    if (payload.type === "agent_end" && currentTaskId) {
-        void taskStore.saveConversation(currentTaskId, messageAccumulator.serialize());
-        devLog("MainView", `Auto-saved conversation after agent_end`);
+    if (type) {
+        messageAccumulator.processEvent(payload as RpcPayload);
+        conversation = messageAccumulator.getState();
     }
 
-    const type = payload.type;
+    if (type === "agent_end" && currentTaskId) {
+        void taskStore.saveConversation(currentTaskId, messageAccumulator.serialize());
+        devLog("MainView", "Auto-saved conversation after agent_end");
+    }
 
-    if ((type === "tool_execution_end" || type === "turn_end" || type === "agent_end") && currentTaskId) {
+    if (type && (type === "tool_execution_end" || type === "turn_end" || type === "agent_end") && currentTaskId) {
         artifactRefreshStore.request(currentTaskId, type);
     }
 
@@ -504,103 +578,13 @@ function handleRpcPayload(payload: Record<string, unknown>) {
         void requestState();
     }
 
-    if (type === "response") {
-        const command = typeof payload.command === "string" ? payload.command : null;
-
-        if (command === "get_state") {
-            rpcStateRequested = false;
-
-            if (payload.success === true) {
-                const data = payload.data as Record<string, unknown> | undefined;
-                const info = formatStateInfo(data);
-                rpcStateInfo = info;
-                runtimeDebugStore.updateFromGetState(data);
-
-                const model =
-                    typeof data?.model === "object" && data.model !== null
-                        ? (data.model as Record<string, unknown>)
-                        : null;
-                const option = model ? resolveModelOption(model) : null;
-                if (option) {
-                    ensureModelOption(option);
-                    selectedModelId = option.id;
-                }
-            } else {
-                const error = payload.error;
-                if (typeof error === "string") {
-                    pushRpcMessage(`[error] ${error}`);
-                    updateAuthHint(error);
-                } else {
-                    pushRpcMessage("[error] get_state failed");
-                }
-                rpcStateInfo = null;
-                runtimeDebugStore.clear();
-            }
-
-            return;
+    if (type === "response" && payload.success === false) {
+        const error = payload.error;
+        if (typeof error === "string") {
+            pushRpcMessage(`[error] ${error}`);
+            updateAuthHint(error);
         }
-
-        if (command === "get_available_models") {
-            rpcModelsRequested = false;
-
-            if (payload.success === true) {
-                const data = payload.data as Record<string, unknown> | undefined;
-                const models = Array.isArray(data?.models) ? data?.models : [];
-                const mapped = models
-                    .filter((model) => typeof model === "object" && model !== null)
-                    .map((model) => resolveModelOption(model as Record<string, unknown>))
-                    .filter((model): model is ModelOption => Boolean(model))
-                    .filter((model) => isPreferredModel(model.id));
-
-                if (mapped.length > 0) {
-                    availableModels = mapped;
-                    if (!mapped.some((model) => model.id === selectedModelId)) {
-                        selectedModelId = mapped[0].id;
-                    }
-                }
-            } else {
-                const error = payload.error;
-                if (typeof error === "string") {
-                    pushRpcMessage(`[error] ${error}`);
-                    updateAuthHint(error);
-                } else {
-                    pushRpcMessage("[error] get_available_models failed");
-                }
-            }
-
-            return;
-        }
-
-        if (command === "set_model") {
-            if (payload.success === true) {
-                const data = payload.data as Record<string, unknown> | undefined;
-                const option = data ? resolveModelOption(data) : null;
-                if (option) {
-                    ensureModelOption(option);
-                    selectedModelId = option.id;
-                }
-                void requestState();
-            } else {
-                const error = payload.error;
-                if (typeof error === "string") {
-                    pushRpcMessage(`[error] ${error}`);
-                    updateAuthHint(error);
-                } else {
-                    pushRpcMessage("[error] set_model failed");
-                }
-            }
-
-            return;
-        }
-
-        if (payload.success === false) {
-            const error = payload.error;
-            if (typeof error === "string") {
-                pushRpcMessage(`[error] ${error}`);
-                updateAuthHint(error);
-                return;
-            }
-        }
+        return;
     }
 
     if (type === "extension_ui_request") {
@@ -638,10 +622,7 @@ function handleRpcPayload(payload: Record<string, unknown>) {
 
         queueUiRequest(request);
         pushRpcMessage(`[ui] ${request.method} requested`);
-        return;
     }
-
-    // message_update, message_end, tool_execution events are handled by MessageAccumulator
 }
 
 async function initializeRuntimeService() {
@@ -668,6 +649,10 @@ async function initializeRuntimeService() {
             rpcStateInfo = null;
             rpcStateRequested = false;
             rpcModelsRequested = false;
+            modelsLoading = false;
+            modelsError = null;
+            availableModels = [];
+            selectedModelId = "";
             runtimeDebugStore.clear();
             pushDevToast(message);
             void refreshVmLogPath();
@@ -694,6 +679,10 @@ async function connectRpc() {
     rpcStateInfo = null;
     rpcStateRequested = false;
     rpcModelsRequested = false;
+    modelsLoading = false;
+    modelsError = null;
+    availableModels = [];
+    selectedModelId = "";
     runtimeDebugStore.clear();
     pendingUiRequest = null;
     pendingUiQueue = [];
@@ -714,6 +703,10 @@ async function disconnectRpc() {
     rpcStateInfo = null;
     rpcStateRequested = false;
     rpcModelsRequested = false;
+    modelsLoading = false;
+    modelsError = null;
+    availableModels = [];
+    selectedModelId = "";
     runtimeDebugStore.clear();
     pendingUiRequest = null;
     pendingUiQueue = [];
@@ -1318,15 +1311,35 @@ onDestroy(() => {
                         </button>
                     </div>
                     <div class="flex items-center gap-2">
-                        <select
-                            bind:value={selectedModelId}
-                            onchange={handleModelChange}
-                            class="max-w-32 truncate appearance-none rounded-md bg-transparent px-2 py-1 text-xs text-muted-foreground outline-none hover:bg-accent cursor-pointer"
-                        >
-                            {#each availableModels as model}
-                                <option value={model.id}>{model.label}</option>
-                            {/each}
-                        </select>
+                        <div class="flex flex-col items-end gap-0.5">
+                            <select
+                                bind:value={selectedModelId}
+                                onchange={handleModelChange}
+                                disabled={!rpcConnected || modelsLoading || !!modelsError || availableModels.length === 0}
+                                class="max-w-40 truncate appearance-none rounded-md bg-transparent px-2 py-1 text-xs text-muted-foreground outline-none hover:bg-accent cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                                {#if modelsLoading}
+                                    <option value="">Loading models…</option>
+                                {:else if modelsError}
+                                    <option value="">Model load failed</option>
+                                {:else if availableModels.length === 0}
+                                    <option value="">No models available</option>
+                                {:else}
+                                    {#each availableModels as model}
+                                        <option value={model.id}>{model.label}</option>
+                                    {/each}
+                                {/if}
+                            </select>
+
+                            {#if modelsError}
+                                <span class="max-w-52 truncate text-[10px] text-red-400" title={modelsError}>
+                                    {modelsError}
+                                </span>
+                            {:else if !modelsLoading && availableModels.length === 0}
+                                <span class="text-[10px] text-muted-foreground">No models available</span>
+                            {/if}
+                        </div>
+
                         <button
                             class="rounded-md bg-primary p-2 text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
                             disabled={!prompt.trim() || !rpcConnected}

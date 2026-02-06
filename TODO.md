@@ -27,8 +27,8 @@
 
 ## Next: Make it usable
 
-- [ ] **Model picker realism (no fake fallback)** — stop hardcoding fallback model lists in runtime/UI; only show models the runtime actually reports.
-- [ ] **Model availability empty/error state** — if no models are available, show a clear empty/error state and disable picker actions.
+- [x] **Model picker realism (no fake fallback)** — removed hardcoded fallback model lists in runtime/UI; model picker now uses runtime-reported models only.
+- [x] **Model availability empty/error state** — picker now shows explicit loading/empty/error states and disables selection when unavailable.
 - [ ] **Model scope toggle in Settings** — add `Preferred only` (default shortlist we define) vs `All available` filtering for model picker results.
 - [ ] **Persist model selection to task metadata** — write picker changes back to `taskStore.model` so switching/reopening tasks restores model intent.
 - [ ] **Finish auth profile cull for MVP** — remove remaining multi-profile runtime/test plumbing and standardize on the default profile path.

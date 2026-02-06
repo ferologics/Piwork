@@ -28,36 +28,39 @@ function parseString(value: unknown): string | null {
     return typeof value === "string" && value.length > 0 ? value : null;
 }
 
-function updateFromGetState(data: Record<string, unknown> | undefined) {
-    if (!data) {
+function updateFromRuntimeState(data: unknown) {
+    if (!isRecord(data)) {
         state.set({ ...initialState, updatedAt: Date.now() });
         return;
     }
 
     const activeTaskId = parseString(data.activeTaskId);
-    const sessionId = parseString(data.sessionId);
-    const sessionName = parseString(data.sessionName);
 
-    const tasks = Array.isArray(data.tasks) ? data.tasks : [];
-    const activeTask = tasks.find((entry) => {
-        if (!isRecord(entry)) {
-            return false;
-        }
+    const tasks: unknown[] = Array.isArray(data.tasks) ? data.tasks : [];
+    const activeTask =
+        tasks.find((entry: unknown) => {
+            if (!isRecord(entry)) {
+                return false;
+            }
 
-        return parseString(entry.taskId) === activeTaskId;
-    });
+            return parseString(entry.taskId) === activeTaskId;
+        }) ?? tasks.find((entry: unknown) => isRecord(entry) && parseString(entry.state) === "active");
 
     const currentCwd = isRecord(activeTask) ? parseString(activeTask.currentCwd) : null;
     const workingFolderRelative = isRecord(activeTask) ? parseString(activeTask.workingFolderRelative) : null;
 
     state.set({
         activeTaskId,
-        sessionId,
-        sessionName,
+        sessionId: activeTaskId,
+        sessionName: activeTaskId,
         currentCwd,
         workingFolderRelative,
         updatedAt: Date.now(),
     });
+}
+
+function updateFromGetState(data: unknown) {
+    updateFromRuntimeState(data);
 }
 
 function clear() {
@@ -66,6 +69,7 @@ function clear() {
 
 export const runtimeDebugStore = {
     subscribe: state.subscribe,
+    updateFromRuntimeState,
     updateFromGetState,
     clear,
 };
