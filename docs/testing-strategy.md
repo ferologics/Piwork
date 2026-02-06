@@ -25,6 +25,7 @@ Primitive tasks (in `mise-tasks/`):
 - `test-set-auth-profile`
 - `test-auth-list`
 - `test-auth-set-key`
+- `test-auth-delete`
 - `test-auth-import-pi`
 - `test-create-task`
 - `test-delete-tasks`

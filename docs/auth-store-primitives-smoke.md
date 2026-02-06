@@ -13,8 +13,9 @@ Purpose: validate auth-store harness primitives (`test-auth-*`) without UI inter
 1. Starts Piwork test harness.
 2. Writes an API key with `test-auth-set-key` into a temporary profile.
 3. Confirms `test-auth-list` returns an `anthropic/api_key` entry.
-4. Optionally imports `~/.pi/agent/auth.json` with `test-auth-import-pi` when available.
-5. Captures `test-dump-state` and exits.
+4. Deletes the provider with `test-auth-delete` and verifies removal via `test-auth-list`.
+5. Optionally imports `~/.pi/agent/auth.json` with `test-auth-import-pi` when available.
+6. Captures `test-dump-state` and exits.
 
 ## Notes
 

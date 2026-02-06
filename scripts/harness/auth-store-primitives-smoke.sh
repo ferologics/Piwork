@@ -36,6 +36,25 @@ if not any(item.get("provider") == "anthropic" and item.get("entryType") == "api
     raise SystemExit("auth list missing anthropic/api_key entry")
 PY
 
+echo "[auth-primitives] delete anthropic provider"
+DELETE_OUTPUT=$(mise run test-auth-delete anthropic "$PROFILE")
+if [[ "$DELETE_OUTPUT" == ERR:* ]]; then
+    echo "[auth-primitives] delete failed: $DELETE_OUTPUT"
+    exit 1
+fi
+
+echo "[auth-primitives] verify delete"
+LIST_AFTER_DELETE=$(mise run test-auth-list "$PROFILE")
+python - "$LIST_AFTER_DELETE" <<'PY'
+import json
+import sys
+
+payload = json.loads(sys.argv[1])
+entries = payload.get("entries", [])
+if any(item.get("provider") == "anthropic" for item in entries):
+    raise SystemExit("auth delete did not remove anthropic provider")
+PY
+
 if [[ -f "$HOME/.pi/agent/auth.json" ]]; then
     echo "[auth-primitives] import ~/.pi auth into profile $PROFILE"
     IMPORT_OUTPUT=$(mise run test-auth-import-pi "$PROFILE")

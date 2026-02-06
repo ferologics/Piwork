@@ -744,6 +744,7 @@ fn sanitize_test_server_value(value: &serde_json::Value) -> serde_json::Value {
 /// - `{"cmd":"set_auth_profile","profile":"default"}` - switches auth profile and restarts runtime in UI
 /// - `{"cmd":"auth_list","profile":"default"}` - returns auth store summary JSON
 /// - `{"cmd":"auth_set_api_key","provider":"anthropic","key":"...","profile":"default"}` - writes API key to auth store
+/// - `{"cmd":"auth_delete","provider":"anthropic","profile":"default"}` - deletes provider from auth store
 /// - `{"cmd":"auth_import_pi","profile":"default"}` - imports ~/.pi/agent/auth.json into auth store
 /// - `{"cmd":"create_task","title":"...","workingFolder":"/path"}` - creates task
 /// - `{"cmd":"delete_all_tasks"}` - wipes all tasks
@@ -837,6 +838,20 @@ fn start_test_server(app_handle: tauri::AppHandle) {
                             let profile = json.get("profile").and_then(|v| v.as_str()).map(str::to_string);
 
                             match auth_store_set_api_key(app.clone(), provider.to_string(), key.to_string(), profile) {
+                                Ok(summary) => {
+                                    let payload = serde_json::to_string(&summary).unwrap_or_else(|_| "{}".to_string());
+                                    let _ = stream.write_all(format!("{payload}\n").as_bytes());
+                                }
+                                Err(error) => {
+                                    let _ = stream.write_all(format!("ERR: {error}\n").as_bytes());
+                                }
+                            }
+                        }
+                        "auth_delete" => {
+                            let provider = json.get("provider").and_then(|v| v.as_str()).unwrap_or("");
+                            let profile = json.get("profile").and_then(|v| v.as_str()).map(str::to_string);
+
+                            match auth_store_delete(app.clone(), provider.to_string(), profile) {
                                 Ok(summary) => {
                                     let payload = serde_json::to_string(&summary).unwrap_or_else(|_| "{}".to_string());
                                     let _ = stream.write_all(format!("{payload}\n").as_bytes());
