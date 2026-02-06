@@ -34,6 +34,26 @@ mise run test-vite
 mise run test-rust
 ```
 
+## AI Harness (debug/dev)
+
+File-based harness tasks live in `mise-tasks/`:
+
+```bash
+mise run test-start
+mise run test-create-task "Title" /path/to/folder
+mise run test-set-task <task-id>
+mise run test-open-preview <task-id> <relative-path>
+mise run test-dump-state
+mise run test-screenshot name
+mise run test-stop
+```
+
+Repeatable Path I-lite negative checks:
+
+```bash
+./scripts/harness/path-i-lite-negative.sh
+```
+
 ### Cleanup
 
 ```bash

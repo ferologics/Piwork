@@ -30,7 +30,8 @@ File-based tasks in `mise-tasks/` for automated AI development:
 mise run test-start              # start app, wait for ready
 mise run test-prompt "hello"     # send prompt, wait for response
 mise run test-screenshot name    # capture to tmp/dev/name.png
-mise run test-set-folder /path   # set working folder, restart VM
+mise run test-open-preview <task-id> <relative-path>  # open main-pane preview for a file
+mise run test-set-folder /path   # set working folder
 mise run test-set-task <id>      # set active task in UI
 mise run test-create-task "Title" [folder]  # create a task
 mise run test-delete-tasks       # delete all tasks
@@ -48,7 +49,7 @@ These let the AI test changes without human interaction:
 
 ### AI testing workflow (important)
 
-- Prefer **ad-hoc primitive tasks** (`test-create-task`, `test-set-task`, `test-prompt`, `test-dump-state`, `test-screenshot`) over monolithic end-to-end scripts.
+- Prefer **ad-hoc primitive tasks** (`test-create-task`, `test-set-task`, `test-prompt`, `test-open-preview`, `test-dump-state`, `test-screenshot`) over monolithic end-to-end scripts.
 - For any UI/state claim, capture all three before concluding:
   1. `test-dump-state` (state snapshot)
   2. `test-screenshot <name>` (visual proof)

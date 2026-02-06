@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+#MISE description="Open a file preview in the main split pane (test harness)"
+set -euo pipefail
+
+TASK_ID="${1:-}"
+RELATIVE_PATH="${2:-}"
+
+if [[ -z "$TASK_ID" || -z "$RELATIVE_PATH" ]]; then
+    echo "Usage: mise run test-open-preview <task-id> <relative-path>"
+    exit 1
+fi
+
+if ! nc -z localhost 19385 2>/dev/null; then
+    echo "Test server not running. Run: mise run test-start"
+    exit 1
+fi
+
+python - "$TASK_ID" "$RELATIVE_PATH" <<'PY' | nc -w 2 localhost 19385
+import json
+import sys
+
+payload = {
+    "cmd": "open_preview",
+    "taskId": sys.argv[1],
+    "relativePath": sys.argv[2],
+}
+print(json.dumps(payload))
+PY

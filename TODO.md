@@ -23,11 +23,11 @@
 - [x] **Remove fallback hydration**: Delete transcript→session reconstruction from normal runtime path
 - [x] **Task resume semantics**: Validate memory continuity + no cross-task context bleed (harness token-seed check in `v2_taskd` mode)
 - [x] **Task switch latency target**: Warm/cold switch loop validated in v2 harness (no long spinner, switch/ready within target budget)
-- [ ] **MVP isolation pass (Path I-lite)**: enforce scoped writes on current runtime without full sandbox rewrite
+- [x] **MVP isolation pass (Path I-lite)**: enforce scoped writes on current runtime without full sandbox rewrite
   - [x] I1: Host + guest scope checks (`realpath`, traversal/symlink/special-file guards) + workspace-root/relative-path plumbing
   - [x] I1b: Ensure workspace mount reliability in v2 taskd path (inject 9p modules in initramfs + verified `/mnt/workdir` mount)
-  - [ ] I2: Negative harness tests (escape attempts + cross-task bleed)
-  - [ ] I3: ADR + UI copy for honest MVP guarantees (scoped local mode)
+  - [x] I2: Negative harness tests (escape attempts + cross-task bleed)
+  - [x] I3: ADR + UI copy for honest MVP guarantees (scoped local mode)
 - [ ] **Gate G2 research lane (non-blocking)**: Gondolin vs deeper hardening path
   - [ ] G2-a: Gondolin feasibility spike (pi RPC, task switching, scoped writes, latency)
   - [ ] G2-b: Post-MVP hardening spike on current runtime (per-task users + stronger sandbox)

@@ -1,15 +1,17 @@
-# Permissions Model (Draft)
+# Permissions Model (MVP: Scoped Local Mode)
 
 ## Goals
 
-- Keep the **VM boundary** as the hard safety line.
-- Use **clear, minimal prompts** for risky actions.
-- Mirror Cowork: **silent web search**, but visible connector context.
+- Keep the **VM boundary** as the base safety line.
+- Enforce a practical **scoped local mode** for task file access.
+- Stay honest about what is and is not hardened in MVP.
 
-## Hard Boundary (always on)
+## Hard Boundary (MVP)
 
-- Only **user‑selected folders** are mounted into the VM.
-- Everything else on the host is invisible.
+- A single **workspace root** is mounted for runtime operations.
+- Each task is constrained to its selected **task folder** under that root.
+- **Traversal/symlink escapes are blocked** by policy checks.
+- This is **not** yet a hardened hostile-code sandbox.
 
 ## Permission Types (v1)
 

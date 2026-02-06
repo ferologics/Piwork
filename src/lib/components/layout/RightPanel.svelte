@@ -220,7 +220,17 @@ onDestroy(() => {
                                 </div>
                             {/if}
                         {:else if card.id === "context"}
-                            <p>No connectors enabled</p>
+                            <div class="space-y-2 text-xs">
+                                <div class="rounded-md border border-border bg-muted/50 px-2 py-2">
+                                    <p class="font-medium text-foreground">Scoped local mode (MVP)</p>
+                                    <ul class="mt-1 list-disc space-y-1 pl-4 text-muted-foreground">
+                                        <li>Access is scoped to the active task folder under your workspace root.</li>
+                                        <li>Traversal and symlink escape attempts are blocked by policy.</li>
+                                        <li>This is not yet a hardened sandbox for hostile code.</li>
+                                    </ul>
+                                </div>
+                                <p>No connectors enabled.</p>
+                            </div>
                         {/if}
                     </div>
                 {/if}

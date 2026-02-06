@@ -26,9 +26,15 @@ Primitive tasks (in `mise-tasks/`):
 - `test-delete-tasks`
 - `test-dump-state`
 - `test-screenshot`
+- `test-open-preview`
 - `test-stop`
 
 Use these primitives for focused checks instead of large brittle end-to-end scripts.
+
+Repeatable I2 scope checks are codified in:
+
+- `./scripts/harness/path-i-lite-negative.sh`
+- reference: `docs/path-i-lite-negative-suite.md`
 
 ## Evidence rule for runtime behavior claims
 

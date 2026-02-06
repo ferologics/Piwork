@@ -1,6 +1,6 @@
 # ADR 0001: Runtime Gate G2 Decision (Isolation-first vs Gondolin vs Sync fallback)
 
-- Status: Proposed
+- Status: Accepted (MVP interim)
 - Date: 2026-02-06
 - Owners: runtime/platform
 - Related:
@@ -8,6 +8,7 @@
   - `docs/runtime-g2-architecture-spike.md`
   - `docs/runtime-v2-taskd-sync-spec.md`
   - `docs/permissions-model.md`
+  - `docs/path-i-lite-negative-suite.md`
 
 ## Context
 
@@ -19,19 +20,16 @@ Runtime v2 Phase 0–2 is complete:
 
 The remaining architecture decision is workspace/sandbox strategy.
 
-Historically, Path S (sync-first) was selected at Gate G1, but that decision is now reopened. We need a clear Gate G2 decision that balances:
-
-- enforceable task isolation
-- UX latency and reliability
-- implementation complexity for current team/stage
+Historically, Path S (sync-first) was selected at Gate G1, but that decision was reopened.
+For MVP we need enforceable scoped access now, without blocking on deep runtime migration.
 
 ## Decision drivers
 
 1. No VM restart on task/folder switching in normal path
 2. Enforceable task file scope (not cwd convention only)
-3. No cross-task data bleed
+3. No cross-task data bleed in normal task flows
 4. Cowork-style responsiveness for prompt + switching
-5. Feasible implementation/maintenance cost
+5. Feasible implementation/maintenance cost for current stage
 
 ## Options considered
 
@@ -40,19 +38,8 @@ Historically, Path S (sync-first) was selected at Gate G1, but that decision is 
 Short description:
 
 - keep current Tauri + QEMU + taskd architecture
-- implement scoped workspace-root mount + strict folder checks
-- add per-task Linux users and staged sandbox hardening
-
-Pros:
-
-- reuses current working codebase
-- smallest migration surface
-- keeps existing harness and runtime control plane
-
-Cons:
-
-- requires careful hardening work in current stack
-- network policy still future work unless explicitly added
+- enforce scoped workspace-root access + strict folder checks
+- defer per-task users/stronger sandboxing to post-MVP
 
 ### Path G: Gondolin-based runtime
 
@@ -61,103 +48,89 @@ Short description:
 - adopt Gondolin for VM substrate + programmable VFS/network
 - bridge existing pi RPC/task model to Gondolin control plane
 
-Pros:
-
-- strong sandbox primitives out of the box
-- programmable filesystem/network model aligns with long-term goals
-
-Cons:
-
-- migration/integration complexity (Tauri ↔ Node runtime bridge)
-- unknowns around pi RPC/session semantics under new substrate
-
 ### Path S: Sync-first fallback
 
 Short description:
 
 - continue host↔guest manifest/read/apply sync model
 
-Pros:
+## Spike evidence summary (MVP track)
 
-- can avoid broad mount patterns
-- keeps host policy central
-
-Cons:
-
-- high complexity/surface area
-- stale-read and pre/post-sync latency risks
-- weaker fit for “filesystem as primary interface” workflows
-
-## Spike evidence summary
-
-> Fill this after G2-a and G2-b spikes.
-
-| Criterion             | Path I result | Path G result | Notes |
-| --------------------- | ------------- | ------------- | ----- |
-| No restart switching  | TBD           | TBD           |       |
-| Scope enforcement     | TBD           | TBD           |       |
-| Cross-task isolation  | TBD           | TBD           |       |
-| Prompt/switch latency | TBD           | TBD           |       |
-| Integration effort    | TBD           | TBD           |       |
+| Criterion             | Path I-lite result | Path G result   | Notes                                       |
+| --------------------- | ------------------ | --------------- | ------------------------------------------- |
+| No restart switching  | Pass               | Not run for MVP | v2 taskd baseline retained                  |
+| Scope enforcement     | Pass (MVP scope)   | Not run for MVP | host+guest checks + workspace-root plumbing |
+| Cross-task isolation  | Pass (MVP scope)   | Not run for MVP | resume baseline + negative scope harness    |
+| Prompt/switch latency | Pass               | Not run for MVP | within current v2 taskd expectations        |
+| Integration effort    | Lowest             | High/unknown    | Path I-lite chosen for delivery speed       |
 
 Evidence links:
 
-- State snapshots: TBD
-- Screenshots: TBD
-- Logs: TBD
+- State snapshots/screenshots/logs from v2 and Path I-lite runs in `tmp/dev/`
+- Repeatable negative suite: `docs/path-i-lite-negative-suite.md`
 
 ## Decision
 
-- Selected path: **TBD**
-- Decision date: **TBD**
+- Selected path: **Path I-lite for MVP**
+- Decision date: **2026-02-06**
 - Decision rationale:
-  - TBD
+  - Delivers enforceable scoped access in the current architecture.
+  - Preserves v2 taskd UX (no switch-triggered VM restart).
+  - Avoids a high-risk migration before MVP learning loops.
+  - Keeps Gate G2 research alive without blocking shipment.
 
 ## MVP guarantees we can claim
 
-> Keep this short and externally honest.
-
-1. TBD
-2. TBD
-3. TBD
+1. **Scoped local mode:** task file access is limited to the task’s selected folder under the configured workspace root.
+2. **Policy guards:** traversal/symlink escape attempts are rejected by host/guest policy checks.
+3. **Task separation:** task sessions are isolated per task; normal switching/resume should not cross-pollinate context.
 
 ## Deferred hardening (explicit)
 
-- TBD
+- Per-task Linux users and stricter ownership boundaries
+- Stronger sandbox boundary for hostile/untrusted code execution
+- Fine-grained network policy/mediation
+- Gondolin feasibility decision for post-MVP runtime evolution
 
 ## Implementation plan (post-decision)
 
-### Phase 3 (selected path)
+### MVP path (Path I-lite)
 
-- [ ] Task 1
-- [ ] Task 2
-- [ ] Task 3
+- [x] Host+guest scope checks and workspace-root-relative plumbing
+- [x] Mount reliability for workspace/taskstate in v2 path
+- [x] Repeatable negative checks for traversal/symlink/cross-task scope
+- [x] Honest UI copy for scoped local mode guarantees
 
 ### Validation
 
-- [ ] `mise run test-dump-state`
-- [ ] `mise run test-screenshot <name>`
-- [ ] supporting log lines (`tmp/dev/piwork.log`, `qemu.log`)
-- [ ] regression checks (`mise run check`)
+- [x] `mise run test-dump-state`
+- [x] `mise run test-screenshot <name>`
+- [x] supporting log lines (`tmp/dev/piwork.log`, `qemu.log`)
+- [x] regression checks (`mise run check`)
 
 ## Consequences
 
 ### Positive
 
-- TBD
+- Ships practical scoped access controls in MVP timeline
+- Keeps runtime model simple and consistent (taskd-first)
+- Leaves room for post-MVP hardening without churn now
 
 ### Negative / trade-offs
 
-- TBD
+- Not a hardened hostile-code sandbox yet
+- Network policy remains coarse in MVP
+- Some deep isolation guarantees are explicitly deferred
 
 ## Rollback / fallback plan
 
-If selected path fails acceptance criteria during implementation:
+If Path I-lite regresses critical behavior:
 
-1. pause rollout behind feature flags
+1. pause/disable via runtime feature flags
 2. preserve Phase 0–2 baseline behavior
-3. return to Gate G2 alternatives with recorded failure evidence
+3. revisit Gate G2 alternatives with recorded failure evidence
 
 ## Open questions
 
-- TBD
+- Whether post-MVP hardening should stay on current runtime or move to Gondolin
+- How far to push per-task sandboxing before introducing network mediation

@@ -361,12 +361,15 @@ Completed in code:
 
 Still open:
 
-- ⏳ Phase 3I-lite I2: codify negative harness checks (escape attempts + cross-task bleed) as repeatable checklist/script flow.
-- ⏳ ADR defining MVP isolation guarantees and deferred hardening.
 - ⏳ Gate G2 research lane (Gondolin feasibility + deeper hardening path comparison).
+
+Recent completions:
+
+- ✅ Phase 3I-lite I2 codified as repeatable harness flow (`scripts/harness/path-i-lite-negative.sh`, `docs/path-i-lite-negative-suite.md`).
+- ✅ ADR updated with MVP contract + deferred hardening (`docs/adr/0001-runtime-g2-decision.md`).
+- ✅ UI copy aligned to scoped local mode messaging (Context panel).
 
 ## Immediate next actions
 
-1. Codify repeatable negative harness checks for traversal/symlink/cross-task escape attempts
-2. Capture MVP security contract in ADR and align UI copy with actual guarantees
-3. Keep Gate G2 as non-blocking research lane while MVP path ships
+1. Keep Gate G2 as non-blocking research lane while MVP path ships
+2. Continue product-level MVP polish around auth/settings/onboarding constraints
