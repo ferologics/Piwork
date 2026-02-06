@@ -14,7 +14,9 @@
   - [x] Add `mise run test-regressions` task (currently runs live-app regression tests).
   - [x] Split gates: `mise run check` (fast) and `mise run check-full` (includes regressions).
   - [x] Add path-aware regression gating for push/CI so live tests only run when integration-impacting files change.
+  - [x] Add fast protocol guardrail (`mise run audit-protocol`) via Vitest contract tests.
 - [x] **Kill v1 runtime** — remove `PIWORK_RUNTIME_V2_TASKD` flag, v1 code paths in runtimeService (`handleTaskSwitchV1`, `handleFolderChangeV1`, `ensureTaskSessionReady`), v1 `nc -l` loop in init script, `RuntimeMode` type. taskd is the only runtime.
+- [x] **Enforce V2-only host protocol** — removed legacy host request handling in taskd, host parser is strict `{ id, type, payload }`, and RuntimeService only resolves pending RPCs from taskd V2 response envelopes.
 - [x] **Rename v2_taskd → runtime** — drop "v2" prefix everywhere (types, logs, flags, docs)
 - [x] **Extract init script** — move the heredoc out of `mise-tasks/runtime-build` into `runtime/init.sh`
 - [x] **Fix context pollution** — infrastructure bash commands (grep mount check, mkdir, session writes) go through pi's RPC and pollute the agent's conversation. Add `system_bash` to taskd that bypasses pi sessions, or do checks in taskd before spawning pi.
@@ -32,6 +34,7 @@
 - [ ] **Inject minimal FS runtime hint into prompts** — include working-folder host path + `/mnt/workdir` alias + scratchpad path, and refresh when folder is bound later (not just at startup).
 - [x] **Fix dev cwd chip staleness on task reopen** — reopen now validates persisted working folder before runtime prep, then refreshes on `task_ready`, so cwd settles to `/mnt/workdir...` instead of sticking at `/mnt/taskstate/.../outputs`.
 - [ ] **Delete remaining slop** — review docs for stale references to v1, v2 flags, sync protocol, smoke suites
+- [ ] **Script hygiene pass** — reduce `scripts/` sprawl by making `mise` the single entrypoint for dev/test ops, moving one-off experiments to `scripts/lab/`, and deleting wrappers not used by `mise` or CI.
 - [ ] **Dev watch scope** — avoid restarting `tauri dev` for non-runtime docs/content edits (e.g. Markdown), keep hot reload scoped to relevant source/config files.
 - [x] **Roadmap sync hygiene** — synced `docs/ui-roadmap.md` with current `TODO.md` execution state (2026-02-06).
 

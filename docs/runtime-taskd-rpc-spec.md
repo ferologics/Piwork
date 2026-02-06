@@ -20,7 +20,7 @@ Everything else (sync protocol details, capability negotiation, timeout tuning) 
 - Transport: newline-delimited JSON (JSONL) over existing TCP RPC channel
 - Encoding: UTF-8 JSON, one object per line
 - Ordering: in-order delivery per connection
-- Recovery: after reconnect, host must call `get_state` before resuming orchestration
+- Recovery: after reconnect, host must call `runtime_get_state` before resuming orchestration
 
 ## 3) Envelope formats
 
@@ -76,9 +76,12 @@ Everything else (sync protocol details, capability negotiation, timeout tuning) 
 }
 ```
 
+Legacy-shaped host requests (missing `payload`, top-level command fields, legacy `type:"response"` assumptions) are invalid and must return `INVALID_REQUEST`.
+
 ## 4) Idempotency rules (P0)
 
 - `id` is required on all requests.
+- `payload` is required and must be an object (use `{}` when no fields are needed).
 - Duplicate request `id` with same payload must not produce duplicate side effects.
 - Duplicate request `id` with different payload returns `INVALID_REQUEST`.
 
@@ -152,7 +155,7 @@ Result:
 
 Completion is signaled by `agent_end` or `task_error`.
 
-### 5.4 `get_state`
+### 5.4 `runtime_get_state`
 
 Payload: `{}`
 
@@ -165,17 +168,79 @@ Result shape:
         {
             "taskId": "task_abc123",
             "state": "active",
+            "provider": "anthropic",
+            "model": "claude-opus-4-5",
+            "thinkingLevel": "high",
+            "promptInFlight": false,
             "sessionFile": "/sessions/task_abc123/session.json",
             "taskDir": "/mnt/taskstate/task_abc123",
             "outputsDir": "/mnt/taskstate/task_abc123/outputs",
             "uploadsDir": "/mnt/taskstate/task_abc123/uploads",
-            "workDir": "/mnt/taskstate/task_abc123/outputs"
+            "workDir": "/mnt/taskstate/task_abc123/outputs",
+            "currentCwd": "/mnt/taskstate/task_abc123/outputs",
+            "workingFolderRelative": null
         }
     ]
 }
 ```
 
-### 5.5 `system_bash`
+### 5.5 `pi_get_available_models`
+
+Payload: `{}`
+
+Result shape:
+
+```json
+{
+    "models": [
+        {
+            "id": "claude-opus-4-5",
+            "name": "Claude Opus 4.5",
+            "provider": "anthropic"
+        }
+    ]
+}
+```
+
+### 5.6 `pi_set_model`
+
+Payload:
+
+```json
+{
+    "provider": "anthropic",
+    "modelId": "claude-opus-4-5"
+}
+```
+
+Result shape:
+
+```json
+{
+    "id": "claude-opus-4-5",
+    "name": "Claude Opus 4.5",
+    "provider": "anthropic"
+}
+```
+
+### 5.7 `extension_ui_response`
+
+Payload:
+
+```json
+{
+    "id": "ui_req_123",
+    "answer": "continue"
+}
+```
+
+Result shape:
+
+```json
+{}
+```
+
+### 5.8 `system_bash`
 
 Purpose: infra/system shell execution from host orchestration or harness paths that must bypass pi session semantics.
 
@@ -201,7 +266,7 @@ Result:
 }
 ```
 
-### 5.6 `stop_task`
+### 5.9 `stop_task`
 
 Payload:
 

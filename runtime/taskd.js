@@ -203,48 +203,6 @@ function resolveTaskCwd(task) {
     return candidateReal;
 }
 
-function normalizePayload(raw) {
-    if (!isRecord(raw)) {
-        return {};
-    }
-
-    if (isRecord(raw.payload)) {
-        return { ...raw.payload };
-    }
-
-    const payload = {};
-
-    if (typeof raw.taskId === "string") {
-        payload.taskId = raw.taskId;
-    }
-    if (typeof raw.message === "string") {
-        payload.message = raw.message;
-    }
-    if (typeof raw.promptId === "string") {
-        payload.promptId = raw.promptId;
-    }
-    if (typeof raw.provider === "string") {
-        payload.provider = raw.provider;
-    }
-    if (typeof raw.model === "string") {
-        payload.model = raw.model;
-    }
-    if (typeof raw.modelId === "string") {
-        payload.model = raw.modelId;
-    }
-    if (typeof raw.thinkingLevel === "string") {
-        payload.thinkingLevel = raw.thinkingLevel;
-    }
-    if (typeof raw.workingFolder === "string") {
-        payload.workingFolder = raw.workingFolder;
-    }
-    if (typeof raw.workingFolderRelative === "string") {
-        payload.workingFolderRelative = raw.workingFolderRelative;
-    }
-
-    return payload;
-}
-
 function requestFingerprint(request) {
     return JSON.stringify({
         type: request.type,
@@ -312,7 +270,7 @@ function maybeHandleDuplicateIdempotentRequest(request) {
 
 function sendV2Success(request, result) {
     const response = {
-        id: request.id || null,
+        id: request.id,
         ok: true,
         result,
     };
@@ -324,7 +282,7 @@ function sendV2Success(request, result) {
 
 function sendV2Error(request, code, message, retryable = false, details = {}) {
     const response = {
-        id: request.id || null,
+        id: request.id,
         ok: false,
         error: {
             code,
@@ -337,26 +295,6 @@ function sendV2Error(request, code, message, retryable = false, details = {}) {
     cacheIdempotentResponse(request, response);
     writeJson(response);
     return response;
-}
-
-function sendLegacyResponse(command, success, data, error, id) {
-    const response = {
-        type: "response",
-        command,
-        success,
-    };
-
-    if (typeof id === "string") {
-        response.id = id;
-    }
-
-    if (success) {
-        response.data = data ?? {};
-    } else {
-        response.error = error || "Unknown error";
-    }
-
-    writeJson(response);
 }
 
 function buildTask(taskId, options = {}) {
@@ -882,16 +820,10 @@ function resolveSystemBashCwd(rawCwd) {
 }
 
 function readSystemBashString(request, keys) {
-    for (const source of [request.payload, request.raw]) {
-        if (!isRecord(source)) {
-            continue;
-        }
-
-        for (const key of keys) {
-            const value = source[key];
-            if (typeof value === "string") {
-                return value;
-            }
+    for (const key of keys) {
+        const value = request.payload[key];
+        if (typeof value === "string") {
+            return value;
         }
     }
 
@@ -970,18 +902,48 @@ async function runSystemBash(command, cwd = null) {
 }
 
 function parseRequest(raw) {
-    if (!isRecord(raw) || typeof raw.type !== "string") {
-        return null;
+    if (!isRecord(raw)) {
+        return {
+            request: null,
+            id: null,
+            error: "Request must be an object",
+        };
     }
 
-    const hasPayloadField = Object.prototype.hasOwnProperty.call(raw, "payload");
+    const id = typeof raw.id === "string" && raw.id.trim().length > 0 ? raw.id : null;
+    if (!id) {
+        return {
+            request: null,
+            id: null,
+            error: "Request id is required",
+        };
+    }
+
+    const type = typeof raw.type === "string" ? raw.type.trim() : "";
+    if (!type) {
+        return {
+            request: null,
+            id,
+            error: "Request type is required",
+        };
+    }
+
+    if (!isRecord(raw.payload)) {
+        return {
+            request: null,
+            id,
+            error: "Request payload must be an object",
+        };
+    }
 
     return {
-        id: typeof raw.id === "string" ? raw.id : null,
-        type: raw.type,
-        payload: normalizePayload(raw),
-        raw,
-        hasPayloadField,
+        request: {
+            id,
+            type,
+            payload: { ...raw.payload },
+        },
+        id,
+        error: null,
     };
 }
 
@@ -1305,10 +1267,6 @@ async function handleV2StopTask(request) {
 }
 
 async function handleV2Request(request) {
-    if (!request.id) {
-        return sendV2Error(request, "INVALID_REQUEST", "id is required", false, {});
-    }
-
     if (maybeHandleDuplicateIdempotentRequest(request)) {
         return;
     }
@@ -1324,7 +1282,6 @@ async function handleV2Request(request) {
             await handleV2Prompt(request);
             return;
         case "runtime_get_state":
-        case "get_state":
             handleV2GetState(request);
             return;
         case "pi_get_available_models":
@@ -1345,170 +1302,6 @@ async function handleV2Request(request) {
         default:
             sendV2Error(request, "INVALID_REQUEST", `Unknown request type: ${request.type}`, false, {});
     }
-}
-
-function legacyStatePayload() {
-    const activeTask = activeTaskId ? tasks.get(activeTaskId) : null;
-
-    return {
-        model: {
-            id: activeTask?.model || defaults.model,
-            name: activeTask?.model || defaults.model,
-            provider: activeTask?.provider || defaults.provider,
-        },
-        sessionName: activeTaskId,
-        sessionId: activeTaskId,
-        isStreaming: Boolean(activeTask?.promptInFlight),
-        activeTaskId,
-        tasks: Array.from(tasks.values()).map(serializeTask),
-    };
-}
-
-async function handleLegacyGetState(request) {
-    sendLegacyResponse("get_state", true, legacyStatePayload(), null, request.id || undefined);
-}
-
-async function handleLegacyGetAvailableModels(request) {
-    try {
-        const models = await fetchAvailableModelsFromPi();
-        sendLegacyResponse(
-            "get_available_models",
-            true,
-            {
-                models,
-            },
-            null,
-            request.id || undefined,
-        );
-    } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        sendLegacyResponse("get_available_models", false, null, message, request.id || undefined);
-    }
-}
-
-async function handleLegacySetModel(request) {
-    const provider = typeof request.payload.provider === "string" ? request.payload.provider : defaults.provider;
-    const model =
-        typeof request.payload.model === "string"
-            ? request.payload.model
-            : typeof request.raw.modelId === "string"
-              ? request.raw.modelId
-              : defaults.model;
-
-    try {
-        const selected = await setModelOnActiveTask(provider, model);
-        sendLegacyResponse("set_model", true, selected, null, request.id || undefined);
-    } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        sendLegacyResponse("set_model", false, null, message, request.id || undefined);
-    }
-}
-
-async function handleLegacyPrompt(request) {
-    const message = typeof request.payload.message === "string" ? request.payload.message : null;
-
-    if (!message) {
-        sendLegacyResponse("prompt", false, null, "message is required", request.id || undefined);
-        return;
-    }
-
-    try {
-        const task = await startPromptOnActiveTask(message);
-        sendLegacyResponse(
-            "prompt",
-            true,
-            {
-                accepted: true,
-                taskId: task.taskId,
-            },
-            null,
-            request.id || undefined,
-        );
-    } catch (error) {
-        const messageText = error instanceof Error ? error.message : String(error);
-        sendLegacyResponse("prompt", false, null, messageText, request.id || undefined);
-    }
-}
-
-async function handleLegacyExtensionUiResponse(request) {
-    try {
-        const data = await forwardExtensionUiResponseToPi(request.raw);
-        sendLegacyResponse("extension_ui_response", true, data, null, request.id || undefined);
-    } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        sendLegacyResponse("extension_ui_response", false, null, message, request.id || undefined);
-    }
-}
-
-async function handleLegacySystemBash(request, commandName) {
-    const parsed = parseSystemBashRequest(request);
-    if (parsed.error) {
-        sendLegacyResponse(commandName, false, null, parsed.error, request.id || undefined);
-        return;
-    }
-
-    const result = await runSystemBash(parsed.command, parsed.cwd);
-    sendLegacyResponse(
-        commandName,
-        true,
-        {
-            output: result.output,
-            exitCode: result.exitCode,
-            timedOut: result.timedOut,
-            cwd: parsed.cwd,
-        },
-        null,
-        request.id || undefined,
-    );
-}
-
-async function handleLegacySwitchSession(request) {
-    sendLegacyResponse(
-        "switch_session",
-        false,
-        null,
-        "switch_session is unsupported in taskd mode",
-        request.id || undefined,
-    );
-}
-
-async function handleLegacyRequest(request) {
-    switch (request.type) {
-        case "get_state":
-            await handleLegacyGetState(request);
-            return;
-        case "get_available_models":
-            await handleLegacyGetAvailableModels(request);
-            return;
-        case "set_model":
-            await handleLegacySetModel(request);
-            return;
-        case "prompt":
-            await handleLegacyPrompt(request);
-            return;
-        case "extension_ui_response":
-            await handleLegacyExtensionUiResponse(request);
-            return;
-        case "bash":
-            await handleLegacySystemBash(request, "bash");
-            return;
-        case "system_bash":
-            await handleLegacySystemBash(request, "system_bash");
-            return;
-        case "switch_session":
-            await handleLegacySwitchSession(request);
-            return;
-        default:
-            sendLegacyResponse(request.type, false, null, `Unknown command: ${request.type}`, request.id || undefined);
-    }
-}
-
-function isV2Request(request) {
-    if (request.hasPayloadField) {
-        return true;
-    }
-
-    return ["create_or_open_task", "switch_task", "stop_task", "system_bash"].includes(request.type);
 }
 
 async function handleRawHostLine(line) {
@@ -1533,13 +1326,14 @@ async function handleRawHostLine(line) {
         return;
     }
 
-    const request = parseRequest(raw);
-    if (!request) {
+    const parsed = parseRequest(raw);
+    if (!parsed.request) {
         writeJson({
+            id: parsed.id,
             ok: false,
             error: {
                 code: "INVALID_REQUEST",
-                message: "Request must include string type",
+                message: parsed.error,
                 retryable: false,
                 details: {},
             },
@@ -1547,12 +1341,7 @@ async function handleRawHostLine(line) {
         return;
     }
 
-    if (isV2Request(request)) {
-        await handleV2Request(request);
-        return;
-    }
-
-    await handleLegacyRequest(request);
+    await handleV2Request(parsed.request);
 }
 
 async function bootstrapInitialTask() {

@@ -57,18 +57,18 @@ Let users authenticate once and reuse provider credentials across tasks. Support
 2. Host sends `/login` via RPC.
 3. UI renders `extension_ui_request` dialogs (select/confirm/input).
 4. Detect login URLs in RPC/extension messages; show **Open** + **Copy** actions (auto-open optional).
-5. On completion, refresh `get_state` + `get_available_models` and show active provider/model.
+5. On completion, refresh `runtime_get_state` + `pi_get_available_models` and show active provider/model.
 
 ### API Key Flow
 
 1. User selects provider + pastes key.
 2. Host writes to the profile `auth.json`.
-3. Validate with `get_available_models`.
+3. Validate with `pi_get_available_models`.
 
 ### Success Criteria
 
-- `get_state` returns an active model.
-- `get_available_models` returns at least one model.
+- `runtime_get_state` returns an active model.
+- `pi_get_available_models` returns at least one model.
 - UI shows active provider/model.
 
 ### Failure Handling

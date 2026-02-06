@@ -1,3 +1,7 @@
+[tasks.audit-protocol]
+description = "Audit runtime protocol invariants (V2-only host lane)"
+run = "pnpm exec vitest run src/lib/__tests__/protocol-contract.test.ts src/lib/__tests__/runtimeService.protocol.test.ts"
+
 [tasks.build]
 description = "Build the frontend"
 run = "pnpm exec vite build"

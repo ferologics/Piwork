@@ -4,6 +4,7 @@
     "description": "",
     "type": "module",
     "scripts": {
+        "audit:protocol": "mise run audit-protocol",
         "build": "mise run build",
         "check": "mise run check",
         "check:full": "mise run check-full",

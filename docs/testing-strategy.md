@@ -7,6 +7,7 @@
 - Vitest for frontend/state logic and runtime contract behavior.
 - Rust unit tests for backend stores/validation.
 - Regression tests must assert against a machine-readable `state_snapshot` payload (not terminal log text).
+- Use `mise run audit-protocol` for fast protocol-lane invariants (V2-only host lane).
 - Use `mise run test-regressions` for runtime contract regressions (live app process).
 - Daily local gate: `mise run check` (fast).
 - Required high-confidence gate: `mise run check-full` (fast gate + live regressions) when forcing a full run.

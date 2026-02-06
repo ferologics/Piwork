@@ -74,7 +74,10 @@ Per task on host:
 - `create_or_open_task(taskId, model, thinkingLevel, workingFolder?)`
 - `switch_task(taskId)`
 - `prompt(message)`
-- `get_state()`
+- `runtime_get_state()`
+- `pi_get_available_models()`
+- `pi_set_model(provider, modelId)`
+- `extension_ui_response(payload)`
 - `system_bash(command, cwd?)` (infra lane, no session pollution)
 - `stop_task(taskId)`
 
@@ -157,7 +160,7 @@ Required evidence for any runtime claim:
 ### Phase 0 — taskd baseline (complete)
 
 - runtime orchestration extracted to `runtimeService`
-- guest taskd lifecycle/switch/prompt/get_state/stop_task implemented
+- guest taskd lifecycle/switch/prompt/runtime_get_state/stop_task implemented
 - host switch handshake + timeout behavior in place
 - normal path no longer depends on VM restart/hydration fallback
 

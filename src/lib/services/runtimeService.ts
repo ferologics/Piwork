@@ -694,10 +694,8 @@ export class RuntimeService {
             return;
         }
 
-        const isLegacyResponse = payload.type === "response";
         const isTaskdResponse = typeof payload.ok === "boolean";
-
-        if (!isLegacyResponse && !isTaskdResponse) {
+        if (!isTaskdResponse) {
             return;
         }
 
