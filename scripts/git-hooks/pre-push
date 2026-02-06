@@ -4,5 +4,11 @@ set -euo pipefail
 ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 cd "$ROOT_DIR"
 
-echo "[pre-push] Running full checks (mise run check-full)..."
-mise run check-full
+if [[ "${PIWORK_FORCE_CHECK_FULL:-0}" == "1" ]]; then
+    echo "[pre-push] PIWORK_FORCE_CHECK_FULL=1 -> running full checks (mise run check-full)..."
+    mise run check-full
+    exit 0
+fi
+
+echo "[pre-push] Fast gate runs in pre-commit; checking whether live regressions are needed..."
+./scripts/testing/run-regressions-if-needed.sh

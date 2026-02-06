@@ -13,6 +13,7 @@
   - [x] Remove low-signal/noise tests and stale assertions (smoke test, legacy session-file assumptions, noisy debug logs).
   - [x] Add `mise run test-regressions` task (currently runs live-app regression tests).
   - [x] Split gates: `mise run check` (fast) and `mise run check-full` (includes regressions).
+  - [x] Add path-aware regression gating for push/CI so live tests only run when integration-impacting files change.
 - [x] **Kill v1 runtime** — remove `PIWORK_RUNTIME_V2_TASKD` flag, v1 code paths in runtimeService (`handleTaskSwitchV1`, `handleFolderChangeV1`, `ensureTaskSessionReady`), v1 `nc -l` loop in init script, `RuntimeMode` type. taskd is the only runtime.
 - [x] **Rename v2_taskd → runtime** — drop "v2" prefix everywhere (types, logs, flags, docs)
 - [x] **Extract init script** — move the heredoc out of `mise-tasks/runtime-build` into `runtime/init.sh`

@@ -75,6 +75,10 @@ run = "mise run test-vite && mise run test-rust"
 description = "Run runtime regression integration tests"
 run = "pnpm exec vitest run --minWorkers=1 --maxWorkers=1 src/lib/__tests__/integration/*.integration.test.ts"
 
+[tasks.test-regressions-if-needed]
+description = "Run runtime regressions only when integration-impacting files changed"
+run = "./scripts/testing/run-regressions-if-needed.sh"
+
 [tasks.test-rust]
 description = "Run Rust tests"
 run = "cargo test --manifest-path src-tauri/Cargo.toml"

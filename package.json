@@ -17,7 +17,8 @@
         "tauri:build": "mise run tauri-build",
         "tauri:dev": "mise run tauri-dev",
         "test": "mise run test",
-        "test:regressions": "mise run test-regressions"
+        "test:regressions": "mise run test-regressions",
+        "test:regressions:if-needed": "mise run test-regressions-if-needed"
     },
     "license": "MIT",
     "dependencies": {

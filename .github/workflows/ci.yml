@@ -7,6 +7,37 @@ on:
       - main
 
 jobs:
+  changes:
+    name: detect integration-impacting changes
+    runs-on: ubuntu-latest
+    outputs:
+      integration: ${{ steps.filter.outputs.integration }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed paths
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            integration:
+              - "runtime/**"
+              - "src-tauri/src/**"
+              - "src/lib/components/layout/**"
+              - "src/lib/services/runtimeService.ts"
+              - "src/lib/stores/runtimeDebugStore.ts"
+              - "src/lib/stores/taskStore.ts"
+              - "src/lib/__tests__/integration/**"
+              - "mise.toml"
+              - "mise-tasks/test-*"
+              - "scripts/testing/**"
+              - "scripts/git-hooks/pre-push"
+              - ".github/workflows/ci.yml"
+
   check:
     name: check (fast)
     runs-on: macos-14
@@ -46,7 +77,8 @@ jobs:
     name: check-full (live regressions)
     runs-on: macos-14
     timeout-minutes: 75
-    needs: check
+    needs: [check, changes]
+    if: needs.changes.outputs.integration == 'true'
 
     steps:
       - name: Checkout

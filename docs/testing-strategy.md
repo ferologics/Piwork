@@ -9,7 +9,8 @@
 - Regression tests must assert against a machine-readable `state_snapshot` payload (not terminal log text).
 - Use `mise run test-regressions` for runtime contract regressions (live app process).
 - Daily local gate: `mise run check` (fast).
-- Required high-confidence gate: `mise run check-full` (fast gate + live regressions), typically on pre-push/CI.
+- Required high-confidence gate: `mise run check-full` (fast gate + live regressions) when forcing a full run.
+- Day-to-day push ergonomics: `mise run test-regressions-if-needed` to skip live regressions when non-impacting files changed.
 
 ### 2) Harness primitives (integration support)
 
@@ -35,8 +36,9 @@ This suite is currently supplemental smoke coverage. Equivalent contract checks 
 
 - `mise run setup` installs hooks automatically (or run `mise run install-git-hooks` manually).
 - pre-commit: `mise run check` (fast feedback)
-- pre-push: `mise run check-full` (slow, high confidence)
-- CI (`.github/workflows/ci.yml`): `check` + `check-full` jobs on PRs/pushes.
+- pre-push: `mise run test-regressions-if-needed` (runs live regressions only when integration-impacting files changed)
+- override: `PIWORK_FORCE_CHECK_FULL=1 git push` for a forced full gate in pre-push
+- CI (`.github/workflows/ci.yml`): `check` always; `check-full` only when integration-impacting paths changed.
 
 ## Evidence rule
 

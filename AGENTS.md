@@ -15,8 +15,9 @@ Cowork-style UI on top of **pi** using **Tauri**. File-scoped tasks, sandboxed V
 ```bash
 mise run setup              # install deps + git hooks
 mise run check              # fast local gate (format/lint/compile/fast tests)
-mise run check-full         # full gate (check + live regressions)
-mise run test-regressions   # live app regression suite
+mise run check-full               # full gate (check + live regressions)
+mise run test-regressions         # live app regression suite
+mise run test-regressions-if-needed # run live regressions only when impacted files changed
 mise run install-git-hooks  # reinstall pre-commit/pre-push hooks
 mise run tauri-dev          # run app
 mise run runtime-build      # build VM runtime pack
@@ -28,8 +29,9 @@ mise run runtime-clean      # clean runtime artifacts
 
 - Git hooks are installed by `mise run setup` (or manually via `mise run install-git-hooks`).
 - `pre-commit` runs `mise run check`.
-- `pre-push` runs `mise run check-full`.
-- CI (`.github/workflows/ci.yml`) runs both `check` and `check-full` gates on PRs/pushes.
+- `pre-push` runs `mise run test-regressions-if-needed` (path-aware live regression gate).
+- Set `PIWORK_FORCE_CHECK_FULL=1` to force full pre-push gate.
+- CI (`.github/workflows/ci.yml`) always runs `check`; `check-full` runs only when integration-impacting paths changed.
 - **Agent rule**: avoid running a redundant manual `mise run check` immediately before `git commit` when hooks are active; rely on pre-commit output unless explicit extra verification is requested.
 
 ## Architecture

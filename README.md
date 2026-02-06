@@ -22,11 +22,12 @@ mise run tauri-dev
 ```
 
 ```bash
-mise run check        # fast local gate
-mise run check-full   # includes live runtime regressions
+mise run check                    # fast local gate
+mise run check-full               # forced full gate (fast + live regressions)
+mise run test-regressions-if-needed # runs live regressions only if integration-impacting files changed
 ```
 
-CI mirrors this split (`.github/workflows/ci.yml`): fast `check` + live `check-full`.
+CI mirrors this split (`.github/workflows/ci.yml`): fast `check` always, `check-full` only when integration-impacting paths changed.
 
 ```bash
 mise run test
@@ -36,7 +37,9 @@ mise run test-regressions
 ```
 
 ```bash
-mise run install-git-hooks   # reinstall hooks manually (pre-commit/check + pre-push/check-full)
+mise run install-git-hooks   # reinstall hooks manually (pre-commit/check + pre-push/conditional regressions)
+# force full pre-push gate once:
+PIWORK_FORCE_CHECK_FULL=1 git push
 ```
 
 ## AI Harness (debug/dev)
