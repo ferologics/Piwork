@@ -290,6 +290,8 @@ function parseExtensionUiRequest(payload: Record<string, unknown>): ExtensionUiR
 }
 
 function applyRuntimeSnapshot(snapshot: RuntimeServiceSnapshot) {
+    const wasTaskSwitching = taskSwitching;
+
     rpcConnected = snapshot.rpcConnected;
     rpcConnecting = snapshot.rpcConnecting;
     rpcError = snapshot.rpcError;
@@ -299,6 +301,11 @@ function applyRuntimeSnapshot(snapshot: RuntimeServiceSnapshot) {
     workspaceRoot = snapshot.workspaceRoot;
     authProfile = snapshot.authProfile;
     taskSwitching = snapshot.taskSwitching;
+
+    if (wasTaskSwitching && !taskSwitching) {
+        void requestState();
+        void requestAvailableModels();
+    }
 }
 
 function getRpcClient() {
@@ -436,7 +443,7 @@ function getActiveRuntimeTask(state: RuntimeGetStateResult): RuntimeTaskState | 
 }
 
 async function requestState() {
-    if (!runtimeService || rpcStateRequested) return;
+    if (!runtimeService || rpcStateRequested || taskSwitching) return;
 
     rpcStateRequested = true;
 
@@ -465,8 +472,16 @@ async function requestState() {
     }
 }
 
+function isTransientModelLoadError(message: string) {
+    return message.includes("pi exited") && message.includes("SIGTERM");
+}
+
 async function requestAvailableModels() {
     if (!runtimeService || rpcModelsRequested) return;
+
+    if (!currentTaskId || taskSwitching || !rpcConnected) {
+        return;
+    }
 
     rpcModelsRequested = true;
     modelsLoading = true;
@@ -490,6 +505,12 @@ async function requestAvailableModels() {
         }
     } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
+
+        if (isTransientModelLoadError(message) || taskSwitching || !rpcConnected) {
+            devLog("MainView", `Ignoring transient model load error: ${message}`);
+            return;
+        }
+
         modelsError = message;
         availableModels = [];
         selectedModelId = "";

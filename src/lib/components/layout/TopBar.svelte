@@ -93,7 +93,7 @@ onDestroy(() => {
                     task {shortId(activeTask.id)}
                 </span>
 
-                {#if runtimeDebug.activeTaskId && runtimeDebug.activeTaskId !== activeTask.id}
+                {#if runtimeDebug.activeTaskId && runtimeDebug.activeTaskId !== "__legacy__" && runtimeDebug.activeTaskId !== activeTask.id}
                     <span
                         class="rounded border border-red-500/40 bg-red-500/15 px-1.5 py-0.5 text-[10px] text-red-300"
                         title={`runtime active task: ${runtimeDebug.activeTaskId}`}
