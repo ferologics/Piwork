@@ -21,6 +21,7 @@ mise run check-ci           # fast CI gate (format-check + lint + compile + fast
 mise run check-full         # full gate (check + live regressions)
 mise run test-regressions         # live app regression suite
 mise run test-regressions-if-needed # run live regressions only when impacted files changed
+mise run test-scope-negative # scope-negative harness suite
 mise run install-git-hooks  # reinstall pre-commit/pre-push hooks
 mise run tauri-dev          # run app
 mise run runtime-build      # build VM runtime pack

@@ -1,8 +1,9 @@
 # Task Artifact Contract (MVP, pre-alpha)
 
-Status: in progress
+Status: active (in progress)
+Category: canonical
 Owner: product/runtime
-Last updated: 2026-02-06
+Last reviewed: 2026-02-07
 
 ## Decisions (locked)
 

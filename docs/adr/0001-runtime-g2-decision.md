@@ -5,9 +5,9 @@
 - Owners: runtime/platform
 - Related:
   - `docs/runtime-taskd-plan.md`
-  - `docs/runtime-g2-architecture-spike.md`
+  - `docs/research/runtime-g2-architecture-spike.md`
   - `docs/permissions-model.md`
-  - `docs/path-i-lite-negative-suite.md`
+  - `docs/testing-strategy.md`
 
 ## Context
 
@@ -66,7 +66,7 @@ Short description:
 Evidence links:
 
 - State snapshots/screenshots/logs from runtime and Path I-lite runs in `tmp/dev/`
-- Repeatable negative suite: `docs/path-i-lite-negative-suite.md`
+- Repeatable negative suite: `docs/testing-strategy.md` (`Scope enforcement suite` section)
 
 ## Decision
 

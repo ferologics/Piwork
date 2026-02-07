@@ -1,5 +1,10 @@
 # Testing Strategy
 
+Status: active
+Category: canonical
+Owner: runtime/platform
+Last reviewed: 2026-02-07
+
 ## Test layers
 
 ### 1) Unit + contract tests (primary gate)
@@ -30,8 +35,30 @@ Screenshot checks require Screen Recording permission. Blank/black captures fail
 
 ### 3) Scope enforcement suite (supplemental)
 
-`scripts/harness/path-i-lite-negative.sh` checks traversal/symlink/cross-task scope behavior.
-See `docs/path-i-lite-negative-suite.md`.
+Run:
+
+```bash
+mise run test-scope-negative
+```
+
+Optional screenshot name override:
+
+```bash
+./scripts/harness/scope-negative.sh scope-negative-suite
+```
+
+Current checks:
+
+1. traversal read blocked (`../task-a/secret-a.txt`)
+2. symlink escape blocked (`link-to-a.txt`)
+3. in-scope direct read still works (`public-b.txt`)
+4. guest rejects `workingFolderRelative` escape and logs `WORKSPACE_POLICY_VIOLATION`
+
+Evidence captured by the harness:
+
+- `mise run test-dump-state`
+- `mise run test-screenshot <name>`
+- supporting log lines in `tmp/dev/piwork.log`
 
 This suite is currently supplemental smoke coverage. Equivalent contract checks should be migrated into automated test code over time.
 

@@ -95,6 +95,10 @@ run = "./scripts/testing/run-regressions-if-needed.sh"
 description = "Run Rust tests"
 run = "cargo test --manifest-path src-tauri/Cargo.toml --lib --tests"
 
+[tasks.test-scope-negative]
+description = "Run scope-negative harness suite"
+run = "./scripts/harness/scope-negative.sh"
+
 [tasks.test-vite]
 description = "Run fast frontend tests (exclude live integration suite)"
 run = "pnpm exec vitest run --exclude src/lib/__tests__/integration/**/*.integration.test.ts"

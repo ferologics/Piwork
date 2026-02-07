@@ -1,4 +1,9 @@
-# UI Roadmap
+# UI Roadmap (archive)
+
+Status: archived
+Superseded by: `../product-direction.md`, `../../TODO.md`
+Closed: 2026-02-07
+Archive note: directional roadmap retained for historical context; active direction now lives in `../product-direction.md`.
 
 Based on Cowork observation + our needs.
 

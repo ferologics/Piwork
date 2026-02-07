@@ -1,8 +1,10 @@
 # Folder + Artifact Implementation Plan
 
-Status: active
+Status: archived
 Owner: runtime/ui
 Last updated: 2026-02-06
+Superseded by: `../task-artifact-contract.md`, `../../TODO.md`
+Archive note: core implementation landed; any remaining evidence follow-ups are tracked in the contract/TODO docs.
 
 ## Goals
 

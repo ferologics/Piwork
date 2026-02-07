@@ -14,7 +14,7 @@ mkdir -p "$TMP_DIR"
 
 if [[ ! -f "$ALPINE_ISO" ]]; then
     echo "ISO not found: $ALPINE_ISO" >&2
-    echo "Download to tmp/ first (see docs/network-mitm-spike.md)." >&2
+    echo "Download to tmp/ first (see docs/research/network-mitm-spike.md)." >&2
     exit 1
 fi
 

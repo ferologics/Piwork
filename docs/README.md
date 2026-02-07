@@ -1,35 +1,36 @@
 # Docs Index
 
-## Runtime (source of truth)
+Status: active
+Category: canonical
+Owner: product/runtime
+Last reviewed: 2026-02-07
 
-- `runtime-taskd-plan.md` — taskd rollout status and phases
-- `runtime-taskd-rpc-spec.md` — taskd RPC contract
+## Canonical (active source of truth)
+
+- `runtime-taskd-plan.md` — taskd runtime architecture and rollout status
+- `runtime-taskd-rpc-spec.md` — host↔taskd RPC contract
 - `runtime-pack.md` — VM runtime pack format and boot model
-- `pi-integration.md` — host↔VM↔pi integration overview
-- `testing-strategy.md` — test approach and harness primitives
-
-## Runtime (research / deferred)
-
-- `runtime-g2-architecture-spike.md` — post-MVP hardening research (Gondolin vs deeper sandbox)
-- `adr/0001-runtime-g2-decision.md` — decision record template
-
-## Product
-
+- `pi-integration.md` — host↔VM↔pi integration quick reference
+- `testing-strategy.md` — test strategy, harness primitives, and scope-negative runbook
 - `auth-flow.md` — authentication behavior
-- `permissions-model.md` — folder access model
-- `task-artifact-contract.md` — working-folder immutability + outputs/uploads/scratchpad contract
-- `folder-artifact-implementation-plan.md` — implementation plan for one-time folder bind + scratchpad aggregation
-- `cleanup-execution-plan.md` — cleanup execution archive + remaining closeout checklist
-- `followup-steering-spec.md` — deferred spec for queued follow-ups, steering, and stop UX in the composer
-- `ui-roadmap.md` — UI direction + Cowork comparison (execution tracking is in `../TODO.md`)
+- `permissions-model.md` — scoped local mode + permission policy
+- `task-artifact-contract.md` — working-folder + outputs/uploads/scratchpad contract
+- `product-direction.md` — durable product principles and strategy lanes
 
-## Supporting
+## Research (non-normative)
 
-- `path-i-lite-negative-suite.md` — scope enforcement test (traversal/symlink/cross-task)
-- `network-mitm-spike.md` — future network interception notes
+- `research/runtime-g2-architecture-spike.md` — post-MVP hardening research (Gondolin vs deeper sandbox)
+- `research/network-mitm-spike.md` — future strict-network spike notes
+- `research/followup-steering-spec.md` — deferred composer queue/steering design
+- `research/` — Cowork notes, sketches, and field intel
 
-## Research
+## Archive (historical)
 
-- `research/` — Cowork notes, sketches, field intel
-- `research/cowork-claude-runtime-intel-2026-02-06.md` — Cowork runtime observations
-- `research/sandbox-strategy.md` — cross-platform sandbox model
+- `archive/cleanup-execution-plan.md` — closed cleanup implementation plan (superseded by `../TODO.md`)
+- `archive/folder-artifact-implementation-plan.md` — closed folder/artifact implementation sequencing doc (superseded by `task-artifact-contract.md` + `../TODO.md`)
+- `archive/docs-realignment-plan.md` — completed deep-cut docs reclassification plan
+- `archive/ui-roadmap.md` — superseded directional roadmap (replaced by `product-direction.md` + `../TODO.md`)
+
+## ADRs
+
+- `adr/0001-runtime-g2-decision.md` — Gate G2 decision record

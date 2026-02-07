@@ -1,5 +1,10 @@
 # Runtime Pack + VM Boot Flow
 
+Status: active
+Category: canonical
+Owner: runtime/platform
+Last reviewed: 2026-02-07
+
 ## Scope
 
 This doc describes the **current dev/runtime-pack model** used by piwork.

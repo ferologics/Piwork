@@ -1,6 +1,12 @@
 # Runtime Plan — Task Supervisor (`taskd`) + Staged Workspace Strategy
 
-> **Status update (2026-02-06):** taskd is the active runtime baseline and the legacy v1 mode has been removed. MVP execution is on **Path I-lite** (strict scope enforcement on current runtime, no sync expansion). Path G (Gondolin) remains a research lane via Gate G2.
+Status: active
+Category: canonical
+Owner: runtime/platform
+Last reviewed: 2026-02-07
+
+> **Status update (2026-02-06):** taskd is the active runtime baseline and runtime mode flags have been removed. MVP execution is on a **scoped-local baseline** (strict scope enforcement on current runtime, no sync expansion). Gondolin remains a research lane via Gate G2.
+> Integration quick-reference: `docs/pi-integration.md`. Normative wire contract: `docs/runtime-taskd-rpc-spec.md`.
 
 ## Why this plan exists
 
@@ -29,11 +35,11 @@ This plan keeps one clear baseline:
 
 ## Locked decisions (current)
 
-- **Taskd is the only runtime mode.** No runtime mode flags, no v1 fallback path.
+- **Taskd is the only runtime mode.** No runtime mode flags, no fallback runtime path.
 - `stop_task` is a required baseline RPC.
 - Runtime orchestration belongs in `runtimeService`, not `MainView`.
-- MVP ships on **Path I-lite** (scoped local mode with host+guest policy checks).
-- Sync-heavy protocol work stays deferred unless Path S is explicitly re-selected.
+- MVP ships on a **scoped-local baseline** (host+guest policy checks).
+- Sync-heavy protocol work stays deferred unless the sync-first lane is explicitly re-selected.
 - Post-MVP hardening direction is tracked under **Gate G2**.
 
 ## Target architecture
@@ -112,13 +118,13 @@ Latency targets (initial budgets):
 
 ## Workspace + sandbox strategy (Gate G2)
 
-Detailed spike checklist: `docs/runtime-g2-architecture-spike.md`.
+Detailed spike checklist: `docs/research/runtime-g2-architecture-spike.md`.
 
 Current position:
 
-- **Path I-lite** is selected for MVP shipment.
-- **Path G (Gondolin)** remains research.
-- **Path S (sync-first)** remains fallback only.
+- **Scoped-local baseline** is selected for MVP shipment.
+- **Gondolin lane** remains research.
+- **Sync-first lane** remains fallback only.
 
 Decision criteria:
 
@@ -164,7 +170,7 @@ Required evidence for any runtime claim:
 - host switch handshake + timeout behavior in place
 - normal path no longer depends on VM restart/hydration fallback
 
-### Phase 1 — Path I-lite scope enforcement (active baseline)
+### Phase 1 — Scoped-local enforcement (active baseline)
 
 - host working-folder validation + workspace-root enforcement
 - guest relative-path validation + traversal/symlink rejection
@@ -173,8 +179,8 @@ Required evidence for any runtime claim:
 
 ### Gate G2 — post-MVP architecture research (active, non-blocking)
 
-- Path I hardening spikes
-- Path G Gondolin feasibility spikes
+- current-runtime hardening spikes
+- Gondolin feasibility spikes
 - explicit ADR update when direction changes
 
 ### Phase 2 — hardening tranche (post-MVP)
@@ -209,7 +215,7 @@ Scope checks:
 ## Risks / open questions
 
 1. taskd child lifecycle behavior under sustained load
-2. integration complexity if Path G is selected later
+2. integration complexity if Gondolin is selected later
 3. scope-enforcement correctness across host+guest boundaries
 4. where to draw MVP vs post-MVP hardening line
 
@@ -217,11 +223,11 @@ Scope checks:
 
 Completed in code:
 
-- ✅ taskd-only runtime baseline is in place (legacy mode removed)
+- ✅ taskd-only runtime baseline is in place (single runtime lane)
 - ✅ runtime orchestration moved from `MainView.svelte` to `runtimeService`
 - ✅ init script extracted to `runtime/init.sh`
 - ✅ context-pollution fix: infra shell commands now have explicit `system_bash` lane in taskd
-- ✅ Path I-lite scope checks and mount reliability fixes landed
+- ✅ scoped-local scope checks and mount reliability fixes landed
 - ✅ resume-semantics and scope-negative harness evidence captured
 - ✅ auth mount path is default-only (`/mnt/authstate/default`) with baked-auth fallback
 

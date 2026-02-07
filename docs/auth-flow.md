@@ -1,5 +1,10 @@
 # Auth Flow (MVP Baseline)
 
+Status: active
+Category: canonical
+Owner: product/runtime
+Last reviewed: 2026-02-07
+
 ## Goal
 
 Let users authenticate once and reuse provider credentials across tasks.

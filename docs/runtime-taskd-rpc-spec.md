@@ -1,6 +1,9 @@
 # Runtime `taskd` RPC Spec (P0 Normative)
 
 Status: draft (P0 normative)\
+Category: canonical\
+Owner: runtime/platform\
+Last reviewed: 2026-02-07\
 Audience: host runtime service + guest `taskd` implementation\
 Related: `docs/runtime-taskd-plan.md`
 
@@ -76,7 +79,7 @@ Everything else (sync protocol details, capability negotiation, timeout tuning) 
 }
 ```
 
-Legacy-shaped host requests (missing `payload`, top-level command fields, legacy `type:"response"` assumptions) are invalid and must return `INVALID_REQUEST`.
+Non-envelope host requests (missing `payload`, top-level command fields, old `type:"response"` assumptions) are invalid and must return `INVALID_REQUEST`.
 
 ## 4) Idempotency rules (P0)
 
@@ -373,4 +376,4 @@ Deferred items:
 - capability negotiation fields (`protocolVersion`, `capabilities`)
 - detailed retry/timeout tuning tables
 
-These will be specified if Path S (sync-first) is explicitly selected later.
+These will be specified if the sync-first lane is explicitly selected later.

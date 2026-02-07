@@ -1,8 +1,9 @@
 # Follow-up + Steering Composer Spec (deferred)
 
-## Status
-
-Draft for future implementation. Not part of current P0 foundation cleanup.
+Status: deferred
+Category: research
+Owner: product/frontend
+Last reviewed: 2026-02-07
 
 ## Why this exists
 

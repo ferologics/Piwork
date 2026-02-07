@@ -1,87 +1,66 @@
-# pi Integration (Host ↔ VM ↔ taskd)
+# pi Integration Quick Reference (Host ↔ VM ↔ taskd)
 
-## Overview
+Status: active
+Category: canonical
+Owner: runtime/platform
+Last reviewed: 2026-02-07
 
-pi runs inside the VM and is orchestrated by the host app over RPC.
+Use this as a concise integration map. The runtime narrative lives in:
 
-Runtime model is now single-path:
+- `docs/runtime-taskd-plan.md` (primary runtime architecture + rollout)
+- `docs/runtime-taskd-rpc-spec.md` (normative RPC contract)
 
-- taskd runtime (active baseline)
-- no legacy runtime mode split
+## Runtime topology
 
-## Process architecture (current)
+- Host (Tauri) starts/stops VM and owns RPC transport.
+- VM init (`runtime/init.sh`) mounts shares and starts `runtime/taskd.js`.
+- taskd supervises one pi process per task.
+- Frontend runtime orchestration lives in `src/lib/services/runtimeService.ts`.
 
-Host (Tauri app):
+## Transport + protocol
 
-- launches QEMU
-- manages VM lifecycle and RPC transport
-- persists task metadata + conversation cache
-- orchestrates task switch and prompt routing via `RuntimeService`
+- Host reaches taskd at `localhost:19384` (QEMU `hostfwd`).
+- Host commands use strict envelopes:
+  - request: `{ id, type, payload }`
+  - response: `{ id, ok, result | error }`
+- Event stream payloads are forwarded separately from command responses.
 
-Guest (VM):
+See full command/event/error definitions in `docs/runtime-taskd-rpc-spec.md`.
 
-- init script boots runtime
-- starts `taskd`
-- `taskd` supervises one pi process per task
+## Mounts + per-task paths
 
-Per task (guest):
+- `workdir` → `/mnt/workdir` (user workspace)
+- `taskstate` → `/mnt/taskstate` (task artifacts + sessions)
+- `authstate` → `/mnt/authstate` (default auth profile)
 
-- session file: `/sessions/<taskId>/session.json` (canonical)
-- scratchpad outputs dir: `/mnt/taskstate/<taskId>/outputs`
-- scratchpad uploads dir: `/mnt/taskstate/<taskId>/uploads`
+Per task:
 
-## RPC transport (current)
+- canonical session: `/sessions/<taskId>/session.json`
+- writable artifacts: `/mnt/taskstate/<taskId>/outputs`
+- read-only uploads: `/mnt/taskstate/<taskId>/uploads`
 
-- QEMU user-mode networking + `hostfwd` exposes TCP `19384`
-- host sends/receives JSONL RPC through `localhost:19384`
-- host sends taskd command envelope:
-  - request `{ id, type, payload }`
-  - response `{ id, ok, result|error }`
+## Working-folder + scope contract
 
-Normative command/event details: `runtime-taskd-rpc-spec.md`.
+- `workingFolder` is one-time bind (`null -> path`), then locked per task.
+- Host validates scope before task creation/open.
+- Guest enforces relative path constraints and rejects traversal/symlink escapes.
+- Scoped-policy smoke suite entrypoint: `mise run test-scope-negative`.
 
-## Runtime behavior (current)
+## Persistence model
 
-- no normal-path VM restart on task switch
-- host switch flow: `switch_task` ACK (`status: switching`) + wait for `task_ready`
-- deterministic timeout/error handling in host runtime service
-- no normal-path transcript hydration fallback
-- infra shell actions should use `system_bash` (taskd lane), not pi session flows
+Host:
 
-## Working folder and scope model (Path I-lite)
-
-Current MVP direction is Path I-lite:
-
-- host validates working folder against workspace root (`realpath` + scope checks)
-- host passes validated relative path to guest task creation
-- guest enforces relative-path constraints for task cwd selection
-- `workingFolder` is one-time bind per task (`null -> path` allowed once, then locked)
-- first bind for an already-open task is applied by recycling that task process (`stop_task` → `create_or_open_task` → `switch_task`) without VM restart
-- when workspace root is unavailable in-guest, taskd falls back to task outputs scratchpad (`tasks/<taskId>/outputs`) instead of failing hard
-- runtime mount reliability is maintained by loading required 9p modules before mount attempts
-
-## Task persistence
-
-Host persists:
-
-- `task.json` (metadata)
+- `task.json` (task metadata)
 - `conversation.json` (UI cache)
 
 Guest canonical semantic state:
 
 - `/sessions/<taskId>/session.json`
 
-## Testing hooks
+## Testing + evidence
 
-Automated harness drives UI state via dev test server (`127.0.0.1:19385`) commands:
-
-- set folder/task
-- create/delete tasks
-- send prompt
-- dump state
-
-Evidence requirement for runtime claims:
-
-1. `test-dump-state`
-2. `test-screenshot <name>`
-3. supporting logs
+- Test strategy: `docs/testing-strategy.md`
+- For runtime behavior claims, capture:
+  1. `mise run test-dump-state`
+  2. `mise run test-screenshot <name>`
+  3. relevant logs (`tmp/dev/piwork.log`)

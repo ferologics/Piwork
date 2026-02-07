@@ -1,5 +1,10 @@
 # Permissions Model (MVP: Scoped Local Mode)
 
+Status: active
+Category: canonical
+Owner: product/runtime
+Last reviewed: 2026-02-07
+
 ## Goals
 
 - Keep the **VM boundary** as the base safety line.
@@ -13,7 +18,7 @@
 - **Traversal/symlink escapes are blocked** by policy checks.
 - This is **not** yet a hardened hostile-code sandbox.
 
-## Permission Types (v1)
+## Permission Types (MVP)
 
 ### File Operations
 
@@ -39,13 +44,13 @@
   - Folder
   - Tool type
 
-## Change Review (v1)
+## Change Review (MVP)
 
 - Track **created / modified / deleted** files per task.
 - Show a **Changes** list with per‑file status.
-- **Undo/restore** is a **future enhancement** (not required for v1).
+- **Undo/restore** is a **future enhancement** (not required for MVP).
 
-## Policy Storage (v1)
+## Policy Storage (MVP)
 
 - Store per‑user policy on host (not inside VM).
 - Policy applies **only to the current machine**.

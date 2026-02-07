@@ -1,8 +1,12 @@
-# Piwork — Implementation Plan (archive + closeout checklist)
+# Piwork — Implementation Plan (archive, closed)
 
-This is the concrete, sequenced implementation plan to get from the current “mixed prototype” state to a coherent MVP foundation:
+Status: archived
+Superseded by: `../../TODO.md` (active backlog)
+Closed: 2026-02-07
 
-- **one explicit host↔taskd protocol lane** (V2 envelope only)
+This is the concrete, sequenced implementation plan that took the runtime from a mixed prototype to a coherent MVP foundation:
+
+- **one explicit host↔taskd protocol lane**
 - **truthful model picker** (no fallback lists)
 - **default-only auth** (MVP)
 - **smaller `MainView`** (de-risk future UX work)
@@ -10,15 +14,15 @@ This is the concrete, sequenced implementation plan to get from the current “m
 
 Non-goals (explicitly out of scope for this plan): sandbox hardening beyond current policy, connectors, attachments UX, Markdown rendering, tool-call UI polish, onboarding/runtime download.
 
-## Execution status (2026-02-07)
+## Execution status (closed 2026-02-07)
 
-This plan is mostly executed and now acts as an execution archive + closeout reference.
+This plan is fully executed and retained as historical sequencing context.
 
 - [x] PR-0 through PR-4 core goals landed (testing gates, strict host envelope lane, truthful model picker, model persistence, default-profile auth path).
-- [ ] PR-0 closeout still in burn-in: verify path-aware `check-full` behavior in CI/hook flows (including forced local full gate path).
-- [ ] PR-5 closeout remains: runtime naming consistency (`v2`/`legacy` leftovers), slop purge, script hygiene, and dev watch scope tightening.
+- [x] PR-0 closeout burn-in complete (path-aware `check-full` skip/run behavior observed in CI + hooks, including forced local full-gate path).
+- [x] PR-5 closeout complete (runtime naming consistency pass, slop purge, script hygiene pass, and dev watch scope tightening).
 
-Canonical active backlog lives in `../TODO.md`; this document captures sequencing context and closeout intent.
+Canonical active backlog lives in `../TODO.md`; this document is an archive. Historical references below to migration-era terms are intentional.
 
 ---
 

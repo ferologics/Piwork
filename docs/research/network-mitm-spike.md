@@ -1,5 +1,10 @@
 # Network MITM Spike (Armin‑style)
 
+Status: exploratory
+Category: research
+Owner: runtime/platform
+Last reviewed: 2026-02-07
+
 ## Goal
 
 Evaluate a **host‑side network interception** approach for the VM (virtio‑net + stream netdev) to enable **per‑request allow/deny** and full auditability. This is a possible future replacement for **NAT‑only** networking.
@@ -42,7 +47,7 @@ This keeps the VM “talking Ethernet” while the host enforces per‑request p
 
 ## Recommendation (current)
 
-- Keep **NAT** for v1 to ship faster.
+- Keep **NAT** for MVP to ship faster.
 - Treat MITM mode as a **future strict‑network option** once we validate the spike.
 
 ## Local PoC (macOS/arm64)

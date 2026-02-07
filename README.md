@@ -38,6 +38,7 @@ mise run test
 mise run test-vite
 mise run test-rust
 mise run test-regressions
+mise run test-scope-negative
 ```
 
 ```bash
@@ -73,7 +74,7 @@ mise run test-stop
 Scope enforcement suite:
 
 ```bash
-./scripts/harness/path-i-lite-negative.sh
+mise run test-scope-negative
 ```
 
 ### Cleanup
