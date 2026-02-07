@@ -7,7 +7,7 @@
 - Vitest for frontend/state logic and runtime contract behavior.
 - Rust unit tests for backend stores/validation.
 - Regression tests must assert against a machine-readable `state_snapshot` payload (not terminal log text).
-- Use `mise run audit-protocol` for fast protocol-lane invariants (V2-only host lane).
+- Use `mise run audit-protocol` for fast protocol-lane invariants (strict host envelope lane).
 - Use `mise run test-regressions` for runtime contract regressions (live app process).
 - Daily local gate: `mise run check` (fast).
 - Required high-confidence gate: `mise run check-full` (fast gate + live regressions) when forcing a full run.
@@ -66,7 +66,7 @@ The regression gate should make these guarantees explicit:
 3. **Working-folder panel freshness**
    - Working-folder file listing must refresh when `workingFolder` changes on the same task id.
 4. **Runtime mismatch badge semantics**
-   - Badge only appears for real mismatches, not transient boot/reconfigure or legacy sentinel state.
+   - Badge only appears for real mismatches, not transient boot/reconfigure states.
 
 Implemented live canaries (integration):
 

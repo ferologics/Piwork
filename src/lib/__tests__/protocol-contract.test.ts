@@ -12,7 +12,7 @@ function readRepoFile(relativePath: string): string {
 }
 
 describe("runtime protocol contract", () => {
-    it("keeps taskd host command parsing strict v2-only", () => {
+    it("keeps taskd host command parsing strict envelope-only", () => {
         const taskd = readRepoFile("runtime/taskd.js");
 
         expect(taskd).not.toContain("function sendLegacyResponse");

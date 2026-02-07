@@ -18,7 +18,6 @@ const INITIAL_TASK_ID = process.env.PIWORK_INITIAL_TASK_ID || "";
 const DEFAULT_PROVIDER = process.env.PIWORK_DEFAULT_PROVIDER || "anthropic";
 const DEFAULT_MODEL = process.env.PIWORK_DEFAULT_MODEL || "claude-opus-4-5";
 const DEFAULT_THINKING_LEVEL = process.env.PIWORK_DEFAULT_THINKING || "high";
-const LEGACY_TASK_ID = "__legacy__";
 const CHILD_COMMAND_TIMEOUT_MS = 10_000;
 const SYSTEM_BASH_TIMEOUT_MS = 10_000;
 const STOP_GRACE_PERIOD_MS = 1_200;
@@ -381,7 +380,7 @@ function maybeHandleDuplicateIdempotentRequest(request) {
     return true;
 }
 
-function sendV2Success(request, result) {
+function sendRpcSuccess(request, result) {
     const response = {
         id: request.id,
         ok: true,
@@ -394,7 +393,7 @@ function sendV2Success(request, result) {
     return response;
 }
 
-function sendV2Error(request, code, message, retryable = false, details = {}) {
+function sendRpcError(request, code, message, retryable = false, details = {}) {
     const response = {
         id: request.id,
         ok: false,
@@ -877,26 +876,6 @@ function switchTaskInternal(taskId, emitEvents = true) {
     }
 }
 
-async function ensureLegacyActiveTask() {
-    const preferredTaskId = validateTaskId(INITIAL_TASK_ID) ? INITIAL_TASK_ID : LEGACY_TASK_ID;
-
-    if (!tasks.has(preferredTaskId)) {
-        await createOrOpenTaskInternal(preferredTaskId, defaults);
-    }
-
-    const task = tasks.get(preferredTaskId);
-    if (!task) {
-        throw new Error("failed to create legacy task");
-    }
-
-    if (task.state === "stopped" || task.state === "errored" || task.state === "missing") {
-        await createOrOpenTaskInternal(preferredTaskId, defaults);
-    }
-
-    switchTaskInternal(preferredTaskId, false);
-    return tasks.get(preferredTaskId);
-}
-
 async function startPromptOnActiveTask(message) {
     if (typeof message !== "string" || message.trim().length === 0) {
         const error = new Error("message is required");
@@ -904,11 +883,7 @@ async function startPromptOnActiveTask(message) {
         throw error;
     }
 
-    let task = activeTaskId ? tasks.get(activeTaskId) : null;
-
-    if (!task) {
-        task = await ensureLegacyActiveTask();
-    }
+    const task = activeTaskId ? tasks.get(activeTaskId) : null;
 
     if (!task || task.state !== "active") {
         const error = new Error("no active task");
@@ -1123,16 +1098,16 @@ function pickTaskNotReadyRetryable(code) {
     return code === "TASK_NOT_READY";
 }
 
-async function handleV2CreateOrOpenTask(request) {
+async function handleCreateOrOpenTaskRequest(request) {
     const taskId = typeof request.payload.taskId === "string" ? request.payload.taskId : null;
 
     if (!validateTaskId(taskId)) {
-        return sendV2Error(request, "INVALID_REQUEST", "taskId is required", false, {});
+        return sendRpcError(request, "INVALID_REQUEST", "taskId is required", false, {});
     }
 
     try {
         const { task, mode } = await createOrOpenTaskInternal(taskId, request.payload);
-        return sendV2Success(request, {
+        return sendRpcSuccess(request, {
             taskId: task.taskId,
             state: task.state,
             mode,
@@ -1141,28 +1116,28 @@ async function handleV2CreateOrOpenTask(request) {
         const code = typeof error?.code === "string" ? error.code : "INTERNAL_ERROR";
         const message = error instanceof Error ? error.message : String(error);
         const details = isRecord(error?.details) ? error.details : {};
-        return sendV2Error(request, code, message, pickTaskNotReadyRetryable(code), details);
+        return sendRpcError(request, code, message, pickTaskNotReadyRetryable(code), details);
     }
 }
 
-function handleV2SwitchTask(request) {
+function handleSwitchTaskRequest(request) {
     const taskId = typeof request.payload.taskId === "string" ? request.payload.taskId : null;
 
     if (!validateTaskId(taskId)) {
-        return sendV2Error(request, "INVALID_REQUEST", "taskId is required", false, {});
+        return sendRpcError(request, "INVALID_REQUEST", "taskId is required", false, {});
     }
 
     try {
         const task = tasks.get(taskId);
         if (!task) {
-            return sendV2Error(request, "TASK_NOT_FOUND", "task not found", false, {});
+            return sendRpcError(request, "TASK_NOT_FOUND", "task not found", false, {});
         }
 
         if (!["ready", "idle", "active"].includes(task.state)) {
-            return sendV2Error(request, "TASK_NOT_READY", "task is not ready", true, {});
+            return sendRpcError(request, "TASK_NOT_READY", "task is not ready", true, {});
         }
 
-        const response = sendV2Success(request, {
+        const response = sendRpcSuccess(request, {
             status: "switching",
             taskId,
         });
@@ -1172,24 +1147,24 @@ function handleV2SwitchTask(request) {
     } catch (error) {
         const code = typeof error?.code === "string" ? error.code : "INTERNAL_ERROR";
         const message = error instanceof Error ? error.message : String(error);
-        return sendV2Error(request, code, message, pickTaskNotReadyRetryable(code), {});
+        return sendRpcError(request, code, message, pickTaskNotReadyRetryable(code), {});
     }
 }
 
-async function handleV2Prompt(request) {
+async function handlePromptRequest(request) {
     const message = typeof request.payload.message === "string" ? request.payload.message : null;
     const promptId = typeof request.payload.promptId === "string" ? request.payload.promptId : randomId("prompt");
 
     if (!message) {
-        return sendV2Error(request, "INVALID_REQUEST", "message is required", false, {});
+        return sendRpcError(request, "INVALID_REQUEST", "message is required", false, {});
     }
 
     const task = activeTaskId ? tasks.get(activeTaskId) : null;
     if (!task || task.state !== "active") {
-        return sendV2Error(request, "TASK_NOT_READY", "no active task", true, {});
+        return sendRpcError(request, "TASK_NOT_READY", "no active task", true, {});
     }
 
-    const response = sendV2Success(request, {
+    const response = sendRpcSuccess(request, {
         accepted: true,
         taskId: task.taskId,
         promptId,
@@ -1249,18 +1224,14 @@ function runtimeDiagPayload() {
     };
 }
 
-function handleV2RuntimeDiag(request) {
-    return sendV2Success(request, runtimeDiagPayload());
+function handleRuntimeDiagRequest(request) {
+    return sendRpcSuccess(request, runtimeDiagPayload());
 }
 
-async function ensureActiveTaskForPiCommand() {
-    let task = activeTaskId ? tasks.get(activeTaskId) : null;
+async function requireActiveTaskForPiCommand() {
+    const task = activeTaskId ? tasks.get(activeTaskId) : null;
 
-    if (!task) {
-        task = await ensureLegacyActiveTask();
-    }
-
-    if (!task) {
+    if (!task || task.state !== "active") {
         const error = new Error("no active task");
         error.code = "TASK_NOT_READY";
         throw error;
@@ -1284,7 +1255,7 @@ function parsePiResponseError(response, fallback) {
 }
 
 async function fetchAvailableModelsFromPi() {
-    const task = await ensureActiveTaskForPiCommand();
+    const task = await requireActiveTaskForPiCommand();
     const response = await sendToTask(task, {
         type: "get_available_models",
     });
@@ -1300,7 +1271,7 @@ async function fetchAvailableModelsFromPi() {
 }
 
 async function setModelOnActiveTask(provider, modelId) {
-    const task = await ensureActiveTaskForPiCommand();
+    const task = await requireActiveTaskForPiCommand();
     const response = await sendToTask(task, {
         type: "set_model",
         provider,
@@ -1347,7 +1318,7 @@ async function forwardExtensionUiResponseToPi(payload) {
         throw error;
     }
 
-    const task = await ensureActiveTaskForPiCommand();
+    const task = await requireActiveTaskForPiCommand();
     const response = await sendToTask(task, {
         ...payload,
         type: "extension_ui_response",
@@ -1382,59 +1353,59 @@ function parseSetModelRequest(request) {
     };
 }
 
-function handleV2GetState(request) {
-    return sendV2Success(request, taskdStatePayload());
+function handleRuntimeGetStateRequest(request) {
+    return sendRpcSuccess(request, taskdStatePayload());
 }
 
-async function handleV2GetAvailableModels(request) {
+async function handleGetAvailableModelsRequest(request) {
     try {
         const models = await fetchAvailableModelsFromPi();
-        return sendV2Success(request, { models });
+        return sendRpcSuccess(request, { models });
     } catch (error) {
         const code = typeof error?.code === "string" ? error.code : "INTERNAL_ERROR";
         const message = error instanceof Error ? error.message : String(error);
         const retryable = code === "TASK_NOT_READY";
-        return sendV2Error(request, code, message, retryable, {});
+        return sendRpcError(request, code, message, retryable, {});
     }
 }
 
-async function handleV2SetModel(request) {
+async function handleSetModelRequest(request) {
     const parsed = parseSetModelRequest(request);
     if (!parsed) {
-        return sendV2Error(request, "INVALID_REQUEST", "provider and modelId are required", false, {});
+        return sendRpcError(request, "INVALID_REQUEST", "provider and modelId are required", false, {});
     }
 
     try {
         const selected = await setModelOnActiveTask(parsed.provider, parsed.modelId);
-        return sendV2Success(request, selected);
+        return sendRpcSuccess(request, selected);
     } catch (error) {
         const code = typeof error?.code === "string" ? error.code : "INTERNAL_ERROR";
         const message = error instanceof Error ? error.message : String(error);
         const retryable = code === "TASK_NOT_READY";
-        return sendV2Error(request, code, message, retryable, {});
+        return sendRpcError(request, code, message, retryable, {});
     }
 }
 
-async function handleV2ExtensionUiResponse(request) {
+async function handleExtensionUiResponseRequest(request) {
     try {
         const data = await forwardExtensionUiResponseToPi(request.payload);
-        return sendV2Success(request, data);
+        return sendRpcSuccess(request, data);
     } catch (error) {
         const code = typeof error?.code === "string" ? error.code : "INTERNAL_ERROR";
         const message = error instanceof Error ? error.message : String(error);
         const retryable = code === "TASK_NOT_READY";
-        return sendV2Error(request, code, message, retryable, {});
+        return sendRpcError(request, code, message, retryable, {});
     }
 }
 
-async function handleV2SystemBash(request) {
+async function handleSystemBashRequest(request) {
     const parsed = parseSystemBashRequest(request);
     if (parsed.error) {
-        return sendV2Error(request, "INVALID_REQUEST", parsed.error, false, {});
+        return sendRpcError(request, "INVALID_REQUEST", parsed.error, false, {});
     }
 
     const result = await runSystemBash(parsed.command, parsed.cwd);
-    return sendV2Success(request, {
+    return sendRpcSuccess(request, {
         output: result.output,
         exitCode: result.exitCode,
         timedOut: result.timedOut,
@@ -1442,20 +1413,20 @@ async function handleV2SystemBash(request) {
     });
 }
 
-async function handleV2StopTask(request) {
+async function handleStopTaskRequest(request) {
     const taskId = typeof request.payload.taskId === "string" ? request.payload.taskId : null;
 
     if (!validateTaskId(taskId)) {
-        return sendV2Error(request, "INVALID_REQUEST", "taskId is required", false, {});
+        return sendRpcError(request, "INVALID_REQUEST", "taskId is required", false, {});
     }
 
     const task = tasks.get(taskId);
     if (!task) {
-        return sendV2Error(request, "TASK_NOT_FOUND", "task not found", false, {});
+        return sendRpcError(request, "TASK_NOT_FOUND", "task not found", false, {});
     }
 
     if (!["ready", "active", "idle", "errored", "stopped"].includes(task.state)) {
-        return sendV2Error(request, "TASK_NOT_READY", "task cannot be stopped", true, {});
+        return sendRpcError(request, "TASK_NOT_READY", "task cannot be stopped", true, {});
     }
 
     try {
@@ -1468,54 +1439,54 @@ async function handleV2StopTask(request) {
         task.state = "stopped";
         emitEvent("task_stopped", taskId, {});
 
-        return sendV2Success(request, {
+        return sendRpcSuccess(request, {
             taskId,
             state: "stopped",
         });
     } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        return sendV2Error(request, "INTERNAL_ERROR", message, false, {});
+        return sendRpcError(request, "INTERNAL_ERROR", message, false, {});
     }
 }
 
-async function handleV2Request(request) {
+async function handleHostRequest(request) {
     if (maybeHandleDuplicateIdempotentRequest(request)) {
         return;
     }
 
     switch (request.type) {
         case "create_or_open_task":
-            await handleV2CreateOrOpenTask(request);
+            await handleCreateOrOpenTaskRequest(request);
             return;
         case "switch_task":
-            handleV2SwitchTask(request);
+            handleSwitchTaskRequest(request);
             return;
         case "prompt":
-            await handleV2Prompt(request);
+            await handlePromptRequest(request);
             return;
         case "runtime_get_state":
-            handleV2GetState(request);
+            handleRuntimeGetStateRequest(request);
             return;
         case "runtime_diag":
-            handleV2RuntimeDiag(request);
+            handleRuntimeDiagRequest(request);
             return;
         case "pi_get_available_models":
-            await handleV2GetAvailableModels(request);
+            await handleGetAvailableModelsRequest(request);
             return;
         case "pi_set_model":
-            await handleV2SetModel(request);
+            await handleSetModelRequest(request);
             return;
         case "extension_ui_response":
-            await handleV2ExtensionUiResponse(request);
+            await handleExtensionUiResponseRequest(request);
             return;
         case "system_bash":
-            await handleV2SystemBash(request);
+            await handleSystemBashRequest(request);
             return;
         case "stop_task":
-            await handleV2StopTask(request);
+            await handleStopTaskRequest(request);
             return;
         default:
-            sendV2Error(request, "INVALID_REQUEST", `Unknown request type: ${request.type}`, false, {});
+            sendRpcError(request, "INVALID_REQUEST", `Unknown request type: ${request.type}`, false, {});
     }
 }
 
@@ -1576,7 +1547,7 @@ async function handleRawHostLine(line) {
 
     parsed.request.receivedAtMs = Date.now();
     traceHostReceived(parsed.request);
-    await handleV2Request(parsed.request);
+    await handleHostRequest(parsed.request);
 }
 
 async function bootstrapInitialTask() {

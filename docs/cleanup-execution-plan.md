@@ -120,7 +120,7 @@ In `runtime/taskd.js` (V2 handler):
   - keep existing fields (`taskId`, `state`, `currentCwd`, `workingFolderRelative`, etc.)
 
 - **Add `pi_get_available_models`** (V2):
-  - ensure there is an active task process (use existing `ensureLegacyActiveTask()` if no active task)
+  - ensure there is an active task process before forwarding to pi
   - `await sendToTask(activeTask, { type: "get_available_models" })`
   - return `result: { models: [...] }`
   - if pi returns an error/empty list, return that truthfully (no fallback models)

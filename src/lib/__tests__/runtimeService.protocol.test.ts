@@ -41,7 +41,7 @@ describe("RuntimeService protocol response correlation", () => {
         runtimeService.pendingRpcResponses.clear();
     });
 
-    it("resolves pending taskd commands only for v2 response envelopes", () => {
+    it("resolves pending taskd commands only for taskd response envelopes", () => {
         const service = new RuntimeService();
         const runtimeService = service as unknown as {
             pendingRpcResponses: Map<
