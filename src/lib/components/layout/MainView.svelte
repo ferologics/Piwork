@@ -933,6 +933,7 @@ let testStateSnapshotUnlisten: (() => void) | null = null;
 let testOpenPreviewUnlisten: (() => void) | null = null;
 let testWriteWorkingFileUnlisten: (() => void) | null = null;
 let testSendLoginUnlisten: (() => void) | null = null;
+let testRuntimeDiagUnlisten: (() => void) | null = null;
 
 function buildTestStateSnapshot() {
     const runtimeDebug = get(runtimeDebugStore);
@@ -984,6 +985,12 @@ function buildTestStateSnapshot() {
             isAgentRunning: conversation.isAgentRunning,
             hasError: Boolean(conversation.error),
         },
+        composer: {
+            promptLength: prompt.length,
+            promptSending,
+            promptInFlight,
+            canSendPrompt: canSendPrompt(),
+        },
         ui: {
             bootScreenVisible,
             reconfigureBannerVisible,
@@ -1019,6 +1026,33 @@ function buildTestStateSnapshot() {
             workingFolderEmptyVisible,
         },
     };
+}
+
+async function collectRuntimeDiagForTest(): Promise<Record<string, unknown>> {
+    if (!runtimeService) {
+        return {
+            error: "Runtime service unavailable",
+        };
+    }
+
+    try {
+        return await runtimeService.runtimeDiag();
+    } catch (error) {
+        return {
+            error: error instanceof Error ? error.message : String(error),
+        };
+    }
+}
+
+async function replyRuntimeDiagForTest(requestId: string): Promise<void> {
+    const diag = await collectRuntimeDiagForTest();
+
+    await invoke("test_runtime_diag_reply", {
+        requestId,
+        diag,
+    }).catch((error) => {
+        devLog("TestHarness", `failed to send runtime diag: ${error}`);
+    });
 }
 
 async function saveConversationForTask(taskId: string | null): Promise<void> {
@@ -1313,6 +1347,17 @@ onMount(() => {
             testStateSnapshotUnlisten = unlisten;
         });
 
+        listen<{ requestId?: string | null }>("test_runtime_diag_request", (event) => {
+            const requestId = event.payload?.requestId;
+            if (!requestId) {
+                return;
+            }
+
+            void replyRuntimeDiagForTest(requestId);
+        }).then((unlisten) => {
+            testRuntimeDiagUnlisten = unlisten;
+        });
+
         listen<{ taskId?: string | null; relativePath?: string | null }>("test_open_preview", (event) => {
             const taskId = event.payload?.taskId ?? null;
             const relativePath = event.payload?.relativePath ?? null;
@@ -1360,6 +1405,7 @@ onDestroy(() => {
     testDeleteAllTasksUnlisten?.();
     testDumpStateUnlisten?.();
     testStateSnapshotUnlisten?.();
+    testRuntimeDiagUnlisten?.();
     testOpenPreviewUnlisten?.();
     testWriteWorkingFileUnlisten?.();
 });

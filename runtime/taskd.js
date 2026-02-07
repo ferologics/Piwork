@@ -22,11 +22,15 @@ const LEGACY_TASK_ID = "__legacy__";
 const CHILD_COMMAND_TIMEOUT_MS = 10_000;
 const SYSTEM_BASH_TIMEOUT_MS = 10_000;
 const STOP_GRACE_PERIOD_MS = 1_200;
+const DIAG_HISTORY_LIMIT = 200;
+const HOST_TRACE_ENABLED = process.env.PIWORK_TASKD_TRACE !== "0";
 
 const IDEMPOTENT_REQUESTS = new Set(["create_or_open_task", "switch_task", "stop_task"]);
 
 const tasks = new Map();
 const requestCache = new Map();
+const hostRequestHistory = [];
+const childCommandHistory = [];
 
 let activeTaskId = null;
 let hostSocket = null;
@@ -41,6 +45,107 @@ let workspaceRootReal = undefined;
 
 function log(message) {
     console.log(`[taskd] ${message}`);
+}
+
+function nowIso() {
+    return new Date().toISOString();
+}
+
+function pushBoundedHistory(buffer, entry, limit = DIAG_HISTORY_LIMIT) {
+    buffer.push(entry);
+    if (buffer.length > limit) {
+        buffer.splice(0, buffer.length - limit);
+    }
+}
+
+function summarizeError(error) {
+    if (error instanceof Error) {
+        return error.message;
+    }
+
+    if (typeof error === "string") {
+        return error;
+    }
+
+    return String(error);
+}
+
+function traceRequestTaskId(request) {
+    if (!isRecord(request) || !isRecord(request.payload)) {
+        return activeTaskId;
+    }
+
+    if (typeof request.payload.taskId === "string" && request.payload.taskId.length > 0) {
+        return request.payload.taskId;
+    }
+
+    return activeTaskId;
+}
+
+function traceHostReceived(request) {
+    const entry = {
+        timestamp: nowIso(),
+        direction: "in",
+        id: request.id,
+        type: request.type,
+        taskId: traceRequestTaskId(request),
+    };
+
+    pushBoundedHistory(hostRequestHistory, entry);
+
+    if (HOST_TRACE_ENABLED) {
+        log(`[host] <- ${request.type} id=${request.id} task=${entry.taskId ?? "none"}`);
+    }
+}
+
+function traceHostCompleted(request, ok, details = {}) {
+    const receivedAt = Number.isFinite(request.receivedAtMs) ? request.receivedAtMs : Date.now();
+    const durationMs = Math.max(0, Date.now() - receivedAt);
+    const entry = {
+        timestamp: nowIso(),
+        direction: "out",
+        id: request.id,
+        type: request.type,
+        taskId: traceRequestTaskId(request),
+        ok,
+        durationMs,
+        ...details,
+    };
+
+    pushBoundedHistory(hostRequestHistory, entry);
+
+    if (HOST_TRACE_ENABLED) {
+        const summary = ok ? "ok" : `error=${details.code ?? "unknown"}`;
+        log(`[host] -> ${request.type} id=${request.id} ${summary} ${durationMs}ms`);
+    }
+}
+
+function traceChildCompleted(task, commandType, commandId, startedAtMs, ok, details = {}) {
+    const durationMs = Math.max(0, Date.now() - startedAtMs);
+    const entry = {
+        timestamp: nowIso(),
+        taskId: task.taskId,
+        commandType,
+        commandId,
+        ok,
+        durationMs,
+        ...details,
+    };
+
+    pushBoundedHistory(childCommandHistory, entry);
+
+    if (HOST_TRACE_ENABLED) {
+        const summary = ok ? "ok" : `error=${details.error ?? details.code ?? "unknown"}`;
+        log(`[child] ${task.taskId} ${commandType} id=${commandId} ${summary} ${durationMs}ms`);
+    }
+}
+
+function responseErrorCode(response) {
+    if (!isRecord(response) || !isRecord(response.error)) {
+        return undefined;
+    }
+
+    return typeof response.error.code === "string" ? response.error.code : undefined;
 }
 
 function randomId(prefix) {
@@ -222,7 +327,7 @@ function emitEvent(event, taskId, payload = {}) {
     writeJson({
         type: "event",
         event,
-        timestamp: new Date().toISOString(),
+        timestamp: nowIso(),
         taskId,
         payload,
     });
@@ -261,10 +366,18 @@ function maybeHandleDuplicateIdempotentRequest(request) {
             },
         };
         writeJson(response);
+        traceHostCompleted(request, false, {
+            code: "INVALID_REQUEST",
+            duplicate: true,
+        });
         return true;
     }
 
     writeJson(cached.response);
+    traceHostCompleted(request, cached.response.ok === true, {
+        duplicate: true,
+        code: responseErrorCode(cached.response),
+    });
     return true;
 }
 
@@ -277,6 +390,7 @@ function sendV2Success(request, result) {
 
     cacheIdempotentResponse(request, response);
     writeJson(response);
+    traceHostCompleted(request, true, {});
     return response;
 }
 
@@ -294,6 +408,7 @@ function sendV2Error(request, code, message, retryable = false, details = {}) {
 
     cacheIdempotentResponse(request, response);
     writeJson(response);
+    traceHostCompleted(request, false, { code, message, retryable });
     return response;
 }
 
@@ -326,6 +441,8 @@ function buildTask(taskId, options = {}) {
         stopping: false,
         promptInFlight: false,
         promptCommandId: null,
+        lastChildOutputAt: null,
+        lastChildError: null,
     };
 }
 
@@ -344,6 +461,11 @@ function serializeTask(task) {
         workDir: task.workDir,
         currentCwd: task.currentCwd,
         workingFolderRelative: task.requestedWorkingFolderRelative,
+        childPid: task.child?.pid ?? null,
+        childAlive: Boolean(task.child && !task.child.killed),
+        pendingChildRequestCount: task.pendingChildRequests.size,
+        lastChildOutputAt: task.lastChildOutputAt,
+        lastChildError: task.lastChildError,
     };
 }
 
@@ -367,10 +489,8 @@ function updateTaskConfig(task, options = {}) {
 }
 
 function rejectPendingChildRequests(task, reason) {
-    for (const [id, pending] of task.pendingChildRequests) {
-        clearTimeout(pending.timeout);
+    for (const [, pending] of Array.from(task.pendingChildRequests.entries())) {
         pending.reject(new Error(reason));
-        task.pendingChildRequests.delete(id);
     }
 }
 
@@ -440,10 +560,13 @@ function handleChildOutputLine(task, line) {
         return;
     }
 
+    task.lastChildOutputAt = nowIso();
+
     let payload;
     try {
         payload = JSON.parse(trimmed);
     } catch {
+        task.lastChildError = `non-json-output: ${trimmed.slice(0, 200)}`;
         log(`task ${task.taskId} emitted non-JSON line: ${trimmed}`);
         return;
     }
@@ -451,8 +574,6 @@ function handleChildOutputLine(task, line) {
     if (payload.type === "response" && typeof payload.id === "string") {
         const pending = task.pendingChildRequests.get(payload.id);
         if (pending) {
-            clearTimeout(pending.timeout);
-            task.pendingChildRequests.delete(payload.id);
             pending.resolve(payload);
             return;
         }
@@ -469,6 +590,7 @@ function handleChildExit(task, code, signal) {
     task.child = null;
     task.promptInFlight = false;
     task.promptCommandId = null;
+    task.lastChildError = reason;
 
     if (task.stopping) {
         task.stopping = false;
@@ -522,6 +644,8 @@ async function spawnTaskProcess(task) {
     task.stopping = false;
     task.promptInFlight = false;
     task.promptCommandId = null;
+    task.lastChildOutputAt = null;
+    task.lastChildError = null;
 
     const stdout = readline.createInterface({
         input: child.stdout,
@@ -535,6 +659,7 @@ async function spawnTaskProcess(task) {
     child.stderr.on("data", (chunk) => {
         const text = chunk.toString().trim();
         if (text.length > 0) {
+            task.lastChildError = text.slice(0, 500);
             log(`task ${task.taskId} stderr: ${text}`);
         }
     });
@@ -620,23 +745,70 @@ function sendToTask(task, command, timeoutMs = CHILD_COMMAND_TIMEOUT_MS) {
 
     const id = typeof command.id === "string" ? command.id : randomId("child");
     const payload = { ...command, id };
+    const commandType = typeof payload.type === "string" ? payload.type : "unknown";
+    const startedAtMs = Date.now();
+
+    if (HOST_TRACE_ENABLED) {
+        log(
+            `[child] ${task.taskId} ${commandType} id=${id} start (timeout=${timeoutMs}ms, pending=${task.pendingChildRequests.size})`,
+        );
+    }
 
     return new Promise((resolve, reject) => {
-        const timeout = setTimeout(() => {
+        let settled = false;
+
+        const settleResolve = (responsePayload) => {
+            if (settled) {
+                return;
+            }
+
+            settled = true;
+            clearTimeout(timeout);
             task.pendingChildRequests.delete(id);
-            reject(new Error(`Task command timed out: ${payload.type}`));
+            traceChildCompleted(task, commandType, id, startedAtMs, true, {
+                pendingChildRequestCount: task.pendingChildRequests.size,
+            });
+            resolve(responsePayload);
+        };
+
+        const settleReject = (error, code = null) => {
+            if (settled) {
+                return;
+            }
+
+            settled = true;
+            clearTimeout(timeout);
+            task.pendingChildRequests.delete(id);
+
+            const errorMessage = summarizeError(error);
+            task.lastChildError = `${commandType}: ${errorMessage}`;
+            traceChildCompleted(task, commandType, id, startedAtMs, false, {
+                code,
+                error: errorMessage,
+                pendingChildRequestCount: task.pendingChildRequests.size,
+            });
+
+            reject(error instanceof Error ? error : new Error(errorMessage));
+        };
+
+        const timeout = setTimeout(() => {
+            settleReject(new Error(`Task command timed out: ${commandType}`), "CHILD_COMMAND_TIMEOUT");
         }, timeoutMs);
 
-        task.pendingChildRequests.set(id, { resolve, reject, timeout });
+        task.pendingChildRequests.set(id, {
+            resolve: settleResolve,
+            reject: settleReject,
+            timeout,
+            commandType,
+            startedAtMs,
+        });
 
         task.child.stdin.write(`${JSON.stringify(payload)}\n`, (error) => {
             if (!error) {
                 return;
             }
 
-            clearTimeout(timeout);
-            task.pendingChildRequests.delete(id);
-            reject(error);
+            settleReject(error, "CHILD_STDIN_WRITE_FAILED");
         });
     });
 }
@@ -1041,6 +1213,46 @@ function taskdStatePayload() {
     };
 }
 
+function runtimeDiagTaskPayload(task) {
+    const pendingChildRequests = Array.from(task.pendingChildRequests.entries()).map(([id, pending]) => {
+        const startedAtMs = Number.isFinite(pending.startedAtMs) ? pending.startedAtMs : null;
+        const ageMs = startedAtMs === null ? null : Math.max(0, Date.now() - startedAtMs);
+
+        return {
+            id,
+            commandType: typeof pending.commandType === "string" ? pending.commandType : "unknown",
+            startedAtMs,
+            ageMs,
+        };
+    });
+
+    return {
+        ...serializeTask(task),
+        pendingChildRequests,
+    };
+}
+
+function runtimeDiagPayload() {
+    return {
+        timestamp: nowIso(),
+        pid: process.pid,
+        activeTaskId,
+        defaults: { ...defaults },
+        workspaceRootConfigured: WORKSPACE_ROOT || null,
+        workspaceRootResolved: getWorkspaceRootReal(),
+        hostConnected: Boolean(hostSocket && !hostSocket.destroyed && hostSocket.writable),
+        requestCacheSize: requestCache.size,
+        taskCount: tasks.size,
+        tasks: Array.from(tasks.values()).map(runtimeDiagTaskPayload),
+        hostRequestHistory: [...hostRequestHistory],
+        childCommandHistory: [...childCommandHistory],
+    };
+}
+
+function handleV2RuntimeDiag(request) {
+    return sendV2Success(request, runtimeDiagPayload());
+}
+
 async function ensureActiveTaskForPiCommand() {
     let task = activeTaskId ? tasks.get(activeTaskId) : null;
 
@@ -1284,6 +1496,9 @@ async function handleV2Request(request) {
         case "runtime_get_state":
             handleV2GetState(request);
             return;
+        case "runtime_diag":
+            handleV2RuntimeDiag(request);
+            return;
         case "pi_get_available_models":
             await handleV2GetAvailableModels(request);
             return;
@@ -1314,6 +1529,7 @@ async function handleRawHostLine(line) {
     try {
         raw = JSON.parse(trimmed);
     } catch {
+        log("[host] <- invalid JSON request");
         writeJson({
             ok: false,
             error: {
@@ -1328,7 +1544,7 @@ async function handleRawHostLine(line) {
 
     const parsed = parseRequest(raw);
     if (!parsed.request) {
-        writeJson({
+        const response = {
             id: parsed.id,
             ok: false,
             error: {
@@ -1337,10 +1553,29 @@ async function handleRawHostLine(line) {
                 retryable: false,
                 details: {},
             },
-        });
+        };
+        writeJson(response);
+
+        if (parsed.id) {
+            traceHostCompleted(
+                {
+                    id: parsed.id,
+                    type: "invalid",
+                    payload: {},
+                    receivedAtMs: Date.now(),
+                },
+                false,
+                {
+                    code: "INVALID_REQUEST",
+                    message: parsed.error,
+                },
+            );
+        }
         return;
     }
 
+    parsed.request.receivedAtMs = Date.now();
+    traceHostReceived(parsed.request);
     await handleV2Request(parsed.request);
 }
 

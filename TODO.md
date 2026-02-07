@@ -86,6 +86,6 @@
 
 ## Testing
 
-- Harness primitives: `test-start`, `test-prompt`, `test-screenshot`, `test-set-folder`, `test-set-task`, `test-create-task`, `test-delete-tasks`, `test-dump-state`, `test-stop`, `test-open-preview`, `test-write-working-file`, `test-open-working-folder`, `test-auth-*`, `test-send-login`, `test-check-permissions`
+- Harness primitives: `test-start`, `test-prompt`, `test-screenshot`, `test-set-folder`, `test-set-task`, `test-create-task`, `test-delete-tasks`, `test-dump-state`, `test-state-snapshot`, `test-runtime-diag`, `test-stop`, `test-open-preview`, `test-write-working-file`, `test-open-working-folder`, `test-auth-*`, `test-send-login`, `test-check-permissions`
 - Scope enforcement: `scripts/harness/path-i-lite-negative.sh`
 - Rule: primitives only, no monolithic E2E scripts

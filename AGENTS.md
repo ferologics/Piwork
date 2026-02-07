@@ -80,6 +80,7 @@ mise run test-prompt "hello"             # send prompt, wait for response
 mise run test-screenshot name            # capture to tmp/dev/name.png
 mise run test-dump-state                 # log task/session/message state
 mise run test-state-snapshot             # structured UI/runtime snapshot JSON
+mise run test-runtime-diag               # taskd diagnostics JSON (pending requests/history)
 mise run test-set-folder /path           # one-time bind working folder for active task
 mise run test-set-task <id>              # switch active task
 mise run test-create-task "Title" [folder]
@@ -96,7 +97,7 @@ mise run test-check-permissions          # verify screenshot capture works
 
 - **Primitives only** — no monolithic E2E scripts. Compose primitives ad-hoc.
 - **Use structured snapshots for assertions** — prefer `test-state-snapshot` (or equivalent API calls) over log-grep assertions.
-- **Evidence for claims** — always capture: `test-dump-state` + `test-screenshot` + relevant logs
+- **Evidence for claims** — always capture: `test-dump-state` + `test-screenshot` + relevant logs (and `test-runtime-diag` for timeout/regression diagnosis)
 - **Wait explicitly** — for async transitions, poll/wait; don't rely on fixed sleeps
 - **Clean up** — always `test-stop` after testing
 - Test server (port 19385) is debug-only (`#[cfg(debug_assertions)]`), redacts secrets in logs.

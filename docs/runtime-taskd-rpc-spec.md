@@ -184,6 +184,30 @@ Result shape:
 }
 ```
 
+### 5.4a `runtime_diag` (debug/support)
+
+Payload: `{}`
+
+Result shape (non-normative, debug-oriented and may evolve):
+
+```json
+{
+    "timestamp": "2026-02-07T12:30:00.000Z",
+    "pid": 12345,
+    "activeTaskId": "task_abc123",
+    "defaults": {
+        "provider": "anthropic",
+        "model": "claude-opus-4-5",
+        "thinkingLevel": "high"
+    },
+    "tasks": [],
+    "hostRequestHistory": [],
+    "childCommandHistory": []
+}
+```
+
+Use this only for diagnostics/harness evidence capture.
+
 ### 5.5 `pi_get_available_models`
 
 Payload: `{}`

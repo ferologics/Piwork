@@ -17,7 +17,7 @@
 
 Primitives in `mise-tasks/test-*` remain useful for fast integration probes and evidence capture, but they are **not a substitute** for automated assertions in Vitest/Rust.
 
-Core: `test-start`, `test-stop`, `test-prompt`, `test-screenshot`, `test-dump-state`, `test-state-snapshot`
+Core: `test-start`, `test-stop`, `test-prompt`, `test-screenshot`, `test-dump-state`, `test-state-snapshot`, `test-runtime-diag`
 Tasks: `test-create-task`, `test-delete-tasks`, `test-set-task`
 Folders: `test-set-folder` (one-time bind; existing bound task rejects changes)
 Auth: `test-auth-list`, `test-auth-set-key`, `test-auth-delete`, `test-auth-import-pi`, `test-send-login`
@@ -49,6 +49,10 @@ For any runtime behavior claim, capture all three:
 1. `test-dump-state`
 2. `test-screenshot <name>`
 3. Supporting log lines (`tmp/dev/piwork.log`, VM log)
+
+When diagnosing regressions/timeouts, also capture:
+
+- `runtime_diag` (via harness timeout diagnostics / test server command)
 
 ## Hard guarantees (P0 contracts)
 

@@ -41,6 +41,10 @@ export interface RuntimeGetStateResult {
     tasks: RuntimeTaskState[];
 }
 
+export interface RuntimeDiagResult {
+    [key: string]: unknown;
+}
+
 export interface PiModelOption {
     id: string;
     name: string;
@@ -254,6 +258,12 @@ export class RuntimeService {
             activeTaskId: parseString(result.activeTaskId),
             tasks,
         };
+    }
+
+    async runtimeDiag(): Promise<RuntimeDiagResult> {
+        await this.waitForRpcReady();
+        const result = await this.sendTaskdCommand("runtime_diag", {}, 10_000);
+        return result;
     }
 
     async piGetAvailableModels(): Promise<{ models: PiModelOption[] }> {

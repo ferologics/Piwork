@@ -884,8 +884,16 @@ struct TestStateSnapshotBridge {
     pending: Mutex<HashMap<String, mpsc::Sender<serde_json::Value>>>,
 }
 
+#[derive(Default)]
+struct TestRuntimeDiagBridge {
+    pending: Mutex<HashMap<String, mpsc::Sender<serde_json::Value>>>,
+}
+
 #[cfg(debug_assertions)]
 static TEST_STATE_SNAPSHOT_COUNTER: AtomicU64 = AtomicU64::new(1);
+
+#[cfg(debug_assertions)]
+static TEST_RUNTIME_DIAG_COUNTER: AtomicU64 = AtomicU64::new(1);
 
 #[tauri::command]
 #[allow(clippy::needless_pass_by_value)]
@@ -910,6 +918,31 @@ fn test_state_snapshot_reply(
     sender
         .send(snapshot)
         .map_err(|_| "Snapshot receiver unavailable".to_string())
+}
+
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
+fn test_runtime_diag_reply(
+    request_id: String,
+    diag: serde_json::Value,
+    bridge: tauri::State<TestRuntimeDiagBridge>,
+) -> Result<(), String> {
+    let sender = {
+        let mut pending = bridge
+            .pending
+            .lock()
+            .map_err(|_| "Failed to acquire runtime diag bridge lock".to_string())?;
+
+        pending.remove(&request_id)
+    };
+
+    let Some(sender) = sender else {
+        return Err("Unknown runtime diag request".to_string());
+    };
+
+    sender
+        .send(diag)
+        .map_err(|_| "Runtime diag receiver unavailable".to_string())
 }
 
 #[cfg(debug_assertions)]
@@ -958,6 +991,7 @@ fn sanitize_test_server_value(value: &serde_json::Value) -> serde_json::Value {
 /// - `{"cmd":"delete_all_tasks"}` - wipes all tasks
 /// - `{"cmd":"dump_state"}` - logs UI state
 /// - `{"cmd":"state_snapshot"}` - returns structured UI/runtime snapshot JSON
+/// - `{"cmd":"runtime_diag"}` - returns runtime taskd diagnostics JSON (forwarded from UI/runtime service)
 /// - `{"cmd":"preview_list","taskId":"..."}` - returns preview file list JSON
 /// - `{"cmd":"preview_read","taskId":"...","relativePath":"..."}` - returns preview file content JSON
 /// - `{"cmd":"artifact_list","taskId":"..."}` - returns scratchpad artifact list JSON (`outputs` + `uploads`)
@@ -1169,6 +1203,43 @@ fn start_test_server(app_handle: tauri::AppHandle) {
                                 let _ = stream.write_all(b"ERR: Timed out waiting for state snapshot\n");
                             }
                         }
+                        "runtime_diag" => {
+                            let request_id = format!(
+                                "runtime_diag_{}",
+                                TEST_RUNTIME_DIAG_COUNTER.fetch_add(1, Ordering::Relaxed)
+                            );
+                            let bridge: tauri::State<TestRuntimeDiagBridge> = app.state();
+                            let (sender, receiver) = mpsc::channel();
+
+                            if let Ok(mut pending) = bridge.pending.lock() {
+                                pending.insert(request_id.clone(), sender);
+                            } else {
+                                let _ = stream.write_all(b"ERR: Failed to acquire runtime diag bridge lock\n");
+                                continue;
+                            }
+
+                            let payload = serde_json::json!({
+                                "requestId": request_id,
+                            });
+
+                            if app.emit("test_runtime_diag_request", payload).is_err() {
+                                if let Ok(mut pending) = bridge.pending.lock() {
+                                    pending.remove(&request_id);
+                                }
+                                let _ = stream.write_all(b"ERR: Failed to request runtime diag\n");
+                                continue;
+                            }
+
+                            if let Ok(diag) = receiver.recv_timeout(Duration::from_secs(8)) {
+                                let payload = serde_json::to_string(&diag).unwrap_or_else(|_| "{}".to_string());
+                                let _ = stream.write_all(format!("{payload}\n").as_bytes());
+                            } else {
+                                if let Ok(mut pending) = bridge.pending.lock() {
+                                    pending.remove(&request_id);
+                                }
+                                let _ = stream.write_all(b"ERR: Timed out waiting for runtime diag\n");
+                            }
+                        }
                         "preview_list" => {
                             let task_id = json.get("taskId").and_then(|v| v.as_str()).unwrap_or("");
                             match task_preview_list(app.clone(), task_id.to_string()) {
@@ -1328,6 +1399,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .manage(vm::VmState::default())
         .manage(TestStateSnapshotBridge::default())
+        .manage(TestRuntimeDiagBridge::default())
         .setup(|app| {
             #[cfg(debug_assertions)]
             start_test_server(app.handle().clone());
@@ -1358,6 +1430,7 @@ pub fn run() {
             vm_stop,
             rpc_send,
             test_state_snapshot_reply,
+            test_runtime_diag_reply,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

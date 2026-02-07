@@ -89,6 +89,12 @@ export interface StateSnapshot {
         isAgentRunning: boolean;
         hasError: boolean;
     };
+    composer: {
+        promptLength: number;
+        promptSending: boolean;
+        promptInFlight: boolean;
+        canSendPrompt: boolean;
+    };
     ui: {
         bootScreenVisible: boolean;
         reconfigureBannerVisible: boolean;
@@ -220,7 +226,7 @@ export class IntegrationHarness {
         return null;
     }
 
-    private timeoutDiagnostics(context: string): string {
+    private async timeoutDiagnostics(context: string): Promise<string> {
         const childStatus = this.child
             ? `pid=${this.child.pid ?? "n/a"} exitCode=${this.child.exitCode ?? "null"} killed=${this.child.killed}`
             : "child=none";
@@ -228,10 +234,19 @@ export class IntegrationHarness {
         const snapshot = this.lastSnapshot ? JSON.stringify(this.lastSnapshot, null, 2) : "(no snapshot captured)";
         const qemuLogPath = this.resolveQemuLogPath();
 
+        let runtimeDiag = "(unavailable)";
+        try {
+            const diag = await this.sendJson<Record<string, unknown>>({ cmd: "runtime_diag" });
+            runtimeDiag = JSON.stringify(diag, null, 2);
+        } catch (error) {
+            runtimeDiag = `(failed to fetch runtime_diag: ${String(error)})`;
+        }
+
         return [
             `Context: ${context}`,
             `Child: ${childStatus}`,
             `Last snapshot: ${snapshot}`,
+            `Runtime diag: ${runtimeDiag}`,
             "--- piwork.integration.log (tail) ---",
             this.readTail(INTEGRATION_LOG_PATH),
             "--- piwork.log (tail) ---",
