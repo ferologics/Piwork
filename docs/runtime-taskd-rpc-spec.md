@@ -181,11 +181,21 @@ Result shape:
             "uploadsDir": "/mnt/taskstate/task_abc123/uploads",
             "workDir": "/mnt/taskstate/task_abc123/outputs",
             "currentCwd": "/mnt/taskstate/task_abc123/outputs",
-            "workingFolderRelative": null
+            "workingFolderRelative": null,
+            "bootstrapStatus": "ready",
+            "bootstrapError": null,
+            "bootstrapUpdatedAt": "2026-02-07T15:00:00.000Z"
         }
     ]
 }
 ```
+
+`bootstrapStatus` values:
+
+- `not_started`
+- `pending`
+- `ready`
+- `errored`
 
 ### 5.4a `runtime_diag` (debug/support)
 
@@ -313,10 +323,17 @@ Required:
 
 - `task_switch_started`
 - `task_ready`
+- `task_bootstrap_state`
 - `task_error`
 - `task_stopped`
 - `agent_output`
 - `agent_end`
+
+`task_bootstrap_state` payload shape:
+
+```json
+{ "status": "pending|ready|errored|not_started", "error": null }
+```
 
 Host behavior:
 
@@ -332,6 +349,8 @@ For one switch attempt:
    - `task_ready`, or
    - `task_error`
 
+Bootstrap updates are reported independently via `task_bootstrap_state` and may arrive before or after `task_ready`.
+
 For one prompt:
 
 1. `prompt` response (accepted/rejected)
@@ -346,6 +365,7 @@ For one prompt:
 - `TASK_NOT_READY`
 - `SWITCH_TIMEOUT`
 - `PI_PROCESS_DEAD`
+- `TASK_BOOTSTRAP_FAILED`
 - `INVALID_REQUEST`
 - `INTERNAL_ERROR`
 

@@ -21,6 +21,8 @@ export interface RuntimeServiceSnapshot {
     taskSwitching: boolean;
 }
 
+export type RuntimeTaskBootstrapStatus = "not_started" | "pending" | "ready" | "errored";
+
 export interface RuntimeTaskState {
     taskId: string;
     state: string;
@@ -35,6 +37,9 @@ export interface RuntimeTaskState {
     workDir: string | null;
     currentCwd: string | null;
     workingFolderRelative: string | null;
+    bootstrapStatus: RuntimeTaskBootstrapStatus | null;
+    bootstrapError: string | null;
+    bootstrapUpdatedAt: string | null;
 }
 
 export interface RuntimeGetStateResult {
@@ -143,6 +148,14 @@ function parseString(value: unknown): string | null {
     return trimmed.length > 0 ? trimmed : null;
 }
 
+function parseBootstrapStatus(value: unknown): RuntimeTaskBootstrapStatus | null {
+    if (value === "not_started" || value === "pending" || value === "ready" || value === "errored") {
+        return value;
+    }
+
+    return null;
+}
+
 function parseRuntimeTaskState(entry: unknown): RuntimeTaskState | null {
     if (!isRecord(entry)) {
         return null;
@@ -169,6 +182,9 @@ function parseRuntimeTaskState(entry: unknown): RuntimeTaskState | null {
         workDir: parseString(entry.workDir),
         currentCwd: parseString(entry.currentCwd),
         workingFolderRelative: parseString(entry.workingFolderRelative),
+        bootstrapStatus: parseBootstrapStatus(entry.bootstrapStatus),
+        bootstrapError: parseString(entry.bootstrapError),
+        bootstrapUpdatedAt: parseString(entry.bootstrapUpdatedAt),
     };
 }
 

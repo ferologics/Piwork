@@ -21,6 +21,7 @@ import {
     type RuntimeServiceSnapshot,
     type RuntimeGetStateResult,
     type RuntimeTaskState,
+    type RuntimeTaskBootstrapStatus,
 } from "$lib/services/runtimeService";
 import { previewStore, type PreviewSelection } from "$lib/stores/previewStore";
 
@@ -108,6 +109,35 @@ let availableModels = $state<ModelOption[]>([]);
 let selectedModelId = $state("");
 let modelsLoading = $state(false);
 let modelsError = $state<string | null>(null);
+let activeTaskBootstrapStatus = $state<RuntimeTaskBootstrapStatus | null>(null);
+let activeTaskBootstrapError = $state<string | null>(null);
+
+function parseBootstrapStatus(value: unknown): RuntimeTaskBootstrapStatus | null {
+    if (value === "not_started" || value === "pending" || value === "ready" || value === "errored") {
+        return value;
+    }
+
+    return null;
+}
+
+function clearBootstrapState() {
+    activeTaskBootstrapStatus = null;
+    activeTaskBootstrapError = null;
+}
+
+function resetModelPickerState() {
+    rpcModelsRequested = false;
+    modelsLoading = false;
+    modelsError = null;
+    availableModels = [];
+    selectedModelId = "";
+}
+
+function setModelPickerBootstrapError(message: string | null) {
+    modelsError = message || "Model bootstrap failed";
+    availableModels = [];
+    selectedModelId = "";
+}
 
 const MAX_HEIGHT = 200;
 const LOGIN_PROMPT_SECONDS = 5;
@@ -324,13 +354,21 @@ function applyRuntimeSnapshot(snapshot: RuntimeServiceSnapshot) {
         promptInFlight = false;
     }
 
+    if (!snapshot.rpcConnected) {
+        clearBootstrapState();
+    }
+
+    if (previousTaskId !== currentTaskId) {
+        clearBootstrapState();
+        resetModelPickerState();
+    }
+
     if (snapshot.rpcConnected) {
         hasConnectedOnce = true;
     }
 
     if (wasTaskSwitching && !taskSwitching) {
         void requestState();
-        void requestAvailableModels();
     }
 }
 
@@ -468,6 +506,22 @@ function getActiveRuntimeTask(state: RuntimeGetStateResult): RuntimeTaskState | 
     return state.tasks.find((task) => task.state === "active") ?? null;
 }
 
+function isModelBootstrapPending() {
+    return activeTaskBootstrapStatus === "pending" || activeTaskBootstrapStatus === "not_started";
+}
+
+function modelBootstrapMessage() {
+    if (activeTaskBootstrapStatus === "errored") {
+        return activeTaskBootstrapError || "Model bootstrap failed";
+    }
+
+    if (isModelBootstrapPending()) {
+        return "Preparing model runtime…";
+    }
+
+    return null;
+}
+
 async function requestState() {
     if (!runtimeService || rpcStateRequested || taskSwitching) return;
 
@@ -480,6 +534,8 @@ async function requestState() {
 
         const activeTaskState = getActiveRuntimeTask(state);
         promptInFlight = activeTaskState?.promptInFlight === true;
+        activeTaskBootstrapStatus = activeTaskState?.bootstrapStatus ?? null;
+        activeTaskBootstrapError = activeTaskState?.bootstrapError ?? null;
 
         const activeOption = activeTaskState ? resolveModelOption(activeTaskState) : null;
 
@@ -489,25 +545,43 @@ async function requestState() {
         } else if (!availableModels.some((model) => model.id === selectedModelId)) {
             selectedModelId = availableModels[0]?.id ?? "";
         }
+
+        if (activeTaskBootstrapStatus === "errored") {
+            setModelPickerBootstrapError(activeTaskBootstrapError);
+            return;
+        }
+
+        if (activeTaskBootstrapStatus === "ready") {
+            modelsError = null;
+            void requestAvailableModels();
+        }
     } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         pushRpcMessage(`[error] ${message}`);
         updateAuthHint(message);
         rpcStateInfo = null;
+        clearBootstrapState();
         runtimeDebugStore.clear();
     } finally {
         rpcStateRequested = false;
     }
 }
 
-function isTransientModelLoadError(message: string) {
-    return message.includes("pi exited") && message.includes("SIGTERM");
-}
-
 async function requestAvailableModels() {
     if (!runtimeService || rpcModelsRequested) return;
 
     if (!currentTaskId || taskSwitching || !rpcConnected) {
+        return;
+    }
+
+    if (activeTaskBootstrapStatus === "errored") {
+        modelsLoading = false;
+        setModelPickerBootstrapError(activeTaskBootstrapError);
+        return;
+    }
+
+    if (activeTaskBootstrapStatus !== "ready") {
+        modelsLoading = false;
         return;
     }
 
@@ -534,8 +608,8 @@ async function requestAvailableModels() {
     } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
 
-        if (isTransientModelLoadError(message) || taskSwitching || !rpcConnected) {
-            devLog("MainView", `Ignoring transient model load error: ${message}`);
+        if (taskSwitching || !rpcConnected) {
+            devLog("MainView", `Ignoring model load error while switching/disconnected: ${message}`);
             return;
         }
 
@@ -552,6 +626,11 @@ async function requestAvailableModels() {
 
 async function handleModelChange() {
     if (!runtimeService || modelsLoading) return;
+
+    if (activeTaskBootstrapStatus !== "ready") {
+        modelsError = modelBootstrapMessage();
+        return;
+    }
 
     const selected = availableModels.find((model) => model.id === selectedModelId) ?? null;
     if (!selected) {
@@ -665,7 +744,35 @@ function handleRpcPayload(payload: Record<string, unknown>) {
         if (eventName === "task_ready" && eventTaskId) {
             artifactRefreshStore.request(eventTaskId, "task_ready");
             void requestState();
-            void requestAvailableModels();
+            return;
+        }
+
+        if (eventName === "task_bootstrap_state" && eventTaskId) {
+            const eventPayload =
+                payload.payload && typeof payload.payload === "object"
+                    ? (payload.payload as Record<string, unknown>)
+                    : {};
+
+            if (eventTaskId === currentTaskId) {
+                const status = parseBootstrapStatus(eventPayload.status);
+                const errorMessage =
+                    typeof eventPayload.error === "string" && eventPayload.error.trim().length > 0
+                        ? eventPayload.error
+                        : null;
+
+                activeTaskBootstrapStatus = status;
+                activeTaskBootstrapError = errorMessage;
+
+                if (status === "errored") {
+                    setModelPickerBootstrapError(errorMessage);
+                } else if (status === "ready") {
+                    modelsError = null;
+                    void requestAvailableModels();
+                }
+            }
+
+            void requestState();
+            return;
         }
 
         return;
@@ -722,7 +829,6 @@ async function initializeRuntimeService() {
             copyingLoginUrl = false;
             clearLoginPrompt();
             void requestState();
-            void requestAvailableModels();
         },
         onError: (message) => {
             rpcAuthHint = null;
@@ -732,11 +838,8 @@ async function initializeRuntimeService() {
             clearLoginPrompt();
             rpcStateInfo = null;
             rpcStateRequested = false;
-            rpcModelsRequested = false;
-            modelsLoading = false;
-            modelsError = null;
-            availableModels = [];
-            selectedModelId = "";
+            resetModelPickerState();
+            clearBootstrapState();
             runtimeDebugStore.clear();
             pushDevToast(message);
             void refreshVmLogPath();
@@ -762,11 +865,8 @@ async function connectRpc() {
     clearLoginPrompt();
     rpcStateInfo = null;
     rpcStateRequested = false;
-    rpcModelsRequested = false;
-    modelsLoading = false;
-    modelsError = null;
-    availableModels = [];
-    selectedModelId = "";
+    resetModelPickerState();
+    clearBootstrapState();
     runtimeDebugStore.clear();
     pendingUiRequest = null;
     pendingUiQueue = [];
@@ -786,11 +886,8 @@ async function disconnectRpc() {
     clearLoginPrompt();
     rpcStateInfo = null;
     rpcStateRequested = false;
-    rpcModelsRequested = false;
-    modelsLoading = false;
-    modelsError = null;
-    availableModels = [];
-    selectedModelId = "";
+    resetModelPickerState();
+    clearBootstrapState();
     runtimeDebugStore.clear();
     pendingUiRequest = null;
     pendingUiQueue = [];
@@ -1003,6 +1100,8 @@ function buildTestStateSnapshot() {
             loading: modelsLoading,
             error: modelsError,
             selectedModelId,
+            bootstrapStatus: activeTaskBootstrapStatus,
+            bootstrapError: activeTaskBootstrapError,
         },
         preview: {
             isOpen: previewSelection.isOpen,
@@ -1631,10 +1730,18 @@ onDestroy(() => {
                             <select
                                 bind:value={selectedModelId}
                                 onchange={handleModelChange}
-                                disabled={!rpcConnected || modelsLoading || !!modelsError || availableModels.length === 0}
+                                disabled={
+                                    !rpcConnected ||
+                                    modelsLoading ||
+                                    activeTaskBootstrapStatus !== "ready" ||
+                                    !!modelsError ||
+                                    availableModels.length === 0
+                                }
                                 class="max-w-40 truncate appearance-none rounded-md bg-transparent px-2 py-1 text-xs text-muted-foreground outline-none hover:bg-accent cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
                             >
-                                {#if modelsLoading}
+                                {#if isModelBootstrapPending()}
+                                    <option value="">Preparing model…</option>
+                                {:else if modelsLoading}
                                     <option value="">Loading models…</option>
                                 {:else if modelsError}
                                     <option value="">Model load failed</option>
@@ -1651,6 +1758,8 @@ onDestroy(() => {
                                 <span class="max-w-52 truncate text-[10px] text-red-400" title={modelsError}>
                                     {modelsError}
                                 </span>
+                            {:else if isModelBootstrapPending()}
+                                <span class="text-[10px] text-muted-foreground">Preparing model runtime…</span>
                             {:else if !modelsLoading && availableModels.length === 0}
                                 <span class="text-[10px] text-muted-foreground">No models available</span>
                             {/if}

@@ -108,6 +108,8 @@ export interface StateSnapshot {
         loading: boolean;
         error: string | null;
         selectedModelId: string;
+        bootstrapStatus?: string | null;
+        bootstrapError?: string | null;
     };
     preview: {
         isOpen: boolean;

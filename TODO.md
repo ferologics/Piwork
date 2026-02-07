@@ -2,7 +2,7 @@
 
 ## Now
 
-- [ ] **Reactive model/bootstrap sequencing (P0 stability)** — move runtime model setup from timeout-driven polling to explicit task readiness states.
+- [x] **Reactive model/bootstrap sequencing (P0 stability)** — move runtime model setup from timeout-driven polling to explicit task readiness states.
   - Add a per-task child-command queue in `taskd` so bootstrap `set_model` and first `get_available_models` are serialized.
   - Expose bootstrap readiness/error in `runtime_get_state` and gate UI model-fetch requests on that signal.
   - Keep timeout values only as fallback safety rails, not primary control flow.

@@ -39,6 +39,13 @@ const STOP_GRACE_PERIOD_MS = 1_200;
 const DIAG_HISTORY_LIMIT = 200;
 const HOST_TRACE_ENABLED = process.env.PIWORK_TASKD_TRACE !== "0";
 
+const BOOTSTRAP_STATUS = {
+    NOT_STARTED: "not_started",
+    PENDING: "pending",
+    READY: "ready",
+    ERRORED: "errored",
+};
+
 const IDEMPOTENT_REQUESTS = new Set(["create_or_open_task", "switch_task", "stop_task"]);
 
 const tasks = new Map();
@@ -451,12 +458,18 @@ function buildTask(taskId, options = {}) {
         workDir: outputsDir,
         currentCwd: outputsDir,
         child: null,
+        childCommandQueue: Promise.resolve(),
+        queuedChildCommandCount: 0,
         pendingChildRequests: new Map(),
         stopping: false,
         promptInFlight: false,
         promptCommandId: null,
         lastChildOutputAt: null,
         lastChildError: null,
+        bootstrapStatus: BOOTSTRAP_STATUS.NOT_STARTED,
+        bootstrapError: null,
+        bootstrapUpdatedAt: null,
+        bootstrapAttempt: 0,
     };
 }
 
@@ -475,8 +488,12 @@ function serializeTask(task) {
         workDir: task.workDir,
         currentCwd: task.currentCwd,
         workingFolderRelative: task.requestedWorkingFolderRelative,
+        bootstrapStatus: task.bootstrapStatus,
+        bootstrapError: task.bootstrapError,
+        bootstrapUpdatedAt: task.bootstrapUpdatedAt,
         childPid: task.child?.pid ?? null,
         childAlive: Boolean(task.child && !task.child.killed),
+        queuedChildCommandCount: task.queuedChildCommandCount,
         pendingChildRequestCount: task.pendingChildRequests.size,
         lastChildOutputAt: task.lastChildOutputAt,
         lastChildError: task.lastChildError,
@@ -500,6 +517,29 @@ function updateTaskConfig(task, options = {}) {
         task.requestedWorkingFolderRelative =
             typeof options.workingFolderRelative === "string" ? options.workingFolderRelative : null;
     }
+}
+
+function setTaskBootstrapStatus(task, status, errorMessage = null, emit = false) {
+    const nextError = typeof errorMessage === "string" && errorMessage.length > 0 ? errorMessage : null;
+    const changed = task.bootstrapStatus !== status || task.bootstrapError !== nextError;
+
+    task.bootstrapStatus = status;
+    task.bootstrapError = nextError;
+    task.bootstrapUpdatedAt = nowIso();
+
+    if (!emit || !changed) {
+        return;
+    }
+
+    emitEvent("task_bootstrap_state", task.taskId, {
+        status,
+        error: nextError,
+    });
+}
+
+function resetTaskCommandQueue(task) {
+    task.childCommandQueue = Promise.resolve();
+    task.queuedChildCommandCount = 0;
 }
 
 function rejectPendingChildRequests(task, reason) {
@@ -602,6 +642,7 @@ function handleChildExit(task, code, signal) {
     rejectPendingChildRequests(task, reason);
 
     task.child = null;
+    resetTaskCommandQueue(task);
     task.promptInFlight = false;
     task.promptCommandId = null;
     task.lastChildError = reason;
@@ -609,10 +650,12 @@ function handleChildExit(task, code, signal) {
     if (task.stopping) {
         task.stopping = false;
         task.state = "stopped";
+        setTaskBootstrapStatus(task, BOOTSTRAP_STATUS.NOT_STARTED, null, true);
         return;
     }
 
     task.state = "errored";
+    setTaskBootstrapStatus(task, BOOTSTRAP_STATUS.ERRORED, reason, true);
 
     if (activeTaskId === task.taskId) {
         activeTaskId = null;
@@ -697,25 +740,72 @@ async function spawnTaskProcess(task) {
         child.once("spawn", onSpawn);
     });
 
+    resetTaskCommandQueue(task);
+    task.bootstrapAttempt += 1;
+
+    const bootstrapAttempt = task.bootstrapAttempt;
+    setTaskBootstrapStatus(task, BOOTSTRAP_STATUS.PENDING, null, false);
     task.state = "ready";
 
-    if (task.provider && task.model) {
-        void sendToTask(task, {
+    void runTaskBootstrap(task, bootstrapAttempt);
+}
+
+async function runTaskBootstrap(task, bootstrapAttempt) {
+    if (task.bootstrapAttempt !== bootstrapAttempt) {
+        return;
+    }
+
+    if (!task.child || task.child.killed) {
+        return;
+    }
+
+    if (!task.provider || !task.model) {
+        setTaskBootstrapStatus(task, BOOTSTRAP_STATUS.READY, null, true);
+        return;
+    }
+
+    setTaskBootstrapStatus(task, BOOTSTRAP_STATUS.PENDING, null, true);
+
+    try {
+        await sendToTask(task, {
             type: "set_model",
             provider: task.provider,
             modelId: task.model,
-        }).catch((error) => {
-            log(`task ${task.taskId} set_model failed: ${String(error)}`);
         });
+    } catch (error) {
+        if (task.bootstrapAttempt !== bootstrapAttempt) {
+            return;
+        }
+
+        if (task.state === "missing" || task.state === "stopped") {
+            return;
+        }
+
+        const message = summarizeError(error);
+        setTaskBootstrapStatus(task, BOOTSTRAP_STATUS.ERRORED, message, true);
+        log(`task ${task.taskId} bootstrap set_model failed: ${message}`);
+        return;
     }
+
+    if (task.bootstrapAttempt !== bootstrapAttempt) {
+        return;
+    }
+
+    if (!task.child || task.child.killed) {
+        return;
+    }
+
+    setTaskBootstrapStatus(task, BOOTSTRAP_STATUS.READY, null, true);
 }
 
 async function stopTaskProcess(task) {
     if (!task.child || task.child.killed) {
         task.child = null;
+        resetTaskCommandQueue(task);
         task.state = "stopped";
         task.promptInFlight = false;
         task.promptCommandId = null;
+        setTaskBootstrapStatus(task, BOOTSTRAP_STATUS.NOT_STARTED, null, true);
         return;
     }
 
@@ -747,12 +837,46 @@ async function stopTaskProcess(task) {
     });
 
     task.child = null;
+    resetTaskCommandQueue(task);
     task.state = "stopped";
     task.promptInFlight = false;
     task.promptCommandId = null;
+    setTaskBootstrapStatus(task, BOOTSTRAP_STATUS.NOT_STARTED, null, true);
+}
+
+function enqueueTaskCommand(task, commandType, runner) {
+    if (!(task.childCommandQueue instanceof Promise)) {
+        resetTaskCommandQueue(task);
+    }
+
+    task.queuedChildCommandCount += 1;
+    const queuedDepth = Math.max(0, task.queuedChildCommandCount - 1);
+
+    if (HOST_TRACE_ENABLED && queuedDepth > 0) {
+        log(`[child] ${task.taskId} queued ${commandType} (queueDepth=${queuedDepth})`);
+    }
+
+    const run = () => {
+        task.queuedChildCommandCount = Math.max(0, task.queuedChildCommandCount - 1);
+        return runner();
+    };
+
+    const queued = task.childCommandQueue.then(run, run);
+    task.childCommandQueue = queued.then(
+        () => undefined,
+        () => undefined,
+    );
+
+    return queued;
 }
 
 function sendToTask(task, command, timeoutMs = CHILD_COMMAND_TIMEOUT_MS) {
+    const commandType = typeof command?.type === "string" ? command.type : "unknown";
+
+    return enqueueTaskCommand(task, commandType, () => sendToTaskImmediate(task, command, timeoutMs));
+}
+
+function sendToTaskImmediate(task, command, timeoutMs = CHILD_COMMAND_TIMEOUT_MS) {
     if (!task.child || !task.child.stdin || task.child.stdin.destroyed) {
         return Promise.reject(new Error("task process unavailable"));
     }
@@ -764,7 +888,7 @@ function sendToTask(task, command, timeoutMs = CHILD_COMMAND_TIMEOUT_MS) {
 
     if (HOST_TRACE_ENABLED) {
         log(
-            `[child] ${task.taskId} ${commandType} id=${id} start (timeout=${timeoutMs}ms, pending=${task.pendingChildRequests.size})`,
+            `[child] ${task.taskId} ${commandType} id=${id} start (timeout=${timeoutMs}ms, queue=${task.queuedChildCommandCount}, pending=${task.pendingChildRequests.size})`,
         );
     }
 
@@ -781,6 +905,7 @@ function sendToTask(task, command, timeoutMs = CHILD_COMMAND_TIMEOUT_MS) {
             task.pendingChildRequests.delete(id);
             traceChildCompleted(task, commandType, id, startedAtMs, true, {
                 pendingChildRequestCount: task.pendingChildRequests.size,
+                queuedChildCommandCount: task.queuedChildCommandCount,
             });
             resolve(responsePayload);
         };
@@ -800,6 +925,7 @@ function sendToTask(task, command, timeoutMs = CHILD_COMMAND_TIMEOUT_MS) {
                 code,
                 error: errorMessage,
                 pendingChildRequestCount: task.pendingChildRequests.size,
+                queuedChildCommandCount: task.queuedChildCommandCount,
             });
 
             reject(error instanceof Error ? error : new Error(errorMessage));
@@ -1271,6 +1397,13 @@ function parsePiResponseError(response, fallback) {
 
 async function fetchAvailableModelsFromPi() {
     const task = await requireActiveTaskForPiCommand();
+
+    if (task.bootstrapStatus === BOOTSTRAP_STATUS.ERRORED) {
+        const error = new Error(task.bootstrapError || "model bootstrap failed");
+        error.code = "TASK_BOOTSTRAP_FAILED";
+        throw error;
+    }
+
     const response = await sendToTask(task, {
         type: "get_available_models",
     });
@@ -1312,6 +1445,7 @@ async function setModelOnActiveTask(provider, modelId) {
 
     task.provider = resolvedProvider;
     task.model = resolvedModelId;
+    setTaskBootstrapStatus(task, BOOTSTRAP_STATUS.READY, null, true);
 
     return {
         id: resolvedModelId,
@@ -1379,7 +1513,7 @@ async function handleGetAvailableModelsRequest(request) {
     } catch (error) {
         const code = typeof error?.code === "string" ? error.code : "INTERNAL_ERROR";
         const message = error instanceof Error ? error.message : String(error);
-        const retryable = code === "TASK_NOT_READY";
+        const retryable = code === "TASK_NOT_READY" || code === "TASK_BOOTSTRAP_FAILED";
         return sendRpcError(request, code, message, retryable, {});
     }
 }
