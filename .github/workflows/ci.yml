@@ -138,6 +138,28 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Seed CI auth profile for regressions
+        run: |
+          set -euo pipefail
+          AUTH_FILE="$HOME/Library/Application Support/com.pi.work/auth/default/auth.json"
+
+          if [[ -f "$AUTH_FILE" ]]; then
+            echo "auth profile already present at $AUTH_FILE"
+            exit 0
+          fi
+
+          mkdir -p "$(dirname "$AUTH_FILE")"
+          cat > "$AUTH_FILE" <<'JSON'
+          {
+            "anthropic": {
+              "type": "api_key",
+              "key": "piwork-regression-placeholder"
+            }
+          }
+          JSON
+
+          echo "seeded CI auth stub at $AUTH_FILE"
+
       - name: Run full live regression gate
         env:
           PIWORK_QEMU_ACCEL: tcg
