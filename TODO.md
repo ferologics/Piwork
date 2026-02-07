@@ -37,7 +37,10 @@
 - [ ] **Inject minimal FS runtime hint into prompts** — include working-folder host path + `/mnt/workdir` alias + scratchpad path, and refresh when folder is bound later (not just at startup).
 - [x] **Fix dev cwd chip staleness on task reopen** — reopen now validates persisted working folder before runtime prep, then refreshes on `task_ready`, so cwd settles to `/mnt/workdir...` instead of sticking at `/mnt/taskstate/.../outputs`.
 - [ ] **Delete remaining slop (P0)** — review docs and code for stale references to v1/v2/legacy naming, old sync protocol language, and obsolete smoke-suite assumptions.
+  - [x] Removed runtime/taskd `handleV2*`/`sendV2*` helper naming + `__legacy__` mismatch sentinel path.
+  - [x] Removed unused UI leftovers: `src/lib/components/ProviderList.svelte`, `src/lib/utils/notice.svelte.ts`.
 - [ ] **Script hygiene pass (P0)** — reduce `scripts/` sprawl by making `mise` the single entrypoint for dev/test ops, moving one-off experiments to `scripts/lab/`, and deleting wrappers not used by `mise` or CI.
+  - [x] Moved MITM spike scripts to `scripts/lab/` and updated docs pointers.
 - [ ] **Dev watch scope (P0)** — avoid restarting `tauri dev` for non-runtime docs/content edits (e.g. Markdown), keep hot reload scoped to relevant source/config files.
 - [ ] **Close out cleanup execution plan (P0)** — finish remaining PR-5 leftovers (naming consistency, slop purge, script/watch hygiene), then mark `docs/cleanup-execution-plan.md` closed.
 - [x] **Roadmap sync hygiene** — synced `docs/ui-roadmap.md` with current `TODO.md` execution state (2026-02-07).
