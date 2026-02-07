@@ -7,8 +7,12 @@ description = "Build the frontend"
 run = "pnpm exec vite build"
 
 [tasks.check]
-description = "Fast local gate (format + lint + compile + fast tests)"
+description = "Fast local gate (auto-format + lint + compile + fast tests)"
 run = "mise run format && mise run lint && mise run compile && mise run test"
+
+[tasks.check-ci]
+description = "Fast CI gate (format-check + lint + compile + fast tests)"
+run = "mise run format-check && mise run lint && mise run compile && mise run test"
 
 [tasks.check-full]
 description = "Full gate (check + live runtime regressions)"
@@ -33,6 +37,10 @@ run = "pnpm exec vite dev"
 [tasks.format]
 description = "Format code (Biome + dprint + rustfmt)"
 run = "pnpm exec biome format --write src src-tauri/tauri.conf.json src-tauri/capabilities/default.json package.json components.json svelte.config.js vite.config.js tailwind.config.ts tsconfig.json biome.json dprint.json && pnpm exec dprint fmt && cargo fmt --manifest-path src-tauri/Cargo.toml"
+
+[tasks.format-check]
+description = "Verify formatting (Biome + dprint + rustfmt)"
+run = "pnpm exec biome format src src-tauri/tauri.conf.json src-tauri/capabilities/default.json package.json components.json svelte.config.js vite.config.js tailwind.config.ts tsconfig.json biome.json dprint.json && pnpm exec dprint check && cargo fmt --manifest-path src-tauri/Cargo.toml -- --check"
 
 [tasks.icons]
 description = "Regenerate app icons from assets/logo.svg"

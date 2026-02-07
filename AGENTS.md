@@ -14,8 +14,11 @@ Cowork-style UI on top of **pi** using **Tauri**. File-scoped tasks, sandboxed V
 
 ```bash
 mise run setup              # install deps + git hooks
-mise run check              # fast local gate (format/lint/compile/fast tests)
-mise run check-full               # full gate (check + live regressions)
+mise run format             # auto-format code (writes files)
+mise run format-check       # verify formatting only (no writes)
+mise run check              # fast local gate (auto-format + lint + compile + fast tests)
+mise run check-ci           # fast CI gate (format-check + lint + compile + fast tests)
+mise run check-full         # full gate (check + live regressions)
 mise run test-regressions         # live app regression suite
 mise run test-regressions-if-needed # run live regressions only when impacted files changed
 mise run install-git-hooks  # reinstall pre-commit/pre-push hooks
@@ -28,11 +31,11 @@ mise run runtime-clean      # clean runtime artifacts
 ## Testing gates & hooks
 
 - Git hooks are installed by `mise run setup` (or manually via `mise run install-git-hooks`).
-- `pre-commit` runs `mise run check`.
+- `pre-commit` auto-formats (`mise run format`), re-stages previously staged files, then runs `mise run check-ci`.
 - `pre-push` runs `mise run test-regressions-if-needed` (path-aware live regression gate).
 - Successful `mise run test-regressions` on a clean HEAD writes a local success stamp (`.git/piwork/regressions-last-success`); pre-push skips rerunning live regressions when the stamped HEAD matches current HEAD.
 - Set `PIWORK_FORCE_CHECK_FULL=1` to force full pre-push gate.
-- CI (`.github/workflows/ci.yml`) always runs `check`; `check-full` runs only when integration-impacting paths changed.
+- CI (`.github/workflows/ci.yml`) always runs the `check` job; when Rust-impacting paths are present it runs `mise run check-ci`, and `check-full` runs only when integration-impacting paths changed.
 - **Agent rule**: avoid running a redundant manual `mise run check` immediately before `git commit` when hooks are active; rely on pre-commit output unless explicit extra verification is requested.
 - **Agent rule**: avoid rerunning manual `mise run test-regressions`/`mise run check-full` right before `git push` if they already passed on the same clean HEAD; rely on pre-push stamp skip unless explicit extra verification is requested.
 

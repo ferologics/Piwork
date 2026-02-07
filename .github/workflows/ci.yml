@@ -92,15 +92,18 @@ jobs:
           set -euo pipefail
 
           if [[ "${{ needs.changes.outputs.rust }}" == "true" ]]; then
-            echo "Rust-impacting changes detected -> running full fast gate"
-            mise run check
+            echo "Rust-impacting changes detected -> running full CI fast gate"
+            mise run check-ci
           else
             echo "No Rust-impacting changes detected -> skipping clippy + Rust tests"
-            mise run format
+            mise run format-check
             pnpm exec oxlint --tsconfig tsconfig.json src
             mise run compile
             mise run test-vite
           fi
+
+      - name: Verify checkout is clean
+        run: git diff --exit-code
 
       - name: Show sccache stats
         if: always()
@@ -195,6 +198,9 @@ jobs:
           CARGO_PROFILE_DEV_DEBUG: "0"
           CARGO_PROFILE_TEST_DEBUG: "0"
         run: mise run test-regressions
+
+      - name: Verify checkout is clean
+        run: git diff --exit-code
 
       - name: Show sccache stats
         if: always()

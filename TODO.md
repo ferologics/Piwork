@@ -16,6 +16,11 @@
   - [x] Add path-aware regression gating for push/CI so live tests only run when integration-impacting files changed.
   - [ ] Burn in the CI/hook split gate behavior (`check-full` skip/run on path filters + `PIWORK_FORCE_CHECK_FULL=1` local pre-push path), then mark this parent item done.
   - [x] Add fast protocol guardrail (`mise run audit-protocol`) via Vitest contract tests.
+- [ ] **CI/local gate alignment + cache policy cleanup (P0 ergonomics)** — remove path-detection magic/duplication between CI filters and local scripts, and make cache behavior explicit (`docs/ci-optimization-plan.md`).
+  - Decide whether docs-only changes should run a no-op gate vs lightweight docs validation.
+  - Move path groups into one shared definition and reuse it across CI + local hooks.
+  - Reconcile Rust cache strategy (`rust-cache` sharing between jobs, optional sccache persistence experiment) and keep observable metrics in logs.
+  - Revisit trigger: after 5–10 mixed pushes (docs-only, frontend-only, rust/integration) with expected run/skip behavior and predictable cache hit patterns.
 - [ ] **Reactive model/bootstrap sequencing (P0 stability)** — move runtime model setup from timeout-driven polling to explicit task readiness states.
   - Add a per-task child-command queue in `taskd` so bootstrap `set_model` and first `get_available_models` are serialized.
   - Expose bootstrap readiness/error in `runtime_get_state` and gate UI model-fetch requests on that signal.

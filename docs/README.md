@@ -25,6 +25,7 @@
 
 ## Supporting
 
+- `ci-optimization-plan.md` — CI/local gate alignment plan, cache strategy, and rollout phases
 - `path-i-lite-negative-suite.md` — scope enforcement test (traversal/symlink/cross-task)
 - `network-mitm-spike.md` — future network interception notes
 

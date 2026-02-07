@@ -22,8 +22,11 @@ mise run tauri-dev
 ```
 
 ```bash
-mise run check                    # fast local gate
-mise run check-full               # forced full gate (fast + live regressions)
+mise run format                   # auto-format code (writes files)
+mise run format-check             # verify formatting only (no writes)
+mise run check                    # fast local gate (auto-format + lint + compile + fast tests)
+mise run check-ci                 # fast CI gate (format-check + lint + compile + fast tests)
+mise run check-full               # forced full gate (check + live regressions)
 mise run test-regressions-if-needed # runs live regressions only if integration-impacting files changed
 # pre-push skips rerun when regressions already passed on current clean HEAD
 ```
@@ -38,7 +41,7 @@ mise run test-regressions
 ```
 
 ```bash
-mise run install-git-hooks   # reinstall hooks manually (pre-commit/check + pre-push/conditional regressions)
+mise run install-git-hooks   # reinstall hooks manually (pre-commit/auto-format+verify + pre-push/conditional regressions)
 # force full pre-push gate once:
 PIWORK_FORCE_CHECK_FULL=1 git push
 ```
