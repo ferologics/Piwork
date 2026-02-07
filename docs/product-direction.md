@@ -47,6 +47,44 @@ Build a Cowork-style desktop UI on top of pi that feels reliable for real file-s
 - runtime download/onboarding for non-dev users
 - settings/docs/code cleanup once behavior stabilizes
 
+## Differentiation thesis (after cowork parity)
+
+Once baseline cowork flows are solid, piwork differentiates on three combined qualities:
+
+1. **Provider freedom without workflow loss**
+   - users can switch providers/models while keeping the same task structure, tools, and outputs.
+2. **Execution environment, not chat shell**
+   - actions run in a scoped runtime with visible artifacts and replayable evidence.
+3. **General-purpose workflows (not just coding)**
+   - optimize for day-to-day knowledge work outcomes, not only developer tasks.
+
+## Capability expansion bets
+
+### Connectors first (MCP + native where needed)
+
+- prioritize high-frequency surfaces: Google Drive/Docs/Sheets, Slack, Notion, GitHub.
+- start read-first (import/search/summarize), then add guarded write actions.
+- expose connector permissions per task so boundaries stay explicit.
+
+### Skills as reusable jobs
+
+- ship curated "day-to-day" skills (research brief, meeting follow-up, spreadsheet cleanup, document transform, review/summarize).
+- keep skill outputs file-based and auditable in task artifacts.
+- make "run this skill on this folder/doc set" a first-class flow.
+
+### Easy skill creation
+
+- provide a minimal skill scaffold wizard (goal, inputs, tools, output contract).
+- support local testing + one-click install into piwork.
+- enable team sharing/import of skill packs after local workflow stabilizes.
+
+## Sequencing guidance
+
+1. **Ship** macOS-first cowork basics + reliability (cross-platform follows after baseline proves out).
+2. **Layer in** top connectors with strict task-scoped permissions.
+3. **Package** high-value default skills for non-coder daily workflows.
+4. **Open up** skill creation/distribution once core UX is proven stable.
+
 ## Source-of-truth boundaries
 
 - **Direction and principles**: this doc.
