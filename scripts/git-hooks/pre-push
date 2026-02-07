@@ -10,5 +10,5 @@ if [[ "${PIWORK_FORCE_CHECK_FULL:-0}" == "1" ]]; then
     exit 0
 fi
 
-echo "[pre-push] Fast gate runs in pre-commit; checking whether live regressions are needed..."
+echo "[pre-push] Fast gate runs in pre-commit; checking whether live regressions are needed (and already validated for HEAD)..."
 ./scripts/testing/run-regressions-if-needed.sh

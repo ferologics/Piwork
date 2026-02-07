@@ -25,6 +25,7 @@ mise run tauri-dev
 mise run check                    # fast local gate
 mise run check-full               # forced full gate (fast + live regressions)
 mise run test-regressions-if-needed # runs live regressions only if integration-impacting files changed
+# pre-push skips rerun when regressions already passed on current clean HEAD
 ```
 
 CI mirrors this split (`.github/workflows/ci.yml`): fast `check` always, `check-full` only when integration-impacting paths changed.

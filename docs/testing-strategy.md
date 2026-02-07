@@ -12,6 +12,7 @@
 - Daily local gate: `mise run check` (fast).
 - Required high-confidence gate: `mise run check-full` (fast gate + live regressions) when forcing a full run.
 - Day-to-day push ergonomics: `mise run test-regressions-if-needed` to skip live regressions when non-impacting files changed.
+- Successful local `mise run test-regressions` on a clean HEAD writes a local success stamp so pre-push can skip rerunning on the same commit.
 
 ### 2) Harness primitives (integration support)
 
@@ -38,7 +39,7 @@ This suite is currently supplemental smoke coverage. Equivalent contract checks 
 
 - `mise run setup` installs hooks automatically (or run `mise run install-git-hooks` manually).
 - pre-commit: `mise run check` (fast feedback)
-- pre-push: `mise run test-regressions-if-needed` (runs live regressions only when integration-impacting files changed)
+- pre-push: `mise run test-regressions-if-needed` (runs live regressions only when integration-impacting files changed, and skips if a local success stamp already exists for current clean HEAD)
 - override: `PIWORK_FORCE_CHECK_FULL=1 git push` for a forced full gate in pre-push
 - CI (`.github/workflows/ci.yml`): `check` always; `check-full` only when integration-impacting paths changed.
 

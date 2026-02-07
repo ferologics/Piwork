@@ -30,9 +30,11 @@ mise run runtime-clean      # clean runtime artifacts
 - Git hooks are installed by `mise run setup` (or manually via `mise run install-git-hooks`).
 - `pre-commit` runs `mise run check`.
 - `pre-push` runs `mise run test-regressions-if-needed` (path-aware live regression gate).
+- Successful `mise run test-regressions` on a clean HEAD writes a local success stamp (`.git/piwork/regressions-last-success`); pre-push skips rerunning live regressions when the stamped HEAD matches current HEAD.
 - Set `PIWORK_FORCE_CHECK_FULL=1` to force full pre-push gate.
 - CI (`.github/workflows/ci.yml`) always runs `check`; `check-full` runs only when integration-impacting paths changed.
 - **Agent rule**: avoid running a redundant manual `mise run check` immediately before `git commit` when hooks are active; rely on pre-commit output unless explicit extra verification is requested.
+- **Agent rule**: avoid rerunning manual `mise run test-regressions`/`mise run check-full` right before `git push` if they already passed on the same clean HEAD; rely on pre-push stamp skip unless explicit extra verification is requested.
 
 ## Architecture
 

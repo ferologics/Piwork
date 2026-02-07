@@ -77,7 +77,7 @@ run = "mise run test-vite && mise run test-rust"
 
 [tasks.test-regressions]
 description = "Run runtime regression integration tests"
-run = "pnpm exec svelte-kit sync && mise run runtime-build && pnpm exec vitest run --minWorkers=1 --maxWorkers=1 src/lib/__tests__/integration/runtime-steady-state.integration.test.ts src/lib/__tests__/integration/journey-sequential.integration.test.ts"
+run = "./scripts/testing/run-regressions.sh"
 
 [tasks.test-regressions-if-needed]
 description = "Run runtime regressions only when integration-impacting files changed"
