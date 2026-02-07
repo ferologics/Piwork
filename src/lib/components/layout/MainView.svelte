@@ -32,6 +32,8 @@ let runtimeService: RuntimeService | null = $state(null);
 let unsubscribeRuntimeService: (() => void) | null = null;
 let messageAccumulator = new MessageAccumulator();
 let conversation = $state<ConversationState>(messageAccumulator.getState());
+let promptSending = $state(false);
+let promptInFlight = $state(false);
 let rpcConnected = $state(false);
 let rpcConnecting = $state(false);
 let rpcError = $state<string | null>(null);
@@ -120,9 +122,25 @@ function autoGrow() {
     textareaEl.style.overflowY = textareaEl.scrollHeight > MAX_HEIGHT ? "auto" : "hidden";
 }
 
+function canSendPrompt(ignorePending = false) {
+    if (!rpcConnected || taskSwitching || conversation.isAgentRunning || promptInFlight) {
+        return false;
+    }
+
+    if (!ignorePending && promptSending) {
+        return false;
+    }
+
+    return true;
+}
+
 function handleInputKeydown(e: KeyboardEvent) {
     // Enter sends, Shift+Enter adds newline
     if (e.key === "Enter" && !e.shiftKey) {
+        if (!canSendPrompt()) {
+            return;
+        }
+
         e.preventDefault();
         void sendPrompt();
     }
@@ -290,6 +308,7 @@ function parseExtensionUiRequest(payload: Record<string, unknown>): ExtensionUiR
 
 function applyRuntimeSnapshot(snapshot: RuntimeServiceSnapshot) {
     const wasTaskSwitching = taskSwitching;
+    const previousTaskId = currentTaskId;
 
     rpcConnected = snapshot.rpcConnected;
     rpcConnecting = snapshot.rpcConnecting;
@@ -299,6 +318,11 @@ function applyRuntimeSnapshot(snapshot: RuntimeServiceSnapshot) {
     currentSessionFile = snapshot.currentSessionFile;
     workspaceRoot = snapshot.workspaceRoot;
     taskSwitching = snapshot.taskSwitching;
+
+    if (!snapshot.rpcConnected || previousTaskId !== currentTaskId) {
+        promptSending = false;
+        promptInFlight = false;
+    }
 
     if (snapshot.rpcConnected) {
         hasConnectedOnce = true;
@@ -455,6 +479,8 @@ async function requestState() {
         runtimeDebugStore.updateFromRuntimeState(state);
 
         const activeTaskState = getActiveRuntimeTask(state);
+        promptInFlight = activeTaskState?.promptInFlight === true;
+
         const activeOption = activeTaskState ? resolveModelOption(activeTaskState) : null;
 
         if (activeOption) {
@@ -600,6 +626,14 @@ function handleRpcPayload(payload: Record<string, unknown>) {
     if (type) {
         messageAccumulator.processEvent(payload as RpcPayload);
         conversation = messageAccumulator.getState();
+    }
+
+    if (type === "agent_start" || type === "turn_start") {
+        promptInFlight = true;
+    }
+
+    if (type === "turn_end" || type === "agent_end") {
+        promptInFlight = false;
     }
 
     if (type === "agent_end" && currentTaskId) {
@@ -769,47 +803,57 @@ async function sendPrompt(message?: string): Promise<boolean> {
     const content = (message ?? prompt).trim();
     if (!content) return false;
 
-    // Auto-create task if none active
-    if (!currentTaskId) {
-        const title = content.length > 50 ? content.substring(0, 50) + "…" : content;
-        const task = taskStore.create(title, currentWorkingFolder);
-        await taskStore.upsert(task);
-        taskStore.setActive(task.id);
-        devLog("MainView", `Auto-created task: ${task.id} with folder: ${currentWorkingFolder}`);
-    }
-
-    try {
-        await runtimeService.waitForTaskSwitchComplete();
-        await runtimeService.waitForRpcReady();
-    } catch (error) {
-        devLog("MainView", `Prompt blocked until runtime ready: ${error}`);
+    if (!canSendPrompt()) {
         return false;
     }
 
-    if (!getRpcClient() || !rpcConnected || taskSwitching) {
-        return false;
-    }
-
-    if (currentTaskId && activeTask && activeTask.title === "New Task" && conversation.messages.length === 0) {
-        const nextTitle = content.length > 50 ? `${content.substring(0, 50)}…` : content;
-        await taskStore.upsert({
-            ...activeTask,
-            title: nextTitle,
-            updatedAt: new Date().toISOString(),
-        });
-    }
-
-    // Add user message to conversation
-    messageAccumulator.addUserMessage(content);
-    conversation = messageAccumulator.getState();
+    promptSending = true;
 
     try {
+        // Auto-create task if none active
+        if (!currentTaskId) {
+            const title = content.length > 50 ? content.substring(0, 50) + "…" : content;
+            const task = taskStore.create(title, currentWorkingFolder);
+            await taskStore.upsert(task);
+            taskStore.setActive(task.id);
+            devLog("MainView", `Auto-created task: ${task.id} with folder: ${currentWorkingFolder}`);
+        }
+
+        try {
+            await runtimeService.waitForTaskSwitchComplete();
+            await runtimeService.waitForRpcReady();
+        } catch (error) {
+            devLog("MainView", `Prompt blocked until runtime ready: ${error}`);
+            return false;
+        }
+
+        if (!getRpcClient() || !canSendPrompt(true)) {
+            return false;
+        }
+
+        if (currentTaskId && activeTask && activeTask.title === "New Task" && conversation.messages.length === 0) {
+            const nextTitle = content.length > 50 ? `${content.substring(0, 50)}…` : content;
+            await taskStore.upsert({
+                ...activeTask,
+                title: nextTitle,
+                updatedAt: new Date().toISOString(),
+            });
+        }
+
+        // Add user message to conversation
+        messageAccumulator.addUserMessage(content);
+        conversation = messageAccumulator.getState();
+
+        promptInFlight = true;
         await runtimeService.sendPrompt(content);
         prompt = "";
         return true;
     } catch (error) {
+        promptInFlight = false;
         devLog("MainView", `Prompt send failed: ${error}`);
         return false;
+    } finally {
+        promptSending = false;
     }
 }
 
@@ -1569,7 +1613,7 @@ onDestroy(() => {
 
                         <button
                             class="rounded-md bg-primary p-2 text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-                            disabled={!prompt.trim() || !rpcConnected}
+                            disabled={!prompt.trim() || !canSendPrompt()}
                             onclick={() => sendPrompt()}
                             aria-label="Send"
                         >

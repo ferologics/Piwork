@@ -20,6 +20,7 @@
 - `task-artifact-contract.md` — working-folder immutability + outputs/uploads/scratchpad contract
 - `folder-artifact-implementation-plan.md` — implementation plan for one-time folder bind + scratchpad aggregation
 - `cleanup-execution-plan.md` — PR-sized cleanup sequence for truthful MVP liftoff
+- `followup-steering-spec.md` — deferred spec for queued follow-ups, steering, and stop UX in the composer
 - `ui-roadmap.md` — UI direction + Cowork comparison (execution tracking is in `../TODO.md`)
 
 ## Supporting

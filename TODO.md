@@ -24,6 +24,7 @@
 - [x] **Lock working folder after first bind** — `workingFolder` supports one-time bind (`null -> path`), then becomes immutable for that task; use a new task for a different folder.
 - [x] **Define task artifact persistence contract** — documented in `docs/task-artifact-contract.md` (`outputs` writable, `uploads` read-only, Scratchpad aggregates both).
 - [x] **Implement artifact contract in runtime/UI** — enforce one-time folder bind, surface Scratchpad from `outputs` + `uploads`, and apply uploads read-only policy.
+- [ ] **Add file import UX (P0)** — support importing local files into task `uploads`, then show/preview them in Scratchpad immediately while keeping uploads read-only after import.
 - [ ] **Untangle auth state from runtime artifacts** — keep auth storage purpose clear; avoid mixing credentials with unrelated pi/session artifacts.
 - [ ] **Fix sendLogin optimistic log** — logs `[info] Sent /login` even if not connected
 - [x] **Fix opener permission path** — added `opener:allow-open-path` capability so `Open in Finder` is authorized.
@@ -47,6 +48,7 @@
 - [x] **Finish auth profile cull for MVP** — removed profile switching plumbing; runtime/test/auth paths are standardized on the default profile.
 - [ ] **Markdown rendering** — render agent responses (bold, lists, code blocks). Biggest UX gap.
 - [ ] **Tool call display** — collapsible "Created a file ›", "Ran command ›" in message stream
+- [ ] **Interruptible composer (steering + follow-ups)** — deferred spec captured in `docs/followup-steering-spec.md` (`Enter` while running = steering, `Option+Enter` = queue follow-up, `Option+Up` = recall queued draft, `Esc`/Stop button = interrupt). Revisit after Markdown + tool-call display stabilize.
 - [x] **Right panel IA pass** — replace “Downloads” with “Working folder” card semantics (dynamic title = folder basename when set), clear empty states, and open-in-Finder affordance.
 - [x] **Move Working-folder open action to header** — icon-only action is now in card header (left of chevron), body button removed.
 - [x] **Scratchpad continuity** — keep Scratchpad visible for every task and aggregate artifacts from both `outputs` and `uploads`.
