@@ -33,7 +33,8 @@ jobs:
               - "src/lib/stores/runtimeDebugStore.ts"
               - "src/lib/stores/taskStore.ts"
               - "src/lib/__tests__/integration/**"
-              - "scripts/testing/**"
+              - "scripts/testing/run-regressions.sh"
+              - "scripts/testing/run-regressions-if-needed.sh"
               - "mise-tasks/runtime-build*"
             rust:
               - ".cargo/**"
