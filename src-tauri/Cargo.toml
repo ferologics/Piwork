@@ -14,6 +14,12 @@ edition = "2021"
 name = "piwork_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
+[[bin]]
+name = "piwork"
+path = "src/main.rs"
+test = false
+bench = false
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 

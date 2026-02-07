@@ -943,7 +943,10 @@ function buildTestStateSnapshot() {
     const quickStartVisible = conversation.messages.length === 0 && !conversation.isAgentRunning;
 
     const runtimeMismatchVisible = Boolean(
-        activeTask && runtimeDebug.activeTaskId && runtimeDebug.currentCwd && runtimeDebug.activeTaskId !== activeTask.id,
+        activeTask &&
+            runtimeDebug.activeTaskId &&
+            runtimeDebug.currentCwd &&
+            runtimeDebug.activeTaskId !== activeTask.id,
     );
 
     const workingFolderFileRowCount =

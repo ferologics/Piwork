@@ -85,7 +85,7 @@ run = "./scripts/testing/run-regressions-if-needed.sh"
 
 [tasks.test-rust]
 description = "Run Rust tests"
-run = "cargo test --manifest-path src-tauri/Cargo.toml"
+run = "cargo test --manifest-path src-tauri/Cargo.toml --lib --tests"
 
 [tasks.test-vite]
 description = "Run fast frontend tests (exclude live integration suite)"
