@@ -4,8 +4,42 @@ set -euo pipefail
 ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 cd "$ROOT_DIR"
 
+runtime_dir() {
+    if [[ "$(uname -s)" == "Darwin" ]]; then
+        printf '%s\n' "$HOME/Library/Application Support/com.pi.work/runtime"
+    else
+        printf '%s\n' "${XDG_DATA_HOME:-$HOME/.local/share}/piwork/runtime"
+    fi
+}
+
+runtime_pack_is_ready() {
+    local dir="$1"
+
+    [[ -f "$dir/manifest.json" ]] \
+        && [[ -f "$dir/vmlinuz-virt" ]] \
+        && [[ -f "$dir/initramfs-virt-fast" ]]
+}
+
+ensure_runtime_pack() {
+    local dir
+    dir=$(runtime_dir)
+
+    if [[ "${PIWORK_RUNTIME_CACHE_HIT:-}" == "true" ]] && runtime_pack_is_ready "$dir"; then
+        echo "[runtime-build] cache hit and runtime pack is ready at $dir; skipping rebuild"
+        return
+    fi
+
+    if [[ "${PIWORK_RUNTIME_CACHE_HIT:-}" == "true" ]]; then
+        echo "[runtime-build] cache hit reported, but runtime pack is missing/incomplete at $dir; rebuilding"
+    else
+        echo "[runtime-build] cache miss; rebuilding runtime pack"
+    fi
+
+    mise run runtime-build
+}
+
 pnpm exec svelte-kit sync
-mise run runtime-build
+ensure_runtime_pack
 pnpm exec vitest run --minWorkers=1 --maxWorkers=1 \
     src/lib/__tests__/integration/runtime-steady-state.integration.test.ts \
     src/lib/__tests__/integration/journey-sequential.integration.test.ts

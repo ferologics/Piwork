@@ -119,13 +119,53 @@ jobs:
       - name: Install pi CLI for runtime build
         run: npm install -g @mariozechner/pi-coding-agent
 
+      - name: Resolve pi CLI version
+        id: pi-version
+        run: |
+          set -euo pipefail
+          PI_VERSION=$(npm list -g @mariozechner/pi-coding-agent --depth=0 --json \
+            | node -e 'const fs = require("node:fs"); const data = JSON.parse(fs.readFileSync(0, "utf8")); process.stdout.write(data.dependencies?.["@mariozechner/pi-coding-agent"]?.version ?? "unknown");')
+          echo "version=$PI_VERSION" >> "$GITHUB_OUTPUT"
+          echo "pi_version=$PI_VERSION"
+
+      - name: Restore runtime pack cache
+        id: runtime-pack-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: "~/Library/Application Support/com.pi.work/runtime"
+          key: runtime-pack-${{ runner.os }}-${{ runner.arch }}-pi-${{ steps.pi-version.outputs.version }}-${{ hashFiles('mise-tasks/runtime-build', 'runtime/init.sh', 'runtime/taskd.js') }}
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
       - name: Run full live regression gate
         env:
           PIWORK_QEMU_ACCEL: tcg
+          PIWORK_RUNTIME_CACHE_HIT: ${{ steps.runtime-pack-cache.outputs.cache-hit }}
         run: mise run test-regressions
+
+      - name: Check runtime pack cache save eligibility
+        if: always()
+        id: runtime-pack-cache-ready
+        run: |
+          set -euo pipefail
+          RUNTIME_DIR="$HOME/Library/Application Support/com.pi.work/runtime"
+
+          if [[ -f "$RUNTIME_DIR/manifest.json" ]] \
+            && [[ -f "$RUNTIME_DIR/vmlinuz-virt" ]] \
+            && [[ -f "$RUNTIME_DIR/initramfs-virt-fast" ]]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "ready=false" >> "$GITHUB_OUTPUT"
+
+      - name: Save runtime pack cache
+        if: always() && steps.runtime-pack-cache.outputs.cache-hit != 'true' && steps.runtime-pack-cache-ready.outputs.ready == 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: "~/Library/Application Support/com.pi.work/runtime"
+          key: runtime-pack-${{ runner.os }}-${{ runner.arch }}-pi-${{ steps.pi-version.outputs.version }}-${{ hashFiles('mise-tasks/runtime-build', 'runtime/init.sh', 'runtime/taskd.js') }}
 
       - name: Collect integration diagnostics on failure
         if: failure()
