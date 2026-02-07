@@ -19,7 +19,7 @@ for window in windowList {
           let height = bounds["Height"] as? Int else {
         continue
     }
-    
+
     let area = width * height
     if area > bestWindow.area {
         bestWindow = (windowNumber, area)

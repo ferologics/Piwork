@@ -40,7 +40,7 @@ print_permission_hint() {
 
 # Build windowlist helper if needed
 if [[ ! -x "$WINDOWLIST" ]]; then
-    swiftc -O "$ROOT_DIR/scripts/windowlist.swift" -o "$WINDOWLIST" 2>/dev/null
+    swiftc -O "$ROOT_DIR/scripts/harness/windowlist.swift" -o "$WINDOWLIST" 2>/dev/null
 fi
 
 # Get window ID without stealing focus

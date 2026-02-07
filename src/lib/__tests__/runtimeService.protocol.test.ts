@@ -18,7 +18,7 @@ describe("RuntimeService protocol response correlation", () => {
         let resolvedPayload: Record<string, unknown> | null = null;
         const timeout = setTimeout(() => undefined, 10_000);
 
-        runtimeService.pendingRpcResponses.set("req-legacy", {
+        runtimeService.pendingRpcResponses.set("req-forwarded-response", {
             resolve: (payload) => {
                 resolvedPayload = payload;
             },
@@ -27,7 +27,7 @@ describe("RuntimeService protocol response correlation", () => {
         });
 
         runtimeService.resolvePendingRpcResponse({
-            id: "req-legacy",
+            id: "req-forwarded-response",
             type: "response",
             command: "prompt",
             success: true,
@@ -35,7 +35,7 @@ describe("RuntimeService protocol response correlation", () => {
         });
 
         expect(resolvedPayload).toBeNull();
-        expect(runtimeService.pendingRpcResponses.has("req-legacy")).toBe(true);
+        expect(runtimeService.pendingRpcResponses.has("req-forwarded-response")).toBe(true);
 
         clearTimeout(timeout);
         runtimeService.pendingRpcResponses.clear();
@@ -58,7 +58,7 @@ describe("RuntimeService protocol response correlation", () => {
         let resolvedPayload: Record<string, unknown> | null = null;
         const timeout = setTimeout(() => undefined, 10_000);
 
-        runtimeService.pendingRpcResponses.set("req-v2", {
+        runtimeService.pendingRpcResponses.set("req-taskd-envelope", {
             resolve: (payload) => {
                 resolvedPayload = payload;
             },
@@ -67,7 +67,7 @@ describe("RuntimeService protocol response correlation", () => {
         });
 
         runtimeService.resolvePendingRpcResponse({
-            id: "req-v2",
+            id: "req-taskd-envelope",
             ok: true,
             result: {
                 accepted: true,
@@ -75,12 +75,12 @@ describe("RuntimeService protocol response correlation", () => {
         });
 
         expect(resolvedPayload).toEqual({
-            id: "req-v2",
+            id: "req-taskd-envelope",
             ok: true,
             result: {
                 accepted: true,
             },
         });
-        expect(runtimeService.pendingRpcResponses.has("req-v2")).toBe(false);
+        expect(runtimeService.pendingRpcResponses.has("req-taskd-envelope")).toBe(false);
     });
 });

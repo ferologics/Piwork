@@ -1,0 +1,8 @@
+# Keep Tauri dev rebuild scope focused on app/runtime sources.
+# Ignore docs/content and lab-only paths from Rust-side watching.
+../docs/**
+../README.md
+../AGENTS.md
+../TODO.md
+../scripts/lab/**
+../tmp/**
