@@ -13,9 +13,14 @@
   - [x] Remove low-signal/noise tests and stale assertions (smoke test, legacy session-file assumptions, noisy debug logs).
   - [x] Add `mise run test-regressions` task (currently runs live-app regression tests).
   - [x] Split gates: `mise run check` (fast) and `mise run check-full` (includes regressions).
-  - [x] Add path-aware regression gating for push/CI so live tests only run when integration-impacting files change.
+  - [x] Add path-aware regression gating for push/CI so live tests only run when integration-impacting files changed.
   - [ ] Burn in the CI/hook split gate behavior (`check-full` skip/run on path filters + `PIWORK_FORCE_CHECK_FULL=1` local pre-push path), then mark this parent item done.
   - [x] Add fast protocol guardrail (`mise run audit-protocol`) via Vitest contract tests.
+- [ ] **Reactive model/bootstrap sequencing (P0 stability)** — move runtime model setup from timeout-driven polling to explicit task readiness states.
+  - Add a per-task child-command queue in `taskd` so bootstrap `set_model` and first `get_available_models` are serialized.
+  - Expose bootstrap readiness/error in `runtime_get_state` and gate UI model-fetch requests on that signal.
+  - Keep timeout values only as fallback safety rails, not primary control flow.
+  - Revisit trigger: after timeout tuning lands and CI regressions are green for several consecutive runs, implement this to reduce remaining flake/time spent in wait loops.
 - [x] **Kill v1 runtime** — remove `PIWORK_RUNTIME_V2_TASKD` flag, v1 code paths in runtimeService (`handleTaskSwitchV1`, `handleFolderChangeV1`, `ensureTaskSessionReady`), v1 `nc -l` loop in init script, `RuntimeMode` type. taskd is the only runtime.
 - [x] **Enforce V2-only host protocol** — removed legacy host request handling in taskd, host parser is strict `{ id, type, payload }`, and RuntimeService only resolves pending RPCs from taskd V2 response envelopes.
 - [x] **Finalize runtime naming cleanup (P0)** — dropped `handleV2*`/`sendV2*` helper names, removed the `__legacy__` sentinel path from runtime/UI mismatch logic, and switched to neutral runtime envelope naming.
