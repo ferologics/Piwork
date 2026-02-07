@@ -18,7 +18,7 @@
   - [x] Add fast protocol guardrail (`mise run audit-protocol`) via Vitest contract tests.
 - [x] **Kill v1 runtime** — remove `PIWORK_RUNTIME_V2_TASKD` flag, v1 code paths in runtimeService (`handleTaskSwitchV1`, `handleFolderChangeV1`, `ensureTaskSessionReady`), v1 `nc -l` loop in init script, `RuntimeMode` type. taskd is the only runtime.
 - [x] **Enforce V2-only host protocol** — removed legacy host request handling in taskd, host parser is strict `{ id, type, payload }`, and RuntimeService only resolves pending RPCs from taskd V2 response envelopes.
-- [ ] **Finalize runtime naming cleanup (P0)** — drop remaining `v2`/`legacy` naming artifacts (types, logs, helpers like `handleV2*`/`sendV2*`, and `__legacy__` UI sentinels) so runtime terminology is consistent.
+- [x] **Finalize runtime naming cleanup (P0)** — dropped `handleV2*`/`sendV2*` helper names, removed the `__legacy__` sentinel path from runtime/UI mismatch logic, and switched to neutral runtime envelope naming.
 - [x] **Extract init script** — move the heredoc out of `mise-tasks/runtime-build` into `runtime/init.sh`
 - [x] **Fix context pollution** — infrastructure bash commands (grep mount check, mkdir, session writes) go through pi's RPC and pollute the agent's conversation. Add `system_bash` to taskd that bypasses pi sessions, or do checks in taskd before spawning pi.
 - [x] **Simplify auth/settings** — strip Settings modal to: show current auth status + "Import from pi" button. Kill multi-profile UI. For MVP: baked auth or `~/.pi/agent/auth.json` import.
