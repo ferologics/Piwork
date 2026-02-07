@@ -1,4 +1,4 @@
-# Piwork — Implementation Plan (final)
+# Piwork — Implementation Plan (archive + closeout checklist)
 
 This is the concrete, sequenced implementation plan to get from the current “mixed prototype” state to a coherent MVP foundation:
 
@@ -9,6 +9,16 @@ This is the concrete, sequenced implementation plan to get from the current “m
 - **harness regressions + slop purge** so the repo stops drifting
 
 Non-goals (explicitly out of scope for this plan): sandbox hardening beyond current policy, connectors, attachments UX, Markdown rendering, tool-call UI polish, onboarding/runtime download.
+
+## Execution status (2026-02-07)
+
+This plan is mostly executed and now acts as an execution archive + closeout reference.
+
+- [x] PR-0 through PR-4 core goals landed (testing gates, strict host envelope lane, truthful model picker, model persistence, default-profile auth path).
+- [ ] PR-0 closeout still in burn-in: verify path-aware `check-full` behavior in CI/hook flows (including forced local full gate path).
+- [ ] PR-5 closeout remains: runtime naming consistency (`v2`/`legacy` leftovers), slop purge, script hygiene, and dev watch scope tightening.
+
+Canonical active backlog lives in `../TODO.md`; this document captures sequencing context and closeout intent.
 
 ---
 
