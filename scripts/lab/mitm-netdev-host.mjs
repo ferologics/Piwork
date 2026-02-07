@@ -6,7 +6,7 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
-const rootDir = path.resolve(scriptDir, "..");
+const rootDir = path.resolve(scriptDir, "../..");
 const tmpDir = process.env.TMP_DIR ?? path.join(rootDir, "tmp");
 
 fs.mkdirSync(tmpDir, { recursive: true });

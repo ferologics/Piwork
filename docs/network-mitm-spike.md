@@ -59,7 +59,7 @@ This keeps the VM “talking Ethernet” while the host enforces per‑request p
 2. Run the spike harness (extracts kernel + direct‑boots QEMU):
 
    ```bash
-   scripts/run-mitm-spike.sh
+   scripts/lab/run-mitm-spike.sh
    ```
 
 3. Inspect logs + boot timing:
@@ -81,9 +81,9 @@ Boot timing is written to `tmp/mitm-boot.log` as `BOOT_MS=...`.
 ### Cleanup
 
 ```bash
-scripts/mitm-clean.sh
+scripts/lab/mitm-clean.sh
 # remove the ISO + extracted kernel + fast initramfs:
-CLEAN_ISO=1 scripts/mitm-clean.sh
+CLEAN_ISO=1 scripts/lab/mitm-clean.sh
 ```
 
 ## Spike results (2026‑02‑03)

@@ -2,7 +2,7 @@
 set -euo pipefail
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-ROOT_DIR=$(cd "$SCRIPT_DIR/.." && pwd)
+ROOT_DIR=$(cd "$SCRIPT_DIR/../.." && pwd)
 TMP_DIR=${TMP_DIR:-$ROOT_DIR/tmp}
 ALPINE_ISO=${ALPINE_ISO:-$TMP_DIR/alpine-virt-3.23.3-aarch64.iso}
 NETDEV_SOCKET=${NETDEV_SOCKET:-$TMP_DIR/piwork-netdev.sock}
@@ -18,8 +18,13 @@ if [[ ! -f "$ALPINE_ISO" ]]; then
     exit 1
 fi
 
-"$SCRIPT_DIR/prepare-alpine-kernel.sh"
-"$SCRIPT_DIR/prepare-alpine-fastinit.sh"
+if [[ -x "$SCRIPT_DIR/prepare-alpine-kernel.sh" ]]; then
+    "$SCRIPT_DIR/prepare-alpine-kernel.sh"
+fi
+
+if [[ -x "$SCRIPT_DIR/prepare-alpine-fastinit.sh" ]]; then
+    "$SCRIPT_DIR/prepare-alpine-fastinit.sh"
+fi
 
 cleanup() {
     if [[ -n "${HOST_PID:-}" ]]; then

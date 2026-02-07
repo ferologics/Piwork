@@ -2,7 +2,7 @@
 set -euo pipefail
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-ROOT_DIR=$(cd "$SCRIPT_DIR/.." && pwd)
+ROOT_DIR=$(cd "$SCRIPT_DIR/../.." && pwd)
 TMP_DIR=${TMP_DIR:-$ROOT_DIR/tmp}
 ALPINE_ISO=${ALPINE_ISO:-$TMP_DIR/alpine-virt-3.23.3-aarch64.iso}
 NETDEV_SOCKET=${NETDEV_SOCKET:-$TMP_DIR/piwork-netdev.sock}
