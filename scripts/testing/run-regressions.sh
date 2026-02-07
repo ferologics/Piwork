@@ -31,8 +31,12 @@ ensure_runtime_pack() {
 
     if [[ "${PIWORK_RUNTIME_CACHE_HIT:-}" == "true" ]]; then
         echo "[runtime-build] cache hit reported, but runtime pack is missing/incomplete at $dir; rebuilding"
-    else
+    elif [[ "${CI:-}" == "true" ]]; then
         echo "[runtime-build] cache miss; rebuilding runtime pack"
+    elif runtime_pack_is_ready "$dir"; then
+        echo "[runtime-build] local run: runtime pack present; checking freshness via mise sources"
+    else
+        echo "[runtime-build] local run: runtime pack missing/incomplete; building"
     fi
 
     mise run runtime-build

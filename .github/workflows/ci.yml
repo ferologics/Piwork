@@ -33,16 +33,12 @@ jobs:
               - "src/lib/stores/runtimeDebugStore.ts"
               - "src/lib/stores/taskStore.ts"
               - "src/lib/__tests__/integration/**"
-              - "mise.toml"
-              - "mise-tasks/test-*"
               - "scripts/testing/**"
-              - "scripts/git-hooks/pre-push"
-              - ".github/workflows/ci.yml"
+              - "mise-tasks/runtime-build*"
             rust:
               - ".cargo/**"
               - "src-tauri/**"
               - "mise.toml"
-              - ".github/workflows/ci.yml"
 
   check:
     name: check (fast)

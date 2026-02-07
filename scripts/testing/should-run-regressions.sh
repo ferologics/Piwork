@@ -30,7 +30,7 @@ if [[ -z "$CHANGED" ]]; then
     exit 1
 fi
 
-PATTERN='^(runtime/|src-tauri/src/|src/lib/components/layout/|src/lib/services/runtimeService\.ts$|src/lib/stores/(runtimeDebugStore|taskStore)\.ts$|src/lib/__tests__/integration/|mise\.toml$|mise-tasks/test-|scripts/git-hooks/pre-push$|scripts/testing/|\.github/workflows/ci\.yml$)'
+PATTERN='^(runtime/|src-tauri/src/|src/lib/components/layout/|src/lib/services/runtimeService\.ts$|src/lib/stores/(runtimeDebugStore|taskStore)\.ts$|src/lib/__tests__/integration/|scripts/testing/|mise-tasks/runtime-build)'
 
 if ! printf '%s\n' "$CHANGED" | grep -Eq "$PATTERN"; then
     echo "[regressions] no integration-impacting files changed; skipping regressions"
