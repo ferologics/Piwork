@@ -18,8 +18,23 @@ const INITIAL_TASK_ID = process.env.PIWORK_INITIAL_TASK_ID || "";
 const DEFAULT_PROVIDER = process.env.PIWORK_DEFAULT_PROVIDER || "anthropic";
 const DEFAULT_MODEL = process.env.PIWORK_DEFAULT_MODEL || "claude-opus-4-5";
 const DEFAULT_THINKING_LEVEL = process.env.PIWORK_DEFAULT_THINKING || "high";
-const CHILD_COMMAND_TIMEOUT_MS = 10_000;
-const SYSTEM_BASH_TIMEOUT_MS = 10_000;
+
+function parseTimeoutMs(name, fallback) {
+    const raw = process.env[name];
+    if (!raw) {
+        return fallback;
+    }
+
+    const parsed = Number.parseInt(raw, 10);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+        return fallback;
+    }
+
+    return parsed;
+}
+
+const CHILD_COMMAND_TIMEOUT_MS = parseTimeoutMs("PIWORK_CHILD_COMMAND_TIMEOUT_MS", 25_000);
+const SYSTEM_BASH_TIMEOUT_MS = parseTimeoutMs("PIWORK_SYSTEM_BASH_TIMEOUT_MS", 10_000);
 const STOP_GRACE_PERIOD_MS = 1_200;
 const DIAG_HISTORY_LIMIT = 200;
 const HOST_TRACE_ENABLED = process.env.PIWORK_TASKD_TRACE !== "0";

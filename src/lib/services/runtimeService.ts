@@ -6,8 +6,9 @@ import type { TaskMetadata } from "$lib/types/task";
 
 const POLL_INTERVAL_MS = 100;
 const TASK_SWITCH_TIMEOUT_MS = 5000;
-const RPC_READY_TIMEOUT_MS = 6000;
+const RPC_READY_TIMEOUT_MS = 20_000;
 const RPC_COMMAND_TIMEOUT_MS = 5000;
+const MODEL_RPC_COMMAND_TIMEOUT_MS = 35_000;
 
 export interface RuntimeServiceSnapshot {
     rpcConnected: boolean;
@@ -268,7 +269,7 @@ export class RuntimeService {
 
     async piGetAvailableModels(): Promise<{ models: PiModelOption[] }> {
         await this.waitForRpcReady();
-        const result = await this.sendTaskdCommand("pi_get_available_models", {});
+        const result = await this.sendTaskdCommand("pi_get_available_models", {}, MODEL_RPC_COMMAND_TIMEOUT_MS);
         const models = Array.isArray(result.models)
             ? result.models.map(parsePiModelOption).filter((model): model is PiModelOption => Boolean(model))
             : [];
@@ -285,10 +286,14 @@ export class RuntimeService {
         }
 
         await this.waitForRpcReady();
-        const result = await this.sendTaskdCommand("pi_set_model", {
-            provider: normalizedProvider,
-            modelId: normalizedModelId,
-        });
+        const result = await this.sendTaskdCommand(
+            "pi_set_model",
+            {
+                provider: normalizedProvider,
+                modelId: normalizedModelId,
+            },
+            MODEL_RPC_COMMAND_TIMEOUT_MS,
+        );
 
         const selected = parsePiModelOption(result);
         if (!selected) {

@@ -40,7 +40,13 @@ ensure_runtime_pack() {
 
 pnpm exec svelte-kit sync
 ensure_runtime_pack
-pnpm exec vitest run --minWorkers=1 --maxWorkers=1 \
+
+vitest_args=(--minWorkers=1 --maxWorkers=1)
+if [[ "${CI:-}" == "true" ]]; then
+    vitest_args+=(--bail=1)
+fi
+
+pnpm exec vitest run "${vitest_args[@]}" \
     src/lib/__tests__/integration/runtime-steady-state.integration.test.ts \
     src/lib/__tests__/integration/journey-sequential.integration.test.ts
 
