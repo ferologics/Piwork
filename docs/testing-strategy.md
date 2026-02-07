@@ -38,7 +38,7 @@ This suite is currently supplemental smoke coverage. Equivalent contract checks 
 ## Suggested git hook policy
 
 - `mise run setup` installs hooks automatically (or run `mise run install-git-hooks` manually).
-- pre-commit: `mise run check` (fast feedback)
+- pre-commit: auto-format + verify (`mise run format`, re-stage previously staged files, then `mise run check-ci`)
 - pre-push: `mise run test-regressions-if-needed` (runs live regressions only when integration-impacting files changed, and skips if a local success stamp already exists for current clean HEAD)
 - override: `PIWORK_FORCE_CHECK_FULL=1 git push` for a forced full gate in pre-push
 - CI (`.github/workflows/ci.yml`): `check` always; `check-full` only when integration-impacting paths changed.
