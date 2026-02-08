@@ -3,7 +3,7 @@
 Status: active
 Category: canonical
 Owner: product/runtime
-Last reviewed: 2026-02-07
+Last reviewed: 2026-02-08
 
 ## Goal
 
@@ -27,22 +27,23 @@ Let users authenticate once and reuse provider credentials across tasks.
 ## Current implementation (MVP)
 
 - Settings modal supports:
+  - provider API key entry/edit (writes to app auth store)
+  - provider removal
   - auth status for default profile
-  - `Import from pi` (`~/.pi/agent/auth.json` → app auth store)
+  - `Import from pi` (`~/.pi/agent/auth.json` → app auth store) as optional convenience
   - opening the auth file path
+  - explicit `Apply auth changes` action (runtime restart to pick up updated credentials)
 - Runtime always reads mounted default auth first, then baked auth fallback.
 - Test harness auth primitives:
   - `test-auth-list`
   - `test-auth-set-key <provider> <key>`
   - `test-auth-delete <provider>`
   - `test-auth-import-pi`
-  - `test-send-login`
 
-## `/login` flow
+## OAuth `/login` (deferred)
 
-- UI can send `/login` through the active runtime session.
-- Login URLs detected in stream/extension messages are surfaced with Open/Copy actions.
-- Open question remains: reliability through VM NAT for all providers.
+- OAuth `/login` is intentionally deferred in Piwork's RPC lane until runtime/session lifecycle behavior is specified end-to-end.
+- Current UX and implementation are API-key-first.
 
 ## Success criteria
 

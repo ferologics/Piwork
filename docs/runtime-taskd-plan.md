@@ -234,7 +234,6 @@ Completed in code:
 Still open:
 
 - ⏳ auth storage/runtime artifact separation cleanup
-- ⏳ sendLogin optimistic log cleanup
 - ⏳ docs slop cleanup beyond core runtime docs
 - ⏳ Gate G2 research lane (non-blocking)
 

@@ -24,6 +24,7 @@ let showLeftRail = $state(true);
 let showRightPanel = $state(import.meta.env.DEV);
 let showSettings = $state(false);
 let previewOpen = $state(false);
+let authApplyNonce = $state(0);
 let runtimeStatus = $state<RuntimeStatus | null>(null);
 let runtimeError = $state<string | null>(null);
 let checkingRuntime = $state(true);
@@ -52,6 +53,11 @@ function handleKeydown(e: KeyboardEvent) {
         e.preventDefault();
         showSettings = false;
     }
+}
+
+function applyAuthChangesFromSettings() {
+    authApplyNonce += 1;
+    showSettings = false;
 }
 
 onMount(() => {
@@ -95,11 +101,15 @@ onDestroy(() => {
             {#if showLeftRail && !previewOpen}
                 <LeftRail />
             {/if}
-            <MainView previewOpen={previewOpen} />
+            <MainView previewOpen={previewOpen} authApplyNonce={authApplyNonce} />
             {#if showRightPanel && !previewOpen}
                 <RightPanel />
             {/if}
         </div>
     </div>
-    <SettingsModal open={showSettings} onClose={() => (showSettings = false)} />
+    <SettingsModal
+        open={showSettings}
+        onClose={() => (showSettings = false)}
+        onApplyAuthChanges={applyAuthChangesFromSettings}
+    />
 {/if}

@@ -409,6 +409,27 @@ export class RuntimeService {
         await this.waitForCondition(() => this.snapshot.rpcConnected, timeoutMs, "RPC not ready");
     }
 
+    async restartRuntimeForAuthChanges(): Promise<void> {
+        const client = this.rpcClient;
+        if (!client) {
+            throw new Error("RPC client unavailable");
+        }
+
+        devLog("RuntimeService", "Restarting VM to apply auth changes");
+
+        this.clearPendingRpcResponses("Runtime restarting to apply auth changes");
+        this.patch({
+            rpcConnected: false,
+            rpcError: null,
+        });
+
+        await client.stopVm();
+        this.vmWorkspaceRoot = null;
+        await this.connectRuntime(client);
+        await this.waitForRpcReady();
+        this.callbacks.onStateRefreshRequested?.();
+    }
+
     async handleTaskSwitch(newTask: TaskMetadata | null, deps: TaskSwitchDeps): Promise<void> {
         await this.handleTaskSwitchRuntime(newTask, deps);
     }

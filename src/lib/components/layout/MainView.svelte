@@ -25,7 +25,7 @@ import {
 } from "$lib/services/runtimeService";
 import { previewStore, type PreviewSelection } from "$lib/stores/previewStore";
 
-let { previewOpen = false, loginRequestNonce = 0 }: { previewOpen?: boolean; loginRequestNonce?: number } = $props();
+let { previewOpen = false, authApplyNonce = 0 }: { previewOpen?: boolean; authApplyNonce?: number } = $props();
 
 let prompt = $state("");
 let textareaEl: HTMLTextAreaElement | undefined = $state();
@@ -57,6 +57,10 @@ let pendingUiQueue = $state<ExtensionUiRequest[]>([]);
 let pendingUiSending = $state(false);
 let vmLogPath = $state<string | null>(null);
 let openingLog = $state(false);
+let authSetupKnown = $state(false);
+let authConfigured = $state(true);
+let authChecking = $state(false);
+let applyingAuthChanges = $state(false);
 
 interface DevToast {
     id: number;
@@ -105,6 +109,10 @@ interface ModelOption {
     provider: string | null;
 }
 
+interface AuthStoreSummary {
+    entries: Array<{ provider: string; entryType: string }>;
+}
+
 let availableModels = $state<ModelOption[]>([]);
 let selectedModelId = $state("");
 let modelsLoading = $state(false);
@@ -144,7 +152,7 @@ const LOGIN_PROMPT_SECONDS = 5;
 const LOGIN_AUTO_OPEN_KEY = "piwork:auto-open-login";
 
 let loginPromptTimer: ReturnType<typeof setInterval> | null = null;
-let handledLoginRequestNonce = $state(0);
+let handledAuthApplyNonce = $state(0);
 
 function autoGrow() {
     if (!textareaEl) return;
@@ -153,7 +161,15 @@ function autoGrow() {
     textareaEl.style.overflowY = textareaEl.scrollHeight > MAX_HEIGHT ? "auto" : "hidden";
 }
 
+function isAuthSetupBlocked() {
+    return authSetupKnown && !authConfigured;
+}
+
 function canSendPrompt(ignorePending = false) {
+    if (isAuthSetupBlocked()) {
+        return false;
+    }
+
     if (!rpcConnected || taskSwitching || conversation.isAgentRunning || promptInFlight) {
         return false;
     }
@@ -295,7 +311,7 @@ function updateAuthHint(message: string) {
 
     if (!needsAuth) return;
 
-    rpcAuthHint = "Auth required. Open Settings to run /login or add a provider API key. Import from pi is optional.";
+    rpcAuthHint = "Auth required. Add a provider API key in Settings (or import from pi), then apply auth changes.";
 
     maybeCaptureLoginUrl(message);
 }
@@ -425,31 +441,70 @@ async function handleUiCancel() {
     await sendUiResponse({ cancelled: true });
 }
 
-async function sendLogin(): Promise<boolean> {
-    if (!rpcConnected) {
-        rpcAuthHint = "Runtime disconnected. Reconnect runtime, then send /login or add API key in Settings.";
-        pushRpcMessage("[warn] Cannot send /login: runtime not connected");
-        return false;
-    }
-
-    const sent = await sendPrompt("/login");
-
-    if (!sent) {
-        pushRpcMessage("[warn] Could not send /login");
-        return false;
-    }
-
-    pushRpcMessage("[info] Sent /login");
-    return true;
-}
-
-$effect(() => {
-    if (loginRequestNonce === handledLoginRequestNonce) {
+async function refreshAuthSetup() {
+    if (authChecking) {
         return;
     }
 
-    handledLoginRequestNonce = loginRequestNonce;
-    void sendLogin();
+    authChecking = true;
+
+    try {
+        const summary = await invoke<AuthStoreSummary>("auth_store_list");
+        const entryCount = Array.isArray(summary.entries) ? summary.entries.length : 0;
+
+        if (entryCount > 0) {
+            authConfigured = true;
+            authSetupKnown = true;
+            return;
+        }
+
+        if (availableModels.length > 0) {
+            authConfigured = true;
+            authSetupKnown = true;
+            return;
+        }
+
+        authConfigured = false;
+        authSetupKnown = true;
+    } catch (error) {
+        devLog("MainView", `Auth status check failed: ${error}`);
+        authConfigured = true;
+        authSetupKnown = true;
+    } finally {
+        authChecking = false;
+    }
+}
+
+async function applyAuthChanges() {
+    if (!runtimeService || applyingAuthChanges) {
+        return;
+    }
+
+    applyingAuthChanges = true;
+
+    try {
+        await runtimeService.restartRuntimeForAuthChanges();
+        await requestState();
+        await refreshAuthSetup();
+    } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        pushRpcMessage(`[error] Failed to apply auth changes: ${message}`);
+    } finally {
+        applyingAuthChanges = false;
+    }
+}
+
+$effect(() => {
+    if (authApplyNonce === handledAuthApplyNonce) {
+        return;
+    }
+
+    if (!runtimeService) {
+        return;
+    }
+
+    handledAuthApplyNonce = authApplyNonce;
+    void applyAuthChanges();
 });
 
 function ensureModelOption(option: ModelOption) {
@@ -619,8 +674,12 @@ async function requestAvailableModels() {
 
         if (mapped.length === 0) {
             selectedModelId = "";
+            void refreshAuthSetup();
             return;
         }
+
+        authConfigured = true;
+        authSetupKnown = true;
 
         if (!mapped.some((model) => model.id === selectedModelId)) {
             selectedModelId = mapped[0].id;
@@ -638,6 +697,7 @@ async function requestAvailableModels() {
         selectedModelId = "";
         pushRpcMessage(`[error] ${message}`);
         updateAuthHint(message);
+        void refreshAuthSetup();
     } finally {
         rpcModelsRequested = false;
         modelsLoading = false;
@@ -849,6 +909,7 @@ async function initializeRuntimeService() {
             copyingLoginUrl = false;
             clearLoginPrompt();
             void requestState();
+            void refreshAuthSetup();
         },
         onError: (message) => {
             rpcAuthHint = null;
@@ -919,6 +980,11 @@ async function sendPrompt(message?: string): Promise<boolean> {
 
     const content = (message ?? prompt).trim();
     if (!content) return false;
+
+    if (isAuthSetupBlocked()) {
+        rpcAuthHint = "No auth configured. Add a provider API key in Settings and apply auth changes.";
+        return false;
+    }
 
     if (!canSendPrompt()) {
         return false;
@@ -1113,6 +1179,9 @@ function buildTestStateSnapshot() {
             quickStartVisible,
             loginPromptVisible,
             pendingUiRequest: Boolean(pendingUiRequest),
+            authSetupKnown,
+            authConfigured,
+            authSetupBlocked: isAuthSetupBlocked(),
         },
         models: {
             count: availableModels.length,
@@ -1339,6 +1408,8 @@ async function loadPreviewForSelection(selection: PreviewSelection): Promise<voi
 }
 
 onMount(() => {
+    void refreshAuthSetup();
+
     try {
         const stored = localStorage.getItem(LOGIN_AUTO_OPEN_KEY);
         if (stored === "true") {
@@ -1409,8 +1480,8 @@ onMount(() => {
         });
 
         listen("test_send_login", () => {
-            devLog("TestHarness", "received test_send_login");
-            void sendLogin();
+            devLog("TestHarness", "received test_send_login (ignored: /login is deferred)");
+            rpcAuthHint = "OAuth /login is deferred. Add API key in Settings and apply auth changes.";
         }).then((unlisten) => {
             testSendLoginUnlisten = unlisten;
         });
@@ -1587,16 +1658,26 @@ onDestroy(() => {
                         <div class="mt-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-[11px] text-amber-200">
                             {rpcAuthHint}
                         </div>
-                        <div class="mt-2 flex flex-wrap gap-2">
-                            <button
-                                class="rounded-md bg-secondary px-3 py-1 text-[11px] hover:bg-secondary/80 disabled:opacity-60"
-                                onclick={sendLogin}
-                                disabled={!rpcConnected}
-                            >
-                                Send /login
-                            </button>
+                    {/if}
+
+                    {#if applyingAuthChanges}
+                        <div class="mt-2 rounded-md border border-border bg-muted/40 px-2 py-1 text-[11px] text-muted-foreground">
+                            Applying auth changes…
                         </div>
                     {/if}
+
+                    {#if authChecking && !authSetupKnown}
+                        <div class="mt-2 rounded-md border border-border bg-muted/40 px-2 py-1 text-[11px] text-muted-foreground">
+                            Checking auth setup…
+                        </div>
+                    {/if}
+
+                    {#if isAuthSetupBlocked()}
+                        <div class="mt-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-[11px] text-amber-200">
+                            No auth configured. Add an API key in Settings, then click “Apply auth changes”.
+                        </div>
+                    {/if}
+
                     {#if rpcLoginUrl}
                         {#if loginPromptVisible && loginPromptedUrl === rpcLoginUrl}
                             <div class="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">

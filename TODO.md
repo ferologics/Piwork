@@ -6,10 +6,10 @@
   - Add a per-task child-command queue in `taskd` so bootstrap `set_model` and first `get_available_models` are serialized.
   - Expose bootstrap readiness/error in `runtime_get_state` and gate UI model-fetch requests on that signal.
   - Keep timeout values only as fallback safety rails, not primary control flow.
-- [ ] **Proper auth MVP (P0)** — make auth first-class for non-existing pi setups: working OAuth `/login` flow and provider API key entry in Settings; keep "Import from pi" as convenience, not primary path.
+- [ ] **Proper auth MVP (P0)** — API-key-first onboarding + explicit apply/restart flow for auth changes; keep "Import from pi" as convenience. Defer OAuth `/login` until runtime/session lifecycle is specified.
 - [ ] **Add file import UX (P0)** — support importing local files into task `uploads`, then show/preview them in Scratchpad immediately while keeping uploads read-only after import.
 - [ ] **Untangle auth state from runtime artifacts** — keep auth storage purpose clear; avoid mixing credentials with unrelated pi/session artifacts.
-- [ ] **Fix sendLogin optimistic log** — logs `[info] Sent /login` even if not connected.
+- [x] **Pause OAuth `/login` entry points (for now)** — keep auth API-key-first while OAuth lifecycle is still underspecified in RPC/session flow.
 - [ ] **Inject minimal FS runtime hint into prompts** — include working-folder host path + `/mnt/workdir` alias + scratchpad path, and refresh when folder is bound later (not just at startup).
 
 ## Next

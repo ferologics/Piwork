@@ -35,23 +35,33 @@ pub fn summary(path: &Path) -> Result<AuthStoreSummary, String> {
 }
 
 pub fn set_api_key(path: &Path, provider: &str, key: &str) -> Result<(), String> {
-    if provider.trim().is_empty() {
+    let normalized_provider = provider.trim();
+    if normalized_provider.is_empty() {
         return Err("Provider is required".to_string());
     }
 
-    if key.trim().is_empty() {
+    let normalized_key = key.trim();
+    if normalized_key.is_empty() {
         return Err("API key is required".to_string());
     }
 
     let mut map = read_map(path)?;
-    map.insert(provider.to_string(), serde_json::json!({"type": "api_key", "key": key}));
+    map.insert(
+        normalized_provider.to_string(),
+        serde_json::json!({"type": "api_key", "key": normalized_key}),
+    );
 
     write_map(path, map)
 }
 
 pub fn delete_provider(path: &Path, provider: &str) -> Result<(), String> {
+    let normalized_provider = provider.trim();
+    if normalized_provider.is_empty() {
+        return Ok(());
+    }
+
     let mut map = read_map(path)?;
-    map.remove(provider);
+    map.remove(normalized_provider);
 
     write_map(path, map)
 }
@@ -162,6 +172,23 @@ mod tests {
         let summary = summary(&path).expect("summary");
         assert!(summary.entries.is_empty());
         assert!(!path.exists());
+
+        std::fs::remove_dir_all(path.parent().unwrap()).ok();
+    }
+
+    #[test]
+    fn set_api_key_trims_provider_and_key() {
+        let path = temp_path();
+
+        set_api_key(&path, "  anthropic  ", "  test-key  ").expect("set");
+        let summary = summary(&path).expect("summary");
+
+        assert_eq!(summary.entries.len(), 1);
+        assert_eq!(summary.entries[0].provider, "anthropic");
+
+        let raw = std::fs::read_to_string(&path).expect("read auth file");
+        assert!(raw.contains("\"anthropic\""));
+        assert!(raw.contains("\"test-key\""));
 
         std::fs::remove_dir_all(path.parent().unwrap()).ok();
     }
