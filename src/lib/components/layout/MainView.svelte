@@ -25,7 +25,7 @@ import {
 } from "$lib/services/runtimeService";
 import { previewStore, type PreviewSelection } from "$lib/stores/previewStore";
 
-let { previewOpen = false }: { previewOpen?: boolean } = $props();
+let { previewOpen = false, loginRequestNonce = 0 }: { previewOpen?: boolean; loginRequestNonce?: number } = $props();
 
 let prompt = $state("");
 let textareaEl: HTMLTextAreaElement | undefined = $state();
@@ -144,6 +144,7 @@ const LOGIN_PROMPT_SECONDS = 5;
 const LOGIN_AUTO_OPEN_KEY = "piwork:auto-open-login";
 
 let loginPromptTimer: ReturnType<typeof setInterval> | null = null;
+let handledLoginRequestNonce = $state(0);
 
 function autoGrow() {
     if (!textareaEl) return;
@@ -294,8 +295,7 @@ function updateAuthHint(message: string) {
 
     if (!needsAuth) return;
 
-    rpcAuthHint =
-        "Auth required. Import credentials from pi in Settings, then restart runtime. Fallback: `mise run runtime-build-auth` (optional `PIWORK_AUTH_PATH=...`).";
+    rpcAuthHint = "Auth required. Open Settings to run /login or add a provider API key. Import from pi is optional.";
 
     maybeCaptureLoginUrl(message);
 }
@@ -425,12 +425,32 @@ async function handleUiCancel() {
     await sendUiResponse({ cancelled: true });
 }
 
-async function sendLogin() {
-    const sent = await sendPrompt("/login");
-    if (sent) {
-        pushRpcMessage("[info] Sent /login");
+async function sendLogin(): Promise<boolean> {
+    if (!rpcConnected) {
+        rpcAuthHint = "Runtime disconnected. Reconnect runtime, then send /login or add API key in Settings.";
+        pushRpcMessage("[warn] Cannot send /login: runtime not connected");
+        return false;
     }
+
+    const sent = await sendPrompt("/login");
+
+    if (!sent) {
+        pushRpcMessage("[warn] Could not send /login");
+        return false;
+    }
+
+    pushRpcMessage("[info] Sent /login");
+    return true;
 }
+
+$effect(() => {
+    if (loginRequestNonce === handledLoginRequestNonce) {
+        return;
+    }
+
+    handledLoginRequestNonce = loginRequestNonce;
+    void sendLogin();
+});
 
 function ensureModelOption(option: ModelOption) {
     if (availableModels.some((model) => model.id === option.id)) {
